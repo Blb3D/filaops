@@ -29,6 +29,27 @@ FilaOps is an open-source ERP system designed specifically for 3D print farms. I
 - **Squarespace** - Retail order sync (coming soon)
 - **QuickBooks** - Accounting integration (coming soon)
 
+## FilaOps Pro & Enterprise
+
+Want the full production-ready experience? We offer hosted solutions with premium features:
+
+| Feature | Open Source | Pro | Enterprise |
+|---------|:-----------:|:---:|:----------:|
+| Core ERP (Products, BOMs, Orders) | Yes | Yes | Yes |
+| Inventory & MRP | Yes | Yes | Yes |
+| Serial/Lot Traceability | Yes | Yes | Yes |
+| **Customer Quote Portal** | - | Yes | Yes |
+| **Multicolor/Multi-Material Quoting** | - | Yes | Yes |
+| **B2B Partner Portal** | - | Yes | Yes |
+| Squarespace/QuickBooks Sync | - | Yes | Yes |
+| **ML Print Time Estimation** | - | - | Yes |
+| **Printer Fleet Management** | - | - | Yes |
+| **Live Production Monitoring** | - | - | Yes |
+
+**Multicolor quoting** automatically calculates costs for AMS/multi-filament prints with accurate material usage per color.
+
+Interested? [Contact us](mailto:hello@blb3dprinting.com) or watch this repo for updates.
+
 ## Quick Start
 
 ### Prerequisites
@@ -40,7 +61,7 @@ FilaOps is an open-source ERP system designed specifically for 3D print farms. I
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/filaops.git
+git clone https://github.com/Blb3D/filaops.git
 cd filaops
 
 # Create virtual environment
