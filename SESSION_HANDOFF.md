@@ -83,7 +83,7 @@ C:\Users\brand\OneDrive\Documents\bambu-print-suite → ML Dashboard (port 8001)
 2. [x] **Clean repo** - Fresh history, no sensitive data
 3. [x] **Update README.md** - Tier promotion added
 4. [x] **Push to GitHub** - https://github.com/Blb3D/filaops
-5. [ ] **Add LICENSE file** - BSL 1.1 via GitHub web UI
+5. [x] **Add LICENSE file** - BSL 1.1 added, renamed to LICENSE
 
 ### Immediate (This Week)
 
