@@ -62,12 +62,13 @@ export default function AdminOrders() {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/admin/customers/search?limit=200`, {
+      const res = await fetch(`${API_URL}/api/v1/admin/customers?limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setCustomers(Array.isArray(data) ? data : []);
+        // Response is { items: [...], total: n } from list endpoint
+        setCustomers(Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []));
       }
     } catch (err) {
       console.error("Failed to fetch customers:", err);
@@ -417,9 +418,18 @@ export default function AdminOrders() {
               <form onSubmit={handleCreateOrder} className="space-y-4">
                 {/* Customer Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Customer
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-sm font-medium text-gray-300">
+                      Customer
+                    </label>
+                    <a
+                      href="/admin/customers"
+                      target="_blank"
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      + New Customer
+                    </a>
+                  </div>
                   <select
                     value={createForm.customer_id}
                     onChange={(e) => setCreateForm({ ...createForm, customer_id: e.target.value })}
@@ -437,9 +447,18 @@ export default function AdminOrders() {
 
                 {/* Product Selection */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Product *
-                  </label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="text-sm font-medium text-gray-300">
+                      Product *
+                    </label>
+                    <a
+                      href="/admin/products"
+                      target="_blank"
+                      className="text-xs text-blue-400 hover:text-blue-300"
+                    >
+                      + New Product
+                    </a>
+                  </div>
                   <select
                     value={createForm.product_id}
                     onChange={(e) => setCreateForm({ ...createForm, product_id: e.target.value })}
