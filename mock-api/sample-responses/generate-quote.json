@@ -1,0 +1,59 @@
+{
+  "success": true,
+  "filename": "multicolor_sample.3mf",
+  "model_url": "/uploads/multicolor_sample.3mf",
+  
+  "is_multi_material": true,
+  "multi_material": {
+    "is_multi_material": true,
+    "material_count": 5,
+    "filament_types": ["PLA", "PLA", "PLA", "PLA", "PLA"],
+    "filament_weights_grams": [362.2, 147.7, 89.3, 45.1, 22.8],
+    "filament_colours": ["#FF6B00", "#FFFFFF", "#000000", "#8B4513", "#D4AF37"],
+    "tool_change_count": 247
+  },
+  
+  "dimensions": {
+    "x": 150.2,
+    "y": 89.7,
+    "z": 120.5
+  },
+  
+  "material_grams": 667.1,
+  "print_time_hours": 8.45,
+  
+  "unit_price": 47.69,
+  "total_price": 47.69,
+  
+  "single_color_alternative": {
+    "price": 23.70,
+    "time_minutes": 312,
+    "time_saved_minutes": 195,
+    "material_saved_cost": 8.50,
+    "note": "Single color uses less material (no purge tower)"
+  },
+  
+  "base_quote": {
+    "time_minutes": 507,
+    "price": 47.69,
+    "material_grams": 667.1
+  },
+  
+  "ml_quote": {
+    "time_minutes": 523,
+    "price": 49.12,
+    "correction_factor": 1.032
+  },
+  
+  "ml_status": "applied",
+
+  "production_profile": {
+    "printer_name": "Leonardo",
+    "printer_model": "P1S",
+    "material": "PLA",
+    "quality": "Standard",
+    "infill": "Standard",
+    "layer_height": 0.2,
+    "infill_percentage": 20
+  }
+}

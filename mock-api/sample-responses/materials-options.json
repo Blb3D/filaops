@@ -1,0 +1,63 @@
+{
+  "materials": [
+    {
+      "code": "PLA",
+      "name": "PLA (Standard)",
+      "description": "Easy to print, biodegradable, great for prototypes and decorative items",
+      "strength_rating": 3,
+      "requires_enclosure": false,
+      "colors": [
+        { "code": "PLA-BASIC-WHITE", "name": "White", "hex": "#FFFFFF", "hex_secondary": null, "quantity_kg": 2.5 },
+        { "code": "PLA-BASIC-BLACK", "name": "Black", "hex": "#1a1a1a", "hex_secondary": null, "quantity_kg": 1.8 },
+        { "code": "PLA-BASIC-RED", "name": "Red", "hex": "#DC2626", "hex_secondary": null, "quantity_kg": 1.2 },
+        { "code": "PLA-BASIC-BLUE", "name": "Blue", "hex": "#2563EB", "hex_secondary": null, "quantity_kg": 0.9 },
+        { "code": "PLA-BASIC-GREEN", "name": "Green", "hex": "#16A34A", "hex_secondary": null, "quantity_kg": 0.7 },
+        { "code": "PLA-BASIC-YELLOW", "name": "Yellow", "hex": "#EAB308", "hex_secondary": null, "quantity_kg": 0.5 },
+        { "code": "PLA-BASIC-ORANGE", "name": "Orange", "hex": "#EA580C", "hex_secondary": null, "quantity_kg": 0.6 },
+        { "code": "PLA-BASIC-GRAY", "name": "Gray", "hex": "#6B7280", "hex_secondary": null, "quantity_kg": 1.1 },
+        { "code": "PLA-SILK-GOLD", "name": "Silk Gold", "hex": "#D4AF37", "hex_secondary": null, "quantity_kg": 0.4 },
+        { "code": "PLA-SILK-SILVER", "name": "Silk Silver", "hex": "#C0C0C0", "hex_secondary": null, "quantity_kg": 0.3 },
+        { "code": "PLA-SILK-COPPER", "name": "Silk Copper", "hex": "#B87333", "hex_secondary": null, "quantity_kg": 0.35 },
+        { "code": "PLA-MATTE-BLACK", "name": "Matte Black", "hex": "#0a0a0a", "hex_secondary": null, "quantity_kg": 0.8 },
+        { "code": "PLA-WOOD-BROWN", "name": "Wood Brown", "hex": "#8B4513", "hex_secondary": null, "quantity_kg": 0.25 }
+      ]
+    },
+    {
+      "code": "PETG",
+      "name": "PETG (Strong)",
+      "description": "Food safe, impact resistant, good for functional parts",
+      "strength_rating": 4,
+      "requires_enclosure": false,
+      "colors": [
+        { "code": "PETG-BASIC-WHITE", "name": "White", "hex": "#FFFFFF", "hex_secondary": null, "quantity_kg": 1.5 },
+        { "code": "PETG-BASIC-BLACK", "name": "Black", "hex": "#1a1a1a", "hex_secondary": null, "quantity_kg": 1.2 },
+        { "code": "PETG-BASIC-CLEAR", "name": "Clear", "hex": "#E5E7EB", "hex_secondary": null, "quantity_kg": 0.8 },
+        { "code": "PETG-BASIC-BLUE", "name": "Blue", "hex": "#1D4ED8", "hex_secondary": null, "quantity_kg": 0.6 }
+      ]
+    },
+    {
+      "code": "ABS",
+      "name": "ABS (Durable)",
+      "description": "Heat resistant, strong, good for mechanical parts",
+      "strength_rating": 4,
+      "requires_enclosure": true,
+      "colors": [
+        { "code": "ABS-BASIC-WHITE", "name": "White", "hex": "#F5F5F5", "hex_secondary": null, "quantity_kg": 0.8 },
+        { "code": "ABS-BASIC-BLACK", "name": "Black", "hex": "#1a1a1a", "hex_secondary": null, "quantity_kg": 0.9 },
+        { "code": "ABS-BASIC-RED", "name": "Red", "hex": "#B91C1C", "hex_secondary": null, "quantity_kg": 0.4 }
+      ]
+    },
+    {
+      "code": "TPU",
+      "name": "TPU (Flexible)",
+      "description": "Rubber-like, flexible, great for gaskets and grips",
+      "strength_rating": 3,
+      "requires_enclosure": false,
+      "colors": [
+        { "code": "TPU-BASIC-BLACK", "name": "Black", "hex": "#1a1a1a", "hex_secondary": null, "quantity_kg": 0.5 },
+        { "code": "TPU-BASIC-WHITE", "name": "White", "hex": "#FFFFFF", "hex_secondary": null, "quantity_kg": 0.3 },
+        { "code": "TPU-BASIC-CLEAR", "name": "Clear", "hex": "#D1D5DB", "hex_secondary": null, "quantity_kg": 0.2 }
+      ]
+    }
+  ]
+}

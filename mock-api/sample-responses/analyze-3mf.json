@@ -1,0 +1,15 @@
+{
+  "success": true,
+  "is_multi_material": true,
+  "material_count": 5,
+  "material_slots": [
+    { "slot_index": 0, "name": "Filament 1", "display_color": "#FF6B00" },
+    { "slot_index": 1, "name": "Filament 2", "display_color": "#FFFFFF" },
+    { "slot_index": 2, "name": "Filament 3", "display_color": "#000000" },
+    { "slot_index": 3, "name": "Filament 4", "display_color": "#8B4513" },
+    { "slot_index": 4, "name": "Filament 5", "display_color": "#D4AF37" }
+  ],
+  "model_name": "multicolor_sample",
+  "thumbnail_url": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Crect fill='%232a2a3e' width='200' height='200'/%3E%3Cpath d='M100 40 L160 140 L40 140 Z' fill='%234a4a6a' stroke='%236a6a8a' stroke-width='2'/%3E%3Ctext x='100' y='175' text-anchor='middle' fill='%238888aa' font-size='12'%3EMock Preview%3C/text%3E%3C/svg%3E",
+  "original_colors": ["#FF6B00", "#FFFFFF", "#000000", "#8B4513", "#D4AF37"]
+}
