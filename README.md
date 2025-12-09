@@ -13,25 +13,33 @@ FilaOps is an open source ERP system built for 3D print farms. Manage products, 
 
 ---
 
-## 🚀 Quick Start (Docker - Recommended)
+## 🚀 Quick Start (Docker - 5 Minutes)
 
-**No development experience required.** Just Docker and 5 minutes.
+**No coding required!** Perfect for print farm owners who want professional ERP functionality without the complexity.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/blb3dprinting/filaops.git
+git clone https://github.com/Blb3D/filaops.git
 cd filaops
 
-# 2. Start everything
+# 2. Start everything (one command!)
 docker-compose up -d
 
 # 3. Open your browser
 # http://localhost:5173
 ```
 
+**That's it!** Everything is pre-configured:
+- ✅ SQL Server database (auto-initialized)
+- ✅ Backend API (FastAPI)
+- ✅ Frontend UI (React)
+- ✅ All dependencies included
+
 **Default login:** admin@filaops.local / admin123
 
-📖 **[Full Installation Guide](INSTALL.md)** - Includes Windows/Mac/Linux instructions
+📖 **[Full Installation Guide](INSTALL.md)** - Step-by-step for Windows/Mac/Linux
+
+> **Why Docker?** Most ERP systems require hours of setup, database configuration, and dependency management. FilaOps runs in containers - everything just works. Perfect for print farm owners who want to focus on their business, not IT infrastructure.
 
 ---
 
