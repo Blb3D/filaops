@@ -34,7 +34,7 @@ class InventoryCheckResponse(BaseModel):
     on_hand_quantity: float
     allocated_quantity: float
     available_quantity: float
-    locations: List[InventoryLocation]
+    locations: List[InventoryLocationRequest]
 
 
 @router.post("/check", response_model=InventoryCheckResponse)
@@ -81,7 +81,7 @@ async def check_inventory_availability(
 
         # Build location list (simplified - using location_id as location name for now)
         locations = [
-            InventoryLocation(
+            InventoryLocationRequest(
                 location=f"LOC-{item.location_id}",
                 quantity=float(item.available_quantity)
             )
