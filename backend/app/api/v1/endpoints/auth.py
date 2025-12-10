@@ -9,8 +9,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
-from slowapi import Limiter
-# Note: get_remote_address is used via limiter key_func in main.py
+from app.core.limiter import limiter
 
 from app.db.session import get_db
 from app.models.user import User, RefreshToken, PasswordResetRequest
@@ -47,10 +46,6 @@ from app.logging_config import get_logger
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-# Rate limiter - imported from main app after initialization
-# This will be set by main.py during app startup
-limiter: Limiter = None  # type: ignore
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
