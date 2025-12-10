@@ -348,7 +348,7 @@ export default function AdminUsers() {
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-sm font-medium">
-                        {user.first_name?.[0] || user.email[0].toUpperCase()}
+                        {user.first_name?.[0] || user.email?.[0]?.toUpperCase() || "?"}
                       </div>
                       <span className="text-white">
                         {user.full_name || "-"}

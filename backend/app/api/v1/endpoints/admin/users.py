@@ -99,6 +99,43 @@ async def list_admin_users(
 
 
 # ============================================================================
+# GET USER STATS (for dashboard) - Must be before /{user_id} to avoid route conflict
+# ============================================================================
+
+@router.get("/stats/summary")
+async def get_user_stats(
+    current_admin: User = Depends(get_current_admin_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get summary stats for admin/operator users.
+
+    Useful for dashboard widgets.
+    """
+    total_admins = db.query(User).filter(
+        User.account_type == "admin",
+        User.status == "active"
+    ).count()
+
+    total_operators = db.query(User).filter(
+        User.account_type == "operator",
+        User.status == "active"
+    ).count()
+
+    total_inactive = db.query(User).filter(
+        User.account_type.in_(["admin", "operator"]),
+        User.status != "active"
+    ).count()
+
+    return {
+        "active_admins": total_admins,
+        "active_operators": total_operators,
+        "inactive_users": total_inactive,
+        "total_active": total_admins + total_operators,
+    }
+
+
+# ============================================================================
 # GET SINGLE USER
 # ============================================================================
 
@@ -489,40 +526,3 @@ async def reactivate_admin_user(
     )
     
     return {"message": f"User {user.email} has been reactivated"}
-
-
-# ============================================================================
-# GET CURRENT USER STATS (for dashboard)
-# ============================================================================
-
-@router.get("/stats/summary")
-async def get_user_stats(
-    current_admin: User = Depends(get_current_admin_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Get summary stats for admin/operator users.
-    
-    Useful for dashboard widgets.
-    """
-    total_admins = db.query(User).filter(
-        User.account_type == "admin",
-        User.status == "active"
-    ).count()
-    
-    total_operators = db.query(User).filter(
-        User.account_type == "operator",
-        User.status == "active"
-    ).count()
-    
-    total_inactive = db.query(User).filter(
-        User.account_type.in_(["admin", "operator"]),
-        User.status != "active"
-    ).count()
-    
-    return {
-        "active_admins": total_admins,
-        "active_operators": total_operators,
-        "inactive_users": total_inactive,
-        "total_active": total_admins + total_operators,
-    }
