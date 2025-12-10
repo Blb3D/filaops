@@ -9,7 +9,7 @@ import io
 from datetime import datetime
 
 from app.db.session import get_db
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 from app.models.user import User
 from app.models.product import Product
 from app.models.sales_order import SalesOrder
@@ -19,11 +19,11 @@ router = APIRouter(prefix="/export", tags=["export"])
 
 @router.get("/products")
 async def export_products(
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db)
 ):
     """Export products to CSV"""
-    products = db.query(Product).filter(Product.active.is_(True)).all()
+    products = db.query(Product).filter(Product.active== True).all()
     
     output = io.StringIO()
     writer = csv.writer(output)
@@ -58,7 +58,7 @@ async def export_products(
 async def export_orders(
     start_date: str = None,
     end_date: str = None,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db)
 ):
     """Export sales orders to CSV"""

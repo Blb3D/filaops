@@ -380,7 +380,7 @@ async def reset_user_password(
     # Revoke all refresh tokens for security
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user_id,
-        RefreshToken.revoked.is_(False)
+        RefreshToken.revoked == False
     ).update({
         "revoked": True,
         "revoked_at": datetime.now(timezone.utc)
@@ -456,7 +456,7 @@ async def deactivate_admin_user(
     # Revoke all refresh tokens
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user_id,
-        RefreshToken.revoked.is_(False)
+        RefreshToken.revoked == False
     ).update({
         "revoked": True,
         "revoked_at": datetime.now(timezone.utc)

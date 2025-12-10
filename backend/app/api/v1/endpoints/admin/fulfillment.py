@@ -31,7 +31,7 @@ from app.models.printer import Printer
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 # MaterialInventory removed - using unified Inventory table (Phase 1.4)
 from app.services.shipping_service import shipping_service
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 
 router = APIRouter(prefix="/fulfillment", tags=["Admin - Fulfillment"])
 
@@ -45,7 +45,7 @@ def get_default_location(db: Session) -> InventoryLocation:
     if not location:
         # Try to get any active location
         location = db.query(InventoryLocation).filter(
-            InventoryLocation.active.is_(True)
+            InventoryLocation.active== True
         ).first()
     
     if not location:
@@ -204,7 +204,7 @@ def build_production_queue_item(po: ProductionOrder, db: Session) -> dict:
 @router.get("/stats", response_model=FulfillmentStatsResponse)
 async def get_fulfillment_stats(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get fulfillment dashboard statistics.
@@ -276,7 +276,7 @@ async def get_production_queue(
     limit: int = 50,
     offset: int = 0,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get the production queue with all orders that need to be fulfilled.
@@ -346,7 +346,7 @@ async def get_production_queue(
 async def get_production_order_details(
     production_order_id: int,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get detailed information about a specific production order.
@@ -363,7 +363,7 @@ async def get_production_order_details(
     
     # Get additional details
     product = db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
-    bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first() if po.product_id else None
+    bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active== True).first() if po.product_id else None
     
     # Get quote details
     quote = db.query(Quote).filter(Quote.product_id == po.product_id).first() if po.product_id else None
@@ -442,7 +442,7 @@ async def start_production(
     production_order_id: int,
     request: StartProductionRequest,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Start production on an order.
@@ -510,7 +510,7 @@ async def start_production(
     elif po.product_id:
         bom = db.query(BOM).filter(
             BOM.product_id == po.product_id,
-            BOM.active.is_(True)
+            BOM.active== True
         ).first()
 
     if bom and bom.lines:
@@ -659,7 +659,7 @@ async def complete_print(
     production_order_id: int,
     request: CompleteProductionRequest,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Mark printing as complete with good/bad quantity tracking.
@@ -719,7 +719,7 @@ async def complete_print(
     elif po.product_id:
         bom = db.query(BOM).filter(
             BOM.product_id == po.product_id,
-            BOM.active.is_(True)
+            BOM.active== True
         ).first()
 
     # Build a set of component_ids that should be consumed at production stage
@@ -956,7 +956,7 @@ async def pass_quality_check(
     production_order_id: int,
     qc_notes: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Mark order as passed QC and ready to ship.
@@ -1026,7 +1026,7 @@ async def fail_quality_check(
     failure_reason: str,
     reprint: bool = True,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Mark order as failed QC.
@@ -1153,7 +1153,7 @@ async def fail_quality_check(
 async def get_orders_ready_to_ship(
     limit: int = 50,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get all orders that are ready to ship.
@@ -1180,7 +1180,7 @@ async def get_orders_ready_to_ship(
         if quote and quote.product_id:
             bom = db.query(BOM).filter(
                 BOM.product_id == quote.product_id,
-                BOM.active.is_(True)
+                BOM.active== True
             ).first()
 
             if bom and bom.lines:
@@ -1243,7 +1243,7 @@ async def get_orders_ready_to_ship(
 @router.get("/ship/boxes")
 async def get_available_boxes(
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get all available shipping boxes for shipper selection.
@@ -1254,7 +1254,7 @@ async def get_available_boxes(
 
     # Get all box products (matching the pattern used in bom_service)
     box_products = db.query(Product).filter(
-        Product.active.is_(True),
+        Product.active== True,
         Product.name.like('%box%')
     ).all()
 
@@ -1473,7 +1473,7 @@ async def buy_consolidated_shipping_label(
         elif po.product_id:
             bom = db.query(BOM).filter(
                 BOM.product_id == po.product_id,
-                BOM.active.is_(True)
+                BOM.active== True
             ).first()
 
         if not bom or not bom.lines:
@@ -1540,7 +1540,7 @@ async def buy_consolidated_shipping_label(
             elif po.product_id:
                 bom = db.query(BOM).filter(
                     BOM.product_id == po.product_id,
-                    BOM.active.is_(True)
+                    BOM.active== True
                 ).first()
 
             if not bom or not bom.lines:
@@ -1621,7 +1621,7 @@ async def get_shipping_rates_for_order(
     sales_order_id: int,
     box_product_id: Optional[int] = None,  # Optional override for box selection
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get shipping rate options for an order.
@@ -1731,7 +1731,7 @@ async def buy_shipping_label(
     rate_id: str,
     shipment_id: str,  # Required - from get-rates response
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Purchase a shipping label for an order.
@@ -1781,7 +1781,7 @@ async def buy_shipping_label(
         elif po.product_id:
             bom = db.query(BOM).filter(
                 BOM.product_id == po.product_id,
-                BOM.active.is_(True)
+                BOM.active== True
             ).first()
 
         if not bom or not bom.lines:
@@ -1868,7 +1868,7 @@ async def mark_order_shipped(
     sales_order_id: int,
     request: ShipOrderRequest,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Manually mark an order as shipped (for when label was created outside system).
@@ -1906,7 +1906,7 @@ async def mark_order_shipped(
 async def bulk_update_status(
     request: BulkStatusUpdate,
     db: Session = Depends(get_db),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Update status for multiple production orders at once.

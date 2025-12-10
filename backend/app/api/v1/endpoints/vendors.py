@@ -57,7 +57,7 @@ async def list_vendors(
     query = db.query(Vendor)
 
     if active_only:
-        query = query.filter(Vendor.is_active.is_(True))
+        query = query.filter(Vendor.is_active== True)
 
     if search:
         search_filter = f"%{search}%"

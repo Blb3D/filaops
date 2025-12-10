@@ -19,7 +19,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     # Customer Number (auto-generated, human-readable reference)
-    customer_number = Column(String(20), unique=True, nullable=True, index=True)  # CUST-001, CUST-002
+    # Note: unique constraint handled by filtered index in DB (allows multiple NULLs for non-customers)
+    customer_number = Column(String(20), nullable=True, index=True)  # CUST-001, CUST-002
 
     # Authentication
     email = Column(String(255), unique=True, nullable=False, index=True)

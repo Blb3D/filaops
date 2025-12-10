@@ -55,7 +55,7 @@ async def check_inventory_availability(
         product = db.query(Product).filter(
             (Product.sku == request.material_type) |
             (Product.name.like(f"%{request.material_type}%"))
-        ).filter(Product.is_raw_material.is_(True)).first()
+        ).filter(Product.is_raw_material== True).first()
 
         if not product:
             # Material not found - return zero availability
@@ -164,7 +164,7 @@ async def create_inventory_transaction(
             ).first()
             if not location:
                 location = db.query(InventoryLocation).filter(
-                    InventoryLocation.active.is_(True)
+                    InventoryLocation.active== True
                 ).first()
         
         # If still no location, create a default one
@@ -238,8 +238,8 @@ async def list_materials(db: Session = Depends(get_db)):
     try:
         # Query products table for raw materials
         materials = db.query(Product).filter(
-            Product.is_raw_material.is_(True),
-            Product.active.is_(True)
+            Product.is_raw_material== True,
+            Product.active== True
         ).all()
 
         # Get inventory quantities for each material

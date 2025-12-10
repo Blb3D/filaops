@@ -154,7 +154,7 @@ async def get_analytics_dashboard(
     
     # Product metrics
     total_products = db.query(func.count(Product.id)).filter(
-        Product.active.is_(True)
+        Product.active== True
     ).scalar() or 0
     
     # Top selling products - using SalesOrderLine

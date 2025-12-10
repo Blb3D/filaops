@@ -15,8 +15,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.product import Product
 from app.models.sales_order import SalesOrder, SalesOrderLine
-from app.api.v1.endpoints.auth import get_current_user
-from app.api.v1.endpoints.admin.customers import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 from app.core.security import hash_password
 import secrets
 
@@ -153,7 +152,7 @@ async def import_orders_csv(
     create_customers: bool = Query(True, description="Create customers if they don't exist"),
     source: str = Query("manual", description="Order source: manual, squarespace, shopify, woocommerce, etsy, tiktok"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_staff_user),
 ):
     """
     Import orders from CSV file.

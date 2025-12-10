@@ -20,7 +20,7 @@ from app.models.production_order import ProductionOrder
 from app.models.bom import BOM
 from app.models.product import Product
 from app.models.inventory import Inventory
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 
 router = APIRouter(prefix="/dashboard", tags=["Admin - Dashboard"])
 
@@ -74,7 +74,7 @@ class DashboardResponse(BaseModel):
 
 @router.get("/", response_model=DashboardResponse)
 async def get_dashboard(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -126,7 +126,7 @@ async def get_dashboard(
         .join(Product)
         .filter(
             Product.type == "custom",
-            BOM.active.is_(True),
+            BOM.active== True,
         )
         .count()
     )
@@ -252,7 +252,7 @@ async def get_dashboard(
         .join(Product)
         .filter(
             Product.type == "custom",
-            BOM.active.is_(True),
+            BOM.active== True,
         )
         .order_by(desc(BOM.created_at))
         .limit(10)
@@ -281,7 +281,7 @@ async def get_dashboard(
 
 @router.get("/summary")
 async def get_dashboard_summary(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -325,10 +325,10 @@ async def get_dashboard_summary(
     boms_needing_review = (
         db.query(BOM)
         .join(Product)
-        .filter(BOM.active.is_(True))
+        .filter(BOM.active== True)
         .count()
     )
-    active_boms = db.query(BOM).filter(BOM.active.is_(True)).count()
+    active_boms = db.query(BOM).filter(BOM.active== True).count()
 
     # Low Stock Items (below reorder point + MRP shortages)
     # Use the same logic as /items/low-stock endpoint - just get the count
@@ -344,7 +344,7 @@ async def get_dashboard_summary(
     
     # Get all products with reorder points
     products_with_reorder = db.query(Product).filter(
-        Product.active.is_(True),
+        Product.active== True,
         Product.reorder_point.isnot(None),
         Product.reorder_point > 0
     ).all()
@@ -485,7 +485,7 @@ async def get_dashboard_summary(
 @router.get("/recent-orders")
 async def get_recent_orders(
     limit: int = 5,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -517,7 +517,7 @@ async def get_recent_orders(
 @router.get("/pending-bom-reviews")
 async def get_pending_bom_reviews(
     limit: int = 5,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -525,7 +525,7 @@ async def get_pending_bom_reviews(
     """
     boms = (
         db.query(BOM)
-        .filter(BOM.active.is_(True))
+        .filter(BOM.active== True)
         .order_by(desc(BOM.created_at))
         .limit(limit)
         .all()
@@ -546,7 +546,7 @@ async def get_pending_bom_reviews(
 
 @router.get("/stats")
 async def get_quick_stats(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -571,7 +571,7 @@ async def get_quick_stats(
 
 @router.get("/modules")
 async def get_modules(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
 ):
     """
     Get list of available admin modules.

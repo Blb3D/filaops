@@ -16,7 +16,7 @@ from app.models.product import Product
 from app.models.user import User
 from app.models.inventory import Inventory
 from app.models.manufacturing import Routing
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 from app.logging_config import get_logger
 from app.schemas.bom import (
     BOMCreate,
@@ -91,7 +91,7 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
         # Check if component has its own BOM (is a sub-assembly)
         component_has_bom = db.query(BOM).filter(
             BOM.product_id == line.component_id,
-            BOM.active.is_(True)
+            BOM.active== True
         ).first() is not None
 
         lines.append({
@@ -158,7 +158,7 @@ def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
 
 @router.get("/", response_model=List[BOMListResponse])
 async def list_boms(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -177,7 +177,7 @@ async def list_boms(
         query = query.filter(BOM.product_id == product_id)
 
     if active_only:
-        query = query.filter(BOM.active.is_(True))
+        query = query.filter(BOM.active== True)
 
     if search:
         query = query.join(Product).filter(
@@ -198,7 +198,7 @@ async def list_boms(
         # Get routing process cost for this product
         routing = db.query(Routing).filter(
             Routing.product_id == bom.product_id,
-            Routing.is_active.is_(True)
+            Routing.is_active== True
         ).first()
         process_cost = routing.total_cost if routing and routing.total_cost else Decimal("0")
 
@@ -228,7 +228,7 @@ async def list_boms(
 @router.get("/{bom_id}", response_model=BOMResponse)
 async def get_bom(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -259,7 +259,7 @@ async def get_bom(
 @router.post("/", response_model=BOMResponse, status_code=status.HTTP_201_CREATED)
 async def create_bom(
     bom_data: BOMCreate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -351,7 +351,7 @@ async def create_bom(
 async def update_bom(
     bom_id: int,
     bom_data: BOMUpdate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -389,7 +389,7 @@ async def update_bom(
 @router.delete("/{bom_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_bom(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -426,7 +426,7 @@ async def delete_bom(
 async def add_bom_line(
     bom_id: int,
     line_data: BOMLineCreate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -512,7 +512,7 @@ async def update_bom_line(
     bom_id: int,
     line_id: int,
     line_data: BOMLineUpdate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -589,7 +589,7 @@ async def update_bom_line(
 async def delete_bom_line(
     bom_id: int,
     line_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -635,7 +635,7 @@ async def delete_bom_line(
 @router.post("/{bom_id}/recalculate", response_model=BOMRecalculateResponse)
 async def recalculate_bom(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -706,7 +706,7 @@ async def recalculate_bom(
 async def copy_bom(
     bom_id: int,
     copy_data: BOMCopyRequest,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -792,7 +792,7 @@ async def copy_bom(
 @router.get("/product/{product_id}", response_model=BOMResponse)
 async def get_bom_by_product(
     product_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -803,7 +803,7 @@ async def get_bom_by_product(
     bom = (
         db.query(BOM)
         .options(joinedload(BOM.product), joinedload(BOM.lines))
-        .filter(BOM.product_id == product_id, BOM.active.is_(True))
+        .filter(BOM.product_id == product_id, BOM.active== True)
         .order_by(desc(BOM.version))
         .first()
     )
@@ -884,7 +884,7 @@ def explode_bom_recursive(
         # Check if this component has its own BOM (sub-assembly)
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active.is_(True))
+            .filter(BOM.product_id == component.id, BOM.active== True)
             .order_by(desc(BOM.version))
             .first()
         )
@@ -958,7 +958,7 @@ def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> D
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active.is_(True))
+            .filter(BOM.product_id == component.id, BOM.active== True)
             .order_by(desc(BOM.version))
             .first()
         )
@@ -977,7 +977,7 @@ def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> D
 @router.get("/{bom_id}/explode")
 async def explode_bom(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
     max_depth: int = Query(10, ge=1, le=20),
     flatten: bool = Query(False, description="If true, aggregate quantities for duplicate components"),
@@ -1065,7 +1065,7 @@ async def explode_bom(
 @router.get("/{bom_id}/cost-rollup")
 async def get_cost_rollup(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -1092,7 +1092,7 @@ async def get_cost_rollup(
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active.is_(True))
+            .filter(BOM.product_id == component.id, BOM.active== True)
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1146,7 +1146,7 @@ async def get_cost_rollup(
 @router.get("/where-used/{product_id}")
 async def where_used(
     product_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
     include_inactive: bool = False,
 ):
@@ -1172,7 +1172,7 @@ async def where_used(
     )
 
     if not include_inactive:
-        query = query.filter(BOM.active.is_(True))
+        query = query.filter(BOM.active== True)
 
     lines = query.all()
 
@@ -1207,7 +1207,7 @@ async def where_used(
 @router.post("/{bom_id}/validate")
 async def validate_bom(
     bom_id: int,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -1247,7 +1247,7 @@ async def validate_bom(
             # Check if it's a sub-assembly
             sub_bom = db.query(BOM).filter(
                 BOM.product_id == component.id,
-                BOM.active.is_(True)
+                BOM.active== True
             ).first()
 
             if not sub_bom:

@@ -67,8 +67,8 @@ async def get_current_admin_user(
     """
     Dependency to require admin access.
 
-    Use this dependency for admin-only endpoints (BOM management,
-    production scheduling, etc.)
+    Use this dependency for admin-only endpoints (user management,
+    analytics, customer management, etc.)
 
     Args:
         current_user: Current authenticated user (from get_current_user)
@@ -83,5 +83,31 @@ async def get_current_admin_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return current_user
+
+
+async def get_current_staff_user(
+    current_user: Annotated[User, Depends(get_current_user)]
+) -> User:
+    """
+    Dependency to require staff access (admin or operator).
+
+    Use this dependency for endpoints accessible to both admins and operators
+    (dashboard, orders, production, inventory, etc.)
+
+    Args:
+        current_user: Current authenticated user (from get_current_user)
+
+    Returns:
+        User object if user is admin or operator
+
+    Raises:
+        HTTPException 403 if user is not staff (admin/operator)
+    """
+    if current_user.account_type not in ("admin", "operator"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Staff access required"
         )
     return current_user

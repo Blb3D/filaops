@@ -70,7 +70,7 @@ def get_material_requirements(db: Session, production_order: ProductionOrder) ->
         # Find active BOM for product
         bom = db.query(BOM).filter(
             BOM.product_id == production_order.product_id,
-            BOM.active.is_(True)
+            BOM.active== True
         ).first()
     
     if bom and bom.lines:
@@ -301,7 +301,7 @@ async def get_machine_availability(
     
     Shows capacity utilization and available time for each machine.
     """
-    query = db.query(Resource).filter(Resource.is_active.is_(True))
+    query = db.query(Resource).filter(Resource.is_active== True)
     
     if work_center_id:
         query = query.filter(Resource.work_center_id == work_center_id)
@@ -401,7 +401,7 @@ async def auto_schedule_order(
             search_end = due_datetime
 
     # Get available machines
-    query = db.query(Resource).filter(Resource.is_active.is_(True))
+    query = db.query(Resource).filter(Resource.is_active== True)
     if work_center_id:
         query = query.filter(Resource.work_center_id == work_center_id)
     else:

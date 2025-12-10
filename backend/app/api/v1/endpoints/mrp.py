@@ -13,7 +13,7 @@ from typing import Optional
 from app.db.session import get_db
 from app.models import MRPRun, PlannedOrder, Product
 from app.models.user import User
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 from app.schemas.mrp import (
     MRPRunRequest, MRPRunResponse, MRPRunSummary,
     PlannedOrderCreate, PlannedOrderUpdate, PlannedOrderResponse,
@@ -35,7 +35,7 @@ router = APIRouter(prefix="/mrp", tags=["MRP"])
 @router.post("/run", response_model=MRPRunResponse)
 async def run_mrp(
     request: MRPRunRequest,
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db)
 ):
     """

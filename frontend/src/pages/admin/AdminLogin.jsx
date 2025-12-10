@@ -73,8 +73,8 @@ export default function AdminLogin() {
 
       const userData = await meRes.json();
 
-      if (userData.account_type !== "admin") {
-        throw new Error("Admin access required. Please use an admin account.");
+      if (!["admin", "operator"].includes(userData.account_type)) {
+        throw new Error("Access denied. Please use an admin or operator account.");
       }
 
       // Store token and user data
@@ -109,9 +109,9 @@ export default function AdminLogin() {
           >
             FilaOps
           </Link>
-          <h1 className="text-xl text-white mt-4">Admin Login</h1>
+          <h1 className="text-xl text-white mt-4">Staff Login</h1>
           <p className="text-gray-400 mt-2">
-            Sign in to access the admin panel
+            Sign in to access FilaOps
           </p>
         </div>
 

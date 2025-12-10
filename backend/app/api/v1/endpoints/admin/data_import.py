@@ -7,7 +7,7 @@ import csv
 import io
 
 from app.db.session import get_db
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 from app.models.user import User
 from app.models.product import Product
 from datetime import datetime, timezone
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/import", tags=["import"])
 @router.post("/products")
 async def import_products(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_admin_user),
+    current_user: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db)
 ):
     """Import products from CSV"""

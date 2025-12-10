@@ -374,7 +374,7 @@ async def convert_quote_to_sales_order(
     # Find the BOM for this product
     bom = db.query(BOM).filter(
         BOM.product_id == quote.product_id,
-        BOM.active.is_(True)
+        BOM.active== True
     ).first()
 
     # Generate production order code
@@ -842,12 +842,12 @@ async def generate_production_orders(
             # Find BOM for product (first active one)
             bom = db.query(BOM).filter(
                 BOM.product_id == line.product_id,
-                BOM.active.is_(True)
+                BOM.active== True
             ).first()
 
             routing = db.query(Routing).filter(
                 Routing.product_id == line.product_id,
-                Routing.is_active.is_(True)
+                Routing.is_active== True
             ).first()
 
             po_code = get_next_po_code()
@@ -885,12 +885,12 @@ async def generate_production_orders(
 
                 bom = db.query(BOM).filter(
                     BOM.product_id == product_id,
-                    BOM.active.is_(True)
+                    BOM.active== True
                 ).first()
 
                 routing = db.query(Routing).filter(
                     Routing.product_id == product_id,
-                    Routing.is_active.is_(True)
+                    Routing.is_active== True
                 ).first()
 
                 po_code = get_next_po_code()

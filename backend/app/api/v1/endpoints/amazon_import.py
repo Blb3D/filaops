@@ -245,7 +245,7 @@ async def get_existing_products(
     """
     Get existing products that can be mapped to Amazon items
     """
-    query = db.query(Product).filter(Product.active.is_(True))
+    query = db.query(Product).filter(Product.active== True)
 
     if search:
         search_filter = f"%{search}%"

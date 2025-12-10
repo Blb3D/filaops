@@ -19,7 +19,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.product import Product
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_staff_user
 
 router = APIRouter(prefix="/inventory/transactions", tags=["Admin - Inventory"])
 
@@ -81,7 +81,7 @@ async def list_transactions(
     reference_id: Optional[int] = Query(None, description="Filter by reference ID"),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """List inventory transactions with filters"""
@@ -138,7 +138,7 @@ async def list_transactions(
 @router.post("", response_model=TransactionResponse, status_code=201)
 async def create_transaction(
     request: TransactionCreate,
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """Create an inventory transaction"""
@@ -336,11 +336,11 @@ async def create_transaction(
 
 @router.get("/locations")
 async def list_locations(
-    current_admin: User = Depends(get_current_admin_user),
+    current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
     """List all inventory locations"""
-    locations = db.query(InventoryLocation).filter(InventoryLocation.active.is_(True)).all()
+    locations = db.query(InventoryLocation).filter(InventoryLocation.active== True).all()
     return [
         {
             "id": loc.id,

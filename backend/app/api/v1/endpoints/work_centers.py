@@ -51,7 +51,7 @@ async def list_work_centers(
         query = query.filter(WorkCenter.center_type == center_type)
 
     if active_only:
-        query = query.filter(WorkCenter.is_active.is_(True))
+        query = query.filter(WorkCenter.is_active== True)
 
     work_centers = query.order_by(WorkCenter.scheduling_priority.desc(), WorkCenter.name).all()
 
@@ -204,7 +204,7 @@ async def list_resources(
     query = db.query(Resource).filter(Resource.work_center_id == wc_id)
 
     if active_only:
-        query = query.filter(Resource.is_active.is_(True))
+        query = query.filter(Resource.is_active== True)
 
     resources = query.order_by(Resource.code).all()
 

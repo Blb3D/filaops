@@ -239,14 +239,16 @@ const navItems = [
     path: "/admin/orders/import",
     label: "Import Orders",
     icon: MaterialImportIcon,
+    adminOnly: true,
   },
-  { path: "/admin/customers", label: "Customers", icon: CustomersIcon },
+  { path: "/admin/customers", label: "Customers", icon: CustomersIcon, adminOnly: true },
   { path: "/admin/production", label: "Production", icon: ProductionIcon },
   { path: "/admin/items", label: "Items", icon: ItemsIcon },
   {
     path: "/admin/materials/import",
     label: "Import Materials",
     icon: MaterialImportIcon,
+    adminOnly: true,
   },
   { path: "/admin/bom", label: "Bill of Materials", icon: BOMIcon },
   { path: "/admin/purchasing", label: "Purchasing", icon: PurchasingIcon },
@@ -259,11 +261,12 @@ const navItems = [
     path: "/admin/inventory/transactions",
     label: "Inventory Transactions",
     icon: InventoryIcon,
+    adminOnly: true,
   },
   { path: "/admin/shipping", label: "Shipping", icon: ShippingIcon },
-  { path: "/admin/analytics", label: "Analytics", icon: AnalyticsIcon },
-  { path: "/admin/users", label: "Team Members", icon: CustomersIcon },
-  // { path: "/admin/license", label: "License", icon: LicenseIcon },  // Disabled until ready
+  { path: "/admin/analytics", label: "Analytics", icon: AnalyticsIcon, adminOnly: true },
+  { path: "/admin/users", label: "Team Members", icon: CustomersIcon, adminOnly: true },
+  // { path: "/admin/license", label: "License", icon: LicenseIcon, adminOnly: true },  // Disabled until ready
 ];
 
 export default function AdminLayout() {
@@ -274,6 +277,12 @@ export default function AdminLayout() {
     const userData = localStorage.getItem("adminUser");
     return userData ? JSON.parse(userData) : null;
   });
+
+  // Filter nav items based on user role
+  const isAdmin = user?.account_type === "admin";
+  const filteredNavItems = navItems.filter(
+    (item) => !item.adminOnly || isAdmin
+  );
 
   useEffect(() => {
     const token = localStorage.getItem("adminToken");
@@ -337,7 +346,7 @@ export default function AdminLayout() {
                 </button>
               </div>
               <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
-                {navItems.map((item) => (
+                {filteredNavItems.map((item) => (
                   <NavLink
                     key={item.path}
                     to={item.path}
@@ -383,7 +392,7 @@ export default function AdminLayout() {
             </button>
           </div>
           <nav className="flex-1 p-4 space-y-2">
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
