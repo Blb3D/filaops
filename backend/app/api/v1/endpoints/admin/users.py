@@ -35,7 +35,12 @@ logger = get_logger(__name__)
 
 
 def build_full_name(user: User) -> Optional[str]:
-    """Build full name from first/last name"""
+    """
+    Compute the user's full name from available name parts.
+    
+    Returns:
+    	full_name (str | None): The first and last name joined with a space if both are present, the single available name if only one is present, or `None` if neither name is provided.
+    """
     if user.first_name and user.last_name:
         return f"{user.first_name} {user.last_name}"
     elif user.first_name:
@@ -59,10 +64,25 @@ async def list_admin_users(
     include_inactive: bool = False,
 ):
     """
-    List all admin and operator users.
+    Retrieve a paginated list of admin and operator user summaries.
     
-    Does NOT include customers (use /admin/customers for that).
-    Admin only.
+    Parameters:
+        skip (int): Number of records to skip (offset), must be >= 0.
+        limit (int): Maximum number of records to return, between 1 and 200.
+        account_type (Optional[str]): If provided, restrict results to "admin" or "operator".
+        include_inactive (bool): If True include users with non-active status; otherwise only include active users.
+    
+    Returns:
+        list[dict]: List of user summary dictionaries with keys:
+            - id: User identifier
+            - email: User email address
+            - first_name: First name (or None)
+            - last_name: Last name (or None)
+            - full_name: Computed full name (or None if names missing)
+            - account_type: "admin" or "operator"
+            - status: Account status (e.g., "active", "inactive", "suspended")
+            - last_login_at: Timestamp of last login (or None)
+            - created_at: Account creation timestamp
     """
     query = db.query(User).filter(
         User.account_type.in_(["admin", "operator"])
@@ -109,9 +129,13 @@ async def get_admin_user(
     db: Session = Depends(get_db),
 ):
     """
-    Get a single admin or operator user.
+    Fetches a single admin or operator user's details by ID.
     
-    Admin only.
+    Returns:
+        dict: User record containing `id`, `email`, `first_name`, `last_name`, `full_name`, `account_type`, `status`, `last_login_at`, `created_at`, and `updated_at`.
+    
+    Raises:
+        HTTPException: 404 if no admin or operator user with the given `user_id` exists.
     """
     user = db.query(User).filter(
         User.id == user_id,
@@ -151,7 +175,13 @@ async def create_admin_user(
     """
     Create a new admin or operator user.
     
-    Admin only. The password provided is temporary - user should change it on first login.
+    Creates and persists a new active admin/operator account with the provided data, marks the email as verified, stores a hashed password, and records the creator and timestamps.
+    
+    Returns:
+        dict: Summary of the created user containing keys `id`, `email`, `first_name`, `last_name`, `full_name`, `account_type`, `status`, `last_login_at`, `created_at`, and `updated_at`.
+    
+    Raises:
+        HTTPException: 400 Bad Request if the provided email is already registered.
     """
     # Check for existing email
     existing = db.query(User).filter(User.email == request.email).first()
@@ -220,9 +250,20 @@ async def update_admin_user(
     db: Session = Depends(get_db),
 ):
     """
-    Update an admin or operator user.
+    Update an admin or operator user's attributes.
     
-    Admin only. Cannot demote yourself or the last admin.
+    Performs validation to prevent self-demotion, self-deactivation, demotion of the last active admin, and duplicate email assignment. Applies provided updates, records the updater and timestamp, and returns the updated user summary.
+    
+    Parameters:
+        user_id (int): ID of the admin/operator user to update.
+        request (AdminUserUpdate): Fields to update; only provided fields are applied.
+    
+    Returns:
+        dict: Updated user summary containing keys: `id`, `email`, `first_name`, `last_name`, `full_name`, `account_type`, `status`, `last_login_at`, `created_at`, and `updated_at`.
+    
+    Raises:
+        HTTPException: 404 if the user is not found.
+        HTTPException: 400 for attempts to demote yourself, deactivate yourself, demote the last active admin, or set an email already in use.
     """
     user = db.query(User).filter(
         User.id == user_id,
@@ -320,9 +361,17 @@ async def reset_user_password(
     db: Session = Depends(get_db),
 ):
     """
-    Reset password for an admin or operator user.
+    Reset an admin or operator user's password and revoke all their active refresh tokens.
     
-    Admin only. Also revokes all existing refresh tokens for the user.
+    Parameters:
+        user_id (int): ID of the admin/operator user whose password will be reset.
+        request (AdminUserResetPassword): Payload containing the `new_password` to set.
+    
+    Returns:
+        dict: A message confirming the password reset, e.g. {"message": "Password reset successfully"}.
+    
+    Raises:
+        HTTPException: 404 if the specified user does not exist or is not an admin/operator.
     """
     user = db.query(User).filter(
         User.id == user_id,
@@ -375,10 +424,20 @@ async def deactivate_admin_user(
     db: Session = Depends(get_db),
 ):
     """
-    Deactivate an admin or operator user.
+    Deactivate an admin or operator user account.
     
-    Admin only. Sets status to 'inactive' (soft delete).
-    Cannot deactivate yourself or the last admin.
+    Sets the user's status to "inactive", revokes all their non-revoked refresh tokens, and records who performed the deactivation and when.
+    
+    Parameters:
+    	user_id (int): ID of the admin or operator user to deactivate.
+    
+    Returns:
+    	dict: {"message": "User {email} has been deactivated"} confirming the deactivation.
+    
+    Raises:
+    	HTTPException: 404 if the user is not found.
+    	HTTPException: 400 if attempting to deactivate the current admin's own account.
+    	HTTPException: 400 if attempting to deactivate the last active admin.
     """
     user = db.query(User).filter(
         User.id == user_id,
@@ -451,9 +510,16 @@ async def reactivate_admin_user(
     db: Session = Depends(get_db),
 ):
     """
-    Reactivate a previously deactivated admin or operator user.
+    Reactivates a previously deactivated admin or operator user.
     
-    Admin only.
+    Reactivates the user with the given ID, sets their status to "active", records the acting admin and timestamp, and returns a confirmation message.
+    
+    Returns:
+        dict: A dictionary with a `message` confirming the user's reactivation, e.g. `{"message": "User {email} has been reactivated"}`.
+    
+    Raises:
+        HTTPException: 404 if no admin/operator user with the given ID exists.
+        HTTPException: 400 if the user is already active.
     """
     user = db.query(User).filter(
         User.id == user_id,
@@ -501,9 +567,14 @@ async def get_user_stats(
     db: Session = Depends(get_db),
 ):
     """
-    Get summary stats for admin/operator users.
+    Provide dashboard-ready summary counts for admin and operator users.
     
-    Useful for dashboard widgets.
+    Returns:
+        dict: Summary with the following keys:
+            active_admins: number of users with account_type "admin" and status "active".
+            active_operators: number of users with account_type "operator" and status "active".
+            inactive_users: number of users with account_type "admin" or "operator" whose status is not "active".
+            total_active: sum of `active_admins` and `active_operators`.
     """
     total_admins = db.query(User).filter(
         User.account_type == "admin",

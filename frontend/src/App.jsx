@@ -24,6 +24,18 @@ import AdminUsers from "./pages/admin/AdminUsers";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
+/**
+ * Configure client-side routing and return the application's root router element.
+ *
+ * Defines public routes (/, /setup, /onboarding, /pricing), authentication routes
+ * (admin login and password reset), and a nested /admin route tree rendered
+ * within AdminLayout (dashboard, orders, customers, items, purchasing,
+ * manufacturing, production, shipping, analytics, imports, inventory transactions,
+ * and users). Includes redirects for the root path (to /admin) and /admin/products
+ * (to /admin/items).
+ *
+ * @returns {JSX.Element} The root React element containing BrowserRouter and the configured Routes.
+ */
 export default function App() {
   return (
     <BrowserRouter>

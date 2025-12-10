@@ -24,6 +24,13 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * Render the Admin Users management page with list, filters, stats, and modals for creating, editing, deactivating/reactivating, and resetting passwords for users.
+ *
+ * The component fetches users from the admin API (uses "adminToken" from localStorage), maintains local UI state (loading, error, filters, modals, editing/reset targets), and provides handlers to save users, deactivate/reactivate accounts, and reset passwords. UI includes search and role filters, active/inactive toggle, summary statistics, a users table with action buttons, role permission descriptions, and two modals (UserModal and ResetPasswordModal).
+ *
+ * @returns {JSX.Element} The AdminUsers React component UI.
+ */
 export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -480,7 +487,16 @@ export default function AdminUsers() {
   );
 }
 
-// User Create/Edit Modal
+/**
+ * Modal form for creating a new user or editing an existing user.
+ *
+ * Validates that a new user's password is at least 8 characters. On submit, calls `onSave` with a user payload; when editing, the password field is omitted from the payload if left blank. `onClose` is called when the modal is cancelled.
+ *
+ * @param {{email?: string, first_name?: string, last_name?: string, account_type?: string, status?: string}|null} user - Existing user to edit, or `null` to create a new user.
+ * @param {(payload: Object) => void} onSave - Callback invoked with the user payload when the form is submitted and validation passes.
+ * @param {() => void} onClose - Callback invoked to close the modal without saving.
+ * @returns {JSX.Element} The user create/edit modal component.
+ */
 function UserModal({ user, onSave, onClose }) {
   const [form, setForm] = useState({
     email: user?.email || "",
@@ -700,7 +716,16 @@ function UserModal({ user, onSave, onClose }) {
   );
 }
 
-// Reset Password Modal
+/**
+ * Modal UI for resetting a user's password.
+ *
+ * Renders a form to enter or generate a new password for the given user and submits it via the provided handler.
+ *
+ * @param {{ email: string }} user - The user object for whom the password will be reset; used to display the user's email.
+ * @param {(newPassword: string) => void} onReset - Called with the new password when the form is submitted and passes validation (minimum 8 characters).
+ * @param {() => void} onClose - Called to close the modal without making changes.
+ * @returns {JSX.Element} The reset-password modal element.
+ */
 function ResetPasswordModal({ user, onReset, onClose }) {
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
