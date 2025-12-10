@@ -318,7 +318,11 @@ async def list_items(
         query = query.filter(Product.active== True)
 
     if item_type:
-        query = query.filter(Product.item_type == item_type)
+        if item_type == "filament":
+            # Filaments are supply items with a material_type_id
+            query = query.filter(Product.material_type_id.isnot(None))
+        else:
+            query = query.filter(Product.item_type == item_type)
 
     if procurement_type:
         query = query.filter(Product.procurement_type == procurement_type)

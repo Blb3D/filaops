@@ -9,7 +9,8 @@ import { API_URL } from "../../config/api";
 const ITEM_TYPES = [
   { value: "finished_good", label: "Finished Good", color: "blue" },
   { value: "component", label: "Component", color: "purple" },
-  { value: "supply", label: "Supply", color: "orange" },
+  { value: "filament", label: "Filament", color: "orange" },
+  { value: "supply", label: "Supply", color: "yellow" },
   { value: "service", label: "Service", color: "green" },
 ];
 
@@ -191,13 +192,18 @@ export default function AdminItems() {
     needsReorder: items.filter((i) => i.needs_reorder).length,
   };
 
-  const getItemTypeStyle = (type) => {
+  const getItemTypeStyle = (type, hasFilament = false) => {
+    // If item has material_type_id, treat as filament regardless of item_type
+    if (hasFilament) {
+      return "bg-orange-500/20 text-orange-400";
+    }
     const found = ITEM_TYPES.find((t) => t.value === type);
     if (!found) return "bg-gray-500/20 text-gray-400";
     return {
       blue: "bg-blue-500/20 text-blue-400",
       purple: "bg-purple-500/20 text-purple-400",
       orange: "bg-orange-500/20 text-orange-400",
+      yellow: "bg-yellow-500/20 text-yellow-400",
       green: "bg-green-500/20 text-green-400",
     }[found.color];
   };
@@ -624,7 +630,8 @@ export default function AdminItems() {
                     <td className="py-3 px-4">
                       <span
                         className={`px-2 py-1 rounded-full text-xs ${getItemTypeStyle(
-                          item.item_type
+                          item.item_type,
+                          !!item.material_type_id
                         )}`}
                       >
                         {item.material_type_id
