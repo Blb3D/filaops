@@ -1,258 +1,180 @@
 # FilaOps - 3D Print Farm ERP
 
-> Open source manufacturing resource planning for 3D print operations
+> The ERP that understands additive manufacturing—built by a print farm, for print farms.
 
-[![License: BSL](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
+[![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
-
-FilaOps is an open source ERP system built for 3D print farms. Manage products, inventory, BOMs, orders, and production - designed by someone who actually runs a print farm.
-
-![FilaOps Dashboard](docs/screenshots/dashboard.png)
+[![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
 
 ---
 
-## 🚀 Quick Start (Docker - 5 Minutes)
+## Why FilaOps?
 
-**No coding required!** Perfect for print farm owners who want professional ERP functionality without the complexity.
+Most ERP systems are built for traditional manufacturing. They don't understand filament spools, print times, multi-material jobs, or why you need to track which roll went into which print.
+
+FilaOps was built by someone who runs a print farm and got tired of spreadsheets and generic software that didn't fit.
+
+**What makes it different:**
+- **3D printing native** - BOMs that understand filament, print times, and material costs
+- **Actually usable** - Docker setup, dark theme UI, no enterprise sales calls required
+- **Self-hosted & open** - Your data stays yours. No cloud dependency, no vendor lock-in
+- **Production-grade** - Serial/lot traceability ready for medical device and aerospace compliance
+
+---
+
+## Quick Start
 
 ```bash
-# 1. Clone the repo
 git clone https://github.com/Blb3D/filaops.git
 cd filaops
-
-# 2. Start everything (one command!)
 docker-compose up -d
-
-# 3. Open your browser
-# http://localhost:5173
 ```
 
-**That's it!** Everything is pre-configured:
-- ✅ SQL Server database (auto-initialized)
-- ✅ Backend API (FastAPI)
-- ✅ Frontend UI (React)
-- ✅ All dependencies included
+Open http://localhost:5173 and log in with `admin@filaops.local` / `admin123`
 
-**Default login:** admin@filaops.local / admin123
+That's it. Database, API, and UI are all pre-configured.
 
-📖 **[Full Installation Guide](INSTALL.md)** - Step-by-step for Windows/Mac/Linux
-
-> **Why Docker?** Most ERP systems require hours of setup, database configuration, and dependency management. FilaOps runs in containers - everything just works. Perfect for print farm owners who want to focus on their business, not IT infrastructure.
+📖 **[Full Installation Guide](INSTALL.md)** for manual setup or troubleshooting.
 
 ---
 
-## What You Get
+## What's Included
 
-### Core ERP (Fully Functional)
-- **Product Catalog** - Unified item master (finished goods, components, supplies, services)
-- **Bill of Materials** - Multi-level BOMs with explicit units of measure and cost-only flags
-- **Inventory Management** - Stock levels, allocations, low stock alerts with MRP integration
-- **Sales Orders** - Complete order management with status tracking and MRP explosion
-- **Production Orders** - Manufacturing workflow with operation tracking
-- **MRP** - Material requirements planning with shortage detection
-- **Purchasing** - Low stock alerts with MRP-driven requirements
-- **Shipping** - Multi-carrier support, production status validation, packing slips
+### Core ERP (Free, Self-Hosted)
+
+| Module | What It Does |
+|--------|--------------|
+| **Products & Items** | Unified catalog for finished goods, components, filament, hardware |
+| **Bill of Materials** | Multi-level BOMs with material costs and unit tracking |
+| **Inventory** | Stock levels, FIFO tracking, low stock alerts |
+| **Sales Orders** | Order management with status tracking |
+| **Production Orders** | Manufacturing workflow from order to ship |
+| **MRP** | Material requirements planning with shortage detection |
+| **Traceability** | Serial numbers, lot tracking, forward/backward recall queries |
+| **Multi-User** | Team access with user accounts |
+| **REST API** | Full API for integrations and automation |
 
 ### Admin Dashboard
-- Full React-based admin UI with **dark theme** (your eyes will thank you)
-- Real-time KPIs: overdue orders, low stock items, revenue metrics
-- Order Command Center: MRP explosion, material/capacity requirements, shortage detection
+- Dark theme (your eyes will thank you at 2am)
+- Real-time KPIs: overdue orders, low stock, revenue
+- Order Command Center with MRP explosion
 
 ---
 
-## 📖 Documentation
+## Feature Comparison
 
-| Guide | Description |
-|-------|-------------|
-| **[INSTALL.md](INSTALL.md)** | Docker deployment for print farmers |
-| [GETTING_STARTED.md](GETTING_STARTED.md) | Development setup guide |
-| [HOW_IT_WORKS.md](HOW_IT_WORKS.md) | Understanding the workflow |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | For contributors |
-| **[docs/](docs/)** | All project documentation (architecture, planning, guides) |
-| [docs/README.md](docs/README.md) | Documentation index and navigation |
+The core ERP is fully functional and free to self-host. Pro and Enterprise tiers add integrations and advanced features for larger operations.
+
+| | Community | Pro | Enterprise |
+|---|:---:|:---:|:---:|
+| **Core ERP** | ✅ | ✅ | ✅ |
+| Products, BOMs, Inventory | ✅ | ✅ | ✅ |
+| Sales & Production Orders | ✅ | ✅ | ✅ |
+| MRP & Shortage Detection | ✅ | ✅ | ✅ |
+| Serial/Lot Traceability | ✅ | ✅ | ✅ |
+| Multi-User | ✅ | ✅ | ✅ |
+| REST API | ✅ | ✅ | ✅ |
+| Docker Deployment | ✅ | ✅ | ✅ |
+| | | | |
+| **Integrations** | | | |
+| Customer Quote Portal | — | ✅ | ✅ |
+| Multi-Material/AMS Quoting | — | ✅ | ✅ |
+| Squarespace Sync | — | ✅ | ✅ |
+| QuickBooks Integration | — | ✅ | ✅ |
+| | | | |
+| **Advanced** | | | |
+| Advanced Role Permissions | — | ✅ | ✅ |
+| User Activity Audit Logs | — | ✅ | ✅ |
+| ML Print Time Estimation | — | — | ✅ |
+| Printer Fleet Management | — | — | ✅ |
+| SSO / LDAP | — | — | ✅ |
+| Priority Support | — | — | ✅ |
+
+**Pro & Enterprise launching 2026** — [Join the waitlist](mailto:info@blb3dprinting.com)
 
 ---
 
-## Development Setup (For Contributors)
+## Documentation
 
-If you want to modify FilaOps or contribute, here's the dev setup:
+| | |
+|---|---|
+| **[INSTALL.md](INSTALL.md)** | Installation guide (Docker & manual) |
+| **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** | System overview and workflows |
+| **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Common issues and fixes |
+| **[FAQ.md](FAQ.md)** | Frequently asked questions |
+| **[CONTRIBUTING.md](CONTRIBUTING.md)** | For contributors |
+| **[docs/](docs/)** | Full documentation (architecture, API, planning) |
 
-### Prerequisites
-- Python 3.11+
-- Node.js 18+
-- SQL Server Express (or SQL Server)
-- ODBC Driver 17 for SQL Server
+---
 
-### Backend
+## For Developers
+
+### Local Development Setup
+
+**Prerequisites:** Python 3.11+, Node.js 18+, SQL Server Express, ODBC Driver 17
+
 ```bash
+# Backend
 cd backend
 pip install -r requirements.txt
 cp .env.example .env
-# Edit .env with your database settings
 python -m uvicorn app.main:app --reload --port 8000
-```
 
-### Frontend
-```bash
+# Frontend (separate terminal)
 cd frontend
 npm install
 npm run dev
 ```
 
-API docs: http://localhost:8000/docs
-Admin UI: http://localhost:5173
+- API docs: http://localhost:8000/docs
+- Admin UI: http://localhost:5173
 
----
+### Project Structure
 
-## Configuration
-
-### Docker (.env file)
-```env
-# Copy .env.example to .env and customize
-DB_PASSWORD=YourSecurePassword
-SECRET_KEY=your-64-char-hex-key
-```
-
-### Manual Setup (backend/.env)
-```env
-DB_HOST=localhost\SQLEXPRESS
-DB_NAME=FilaOps
-DB_TRUSTED_CONNECTION=true
-SECRET_KEY=your-secure-secret-key
-```
-
----
-
-## Project Structure
 ```
 filaops/
-├── backend/           # FastAPI REST API
+├── backend/           # FastAPI API
 │   ├── app/
 │   │   ├── api/       # REST endpoints
 │   │   ├── models/    # SQLAlchemy ORM
 │   │   ├── services/  # Business logic (MRP, etc)
 │   │   └── core/      # Config, security
-│   └── Dockerfile
+│   └── tests/
 ├── frontend/          # React admin UI
-│   └── Dockerfile
-├── docker-compose.yml # One-command deployment
-├── INSTALL.md         # User installation guide
-├── docs/              # All documentation (architecture, planning, guides)
-│   ├── architecture/  # Technical architecture docs
-│   ├── planning/      # Roadmaps and release plans
-│   ├── development/   # Developer guides and tools
-│   └── history/       # Project progress and milestones
-└── scripts/           # Utility scripts
-    ├── github/        # GitHub issue/release management
-    ├── database/      # Database setup and migrations
-    └── tools/         # Utility scripts and helpers
+├── docs/              # Documentation
+└── docker-compose.yml
 ```
 
----
+### Contributing
 
-## API Overview
+We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-### Products & Inventory
-```
-GET    /api/v1/items              # List all items
-POST   /api/v1/items              # Create item
-GET    /api/v1/items/low-stock    # Low stock items + MRP shortages
-GET    /api/v1/admin/inventory/transactions  # Transaction history
-```
-
-### Orders & MRP
-```
-GET    /api/v1/sales-orders       # List sales orders
-POST   /api/v1/sales-orders       # Create sales order
-GET    /api/v1/sales-orders/{id}  # Order detail with MRP explosion
-POST   /api/v1/mrp/requirements   # Calculate material requirements
-```
-
-### Production
-```
-GET    /api/v1/production-orders  # List production orders
-POST   /api/v1/production-orders  # Create production order
-POST   /api/v1/production-orders/{id}/start
-POST   /api/v1/production-orders/{id}/complete
-```
-
-Full interactive API docs at `http://localhost:8000/docs` when running.
-
----
-
-## FilaOps Tiers
-
-| Feature | Community | Pro | Enterprise |
-|---------|:---------:|:---:|:----------:|
-| Products, BOMs, Inventory | ✅ | ✅ | ✅ |
-| Sales & Production Orders | ✅ | ✅ | ✅ |
-| MRP & Capacity Planning | ✅ | ✅ | ✅ |
-| Serial/Lot Traceability | ✅ | ✅ | ✅ |
-| Admin Dashboard UI | ✅ | ✅ | ✅ |
-| Docker Deployment | ✅ | ✅ | ✅ |
-| REST API | ✅ | ✅ | ✅ |
-| Customer Quote Portal | - | ✅ | ✅ |
-| Multi-User | - | ✅ | ✅ |
-| E-commerce Integrations | - | ✅ | ✅ |
-| Printer Fleet Management | - | - | ✅ |
-| ML Print Time Estimation | - | - | ✅ |
-| Priority Support | - | - | ✅ |
-
-**Pro & Enterprise coming 2026** - [Join the waitlist](mailto:hello@blb3dprinting.com)
-
----
-
-## Recent Updates (December 2025)
-
-- ✅ **Docker deployment** - One-command setup for print farmers
-- ✅ MRP engine refactoring (Phase 5 complete)
-- ✅ Inventory transaction management
-- ✅ Enhanced dashboard with MRP-integrated alerts
-- ✅ Unified item master system
-
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
-
----
-
-## Contributing
-
-Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Key areas:
-- Bug fixes and testing
-- Documentation improvements
-- UI/UX enhancements
-- Performance optimization
+**Good first issues:**
+- Bug fixes
+- Documentation improvements  
+- UI/UX polish
+- Test coverage
 
 ---
 
 ## License
 
-**Business Source License 1.1** - see [LICENSE](LICENSE)
+**Business Source License 1.1** — see [LICENSE](LICENSE)
 
 - ✅ Free for internal business use
-- ✅ Free for personal/educational use
-- ❌ Cannot be used to offer competing SaaS
+- ✅ Free for personal and educational use  
+- ❌ Cannot offer FilaOps as a hosted service to others
 - 🔓 Converts to Apache 2.0 after 4 years
 
 ---
 
 ## Support
 
-### Documentation
-- **[GETTING_STARTED.md](GETTING_STARTED.md)** - Quick start guide (Docker & manual)
-- **[FAQ.md](FAQ.md)** - Frequently asked questions
-- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common issues and solutions
-- **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** - System overview and workflows
-- **[INSTALL.md](INSTALL.md)** - Detailed installation guide
-
-### Community
-- [GitHub Issues](https://github.com/blb3dprinting/filaops/issues) - Bug reports
-- [GitHub Discussions](https://github.com/blb3dprinting/filaops/discussions) - Questions & ideas
-- [Discord](https://discord.gg/filaops) - Community chat
+- **[GitHub Issues](https://github.com/Blb3D/filaops/issues)** — Bug reports
+- **[GitHub Discussions](https://github.com/Blb3D/filaops/discussions)** — Questions and ideas
+- **Email:** info@blb3dprinting.com
 
 ---
 
-Built by [BLB3D](https://blb3dprinting.com) - a print farm that needed real manufacturing software.
+Built by [BLB3D](https://blb3dprinting.com) — a print farm that needed real manufacturing software.

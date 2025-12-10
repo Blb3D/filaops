@@ -262,6 +262,7 @@ const navItems = [
   },
   { path: "/admin/shipping", label: "Shipping", icon: ShippingIcon },
   { path: "/admin/analytics", label: "Analytics", icon: AnalyticsIcon },
+  { path: "/admin/users", label: "Team Members", icon: CustomersIcon },
   // { path: "/admin/license", label: "License", icon: LicenseIcon },  // Disabled until ready
 ];
 

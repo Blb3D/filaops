@@ -20,6 +20,7 @@ import AdminInventoryTransactions from "./pages/admin/AdminInventoryTransactions
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminMaterialImport from "./pages/admin/AdminMaterialImport";
 import AdminOrderImport from "./pages/admin/AdminOrderImport";
+import AdminUsers from "./pages/admin/AdminUsers";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
@@ -68,6 +69,7 @@ export default function App() {
             path="inventory/transactions"
             element={<AdminInventoryTransactions />}
           />
+          <Route path="users" element={<AdminUsers />} />
         </Route>
       </Routes>
     </BrowserRouter>

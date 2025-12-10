@@ -4,10 +4,14 @@ Admin endpoints - requires admin authentication
 from fastapi import APIRouter
 from . import (
     bom, dashboard, fulfillment, audit, accounting, traceability, 
-    customers, inventory_transactions, analytics, export, data_import, orders
+    customers, inventory_transactions, analytics, export, data_import, orders,
+    users
 )
 
 router = APIRouter()
+
+# User Management (Admin/Operator users)
+router.include_router(users.router)
 
 # Customer Management
 router.include_router(customers.router)
