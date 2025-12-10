@@ -25,7 +25,7 @@ from app.schemas.scheduling import (
     AvailableSlotResponse,
     MachineAvailabilityResponse,
 )
-from app.core.security import get_current_user
+from app.api.v1.endpoints.auth import get_current_user
 from app.core.features import require_tier, Tier
 from app.models.user import User
 
