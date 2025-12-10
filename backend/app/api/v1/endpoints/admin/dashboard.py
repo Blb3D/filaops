@@ -3,7 +3,7 @@ Admin Dashboard Endpoints
 
 Central hub for admin operations - provides summary data and navigation context
 """
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime, timedelta
 

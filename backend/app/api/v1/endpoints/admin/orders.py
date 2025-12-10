@@ -3,7 +3,7 @@ Admin Orders Management - CSV Import
 """
 import csv
 import io
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query

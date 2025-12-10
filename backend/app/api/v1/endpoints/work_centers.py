@@ -4,7 +4,7 @@ Work Centers API Endpoints
 CRUD operations for work centers and resources (machines).
 """
 from fastapi import APIRouter, HTTPException, Depends, status
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.db.session import get_db
 from app.logging_config import get_logger
 from app.models.manufacturing import WorkCenter, Resource
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_current_user
 from app.models.user import User
 from app.schemas.manufacturing import (
     WorkCenterCreate,
