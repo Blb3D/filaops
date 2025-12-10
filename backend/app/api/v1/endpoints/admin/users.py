@@ -18,7 +18,7 @@ from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.models.user import User, RefreshToken
-from app.api.v1.endpoints.auth import get_current_admin_user
+from app.api.v1.deps import get_current_admin_user
 from app.core.security import hash_password
 from app.logging_config import get_logger
 from app.schemas.user_admin import (
