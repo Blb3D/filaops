@@ -3,7 +3,7 @@ Material API Endpoints
 
 Provides material type and color options for the quote portal.
 """
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from app.db.session import get_db
 from app.models.user import User
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_current_user
 from app.models.material import MaterialType, Color, MaterialColor
 from app.models.product import Product
 from app.models.inventory import Inventory, InventoryLocation
