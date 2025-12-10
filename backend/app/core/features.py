@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
-from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_current_user
 
 
 class Tier(str, Enum):
