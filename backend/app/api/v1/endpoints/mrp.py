@@ -8,7 +8,7 @@ Endpoints for:
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 
 from app.db.session import get_db
 from app.models import MRPRun, PlannedOrder, Product

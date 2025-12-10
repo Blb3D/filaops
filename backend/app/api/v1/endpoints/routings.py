@@ -60,12 +60,12 @@ async def list_routings(
     )
 
     if templates_only:
-        query = query.filter(Routing.is_template == True)
+        query = query.filter(Routing.is_template.is_(True))
     elif product_id:
         query = query.filter(Routing.product_id == product_id)
 
     if active_only:
-        query = query.filter(Routing.is_active == True)
+        query = query.filter(Routing.is_active.is_(True))
 
     if search:
         query = query.outerjoin(Product).filter(
@@ -212,7 +212,7 @@ async def seed_routing_templates(
 
     # Get work centers by code
     work_centers = {}
-    for wc in db.query(WorkCenter).filter(WorkCenter.is_active == True).all():
+    for wc in db.query(WorkCenter).filter(WorkCenter.is_active.is_(True)).all():
         work_centers[wc.code] = wc
 
     # Verify required work centers exist
@@ -320,7 +320,7 @@ async def seed_routing_templates(
         # Check if already exists
         existing = db.query(Routing).filter(
             Routing.code == tpl["code"],
-            Routing.is_template == True
+            Routing.is_template.is_(True)
         ).first()
 
         if existing:
@@ -393,8 +393,8 @@ async def apply_template_to_product(
         joinedload(Routing.operations).joinedload(RoutingOperation.work_center)
     ).filter(
         Routing.id == data.template_id,
-        Routing.is_template == True,
-        Routing.is_active == True
+        Routing.is_template.is_(True),
+        Routing.is_active.is_(True)
     ).first()
 
     if not template:
@@ -408,7 +408,7 @@ async def apply_template_to_product(
     # Check for existing routing for this product
     existing = db.query(Routing).filter(
         Routing.product_id == data.product_id,
-        Routing.is_active == True
+        Routing.is_active.is_(True)
     ).first()
 
     # Build override lookup
@@ -580,7 +580,7 @@ async def get_product_routing(
         joinedload(Routing.operations).joinedload(RoutingOperation.work_center)
     ).filter(
         Routing.product_id == product_id,
-        Routing.is_active == True
+        Routing.is_active.is_(True)
     ).order_by(desc(Routing.version)).first()
 
     if not routing:
@@ -653,7 +653,7 @@ async def list_routing_operations(
     ).filter(RoutingOperation.routing_id == routing_id)
 
     if active_only:
-        query = query.filter(RoutingOperation.is_active == True)
+        query = query.filter(RoutingOperation.is_active.is_(True))
 
     operations = query.order_by(RoutingOperation.sequence).all()
 
@@ -789,7 +789,7 @@ def _recalculate_routing_totals(routing: Routing, db: Session):
         joinedload(RoutingOperation.work_center)
     ).filter(
         RoutingOperation.routing_id == routing.id,
-        RoutingOperation.is_active == True
+        RoutingOperation.is_active.is_(True)
     ).all()
 
     total_setup = Decimal("0")

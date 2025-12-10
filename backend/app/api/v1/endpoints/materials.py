@@ -3,7 +3,7 @@ Material API Endpoints
 
 Provides material type and color options for the quote portal.
 """
-from typing import List, Optional
+from typing import Optional
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
@@ -23,10 +23,8 @@ from app.services.material_service import (
     get_portal_material_options,
     get_available_material_types,
     get_available_colors_for_material,
-    get_material_product_for_bom,
     MaterialNotFoundError,
     ColorNotFoundError,
-    MaterialColorNotAvailableError,
 )
 # MaterialInventory removed - using unified Inventory table (Phase 1.4)
 
@@ -245,7 +243,6 @@ def get_materials_for_bom(
     from app.services.material_service import (
         get_available_material_types,
         get_available_colors_for_material,
-        get_material_product_for_bom,
     )
     from app.models.inventory import Inventory
 
@@ -534,7 +531,7 @@ async def import_materials_csv(
                         price_str = row.get(col, "").strip().replace("$", "").replace(",", "")
                         price = Decimal(price_str)
                         break
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             # Find on-hand quantity (in grams, convert to kg)
@@ -545,7 +542,7 @@ async def import_materials_csv(
                         grams = Decimal(row.get(col, "").strip().replace(",", ""))
                         on_hand_kg = grams / Decimal("1000")  # Convert grams to kg
                         break
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             # Get or create material type

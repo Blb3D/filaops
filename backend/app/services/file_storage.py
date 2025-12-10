@@ -3,7 +3,6 @@ File Storage Service for Quote Files
 
 Handles local filesystem storage with Google Cloud Storage backup
 """
-import os
 import hashlib
 from datetime import datetime
 from pathlib import Path

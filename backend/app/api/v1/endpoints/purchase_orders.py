@@ -1,14 +1,12 @@
 """
 Purchase Orders API Endpoints
 """
-from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List, Optional
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, desc
-import os
-import tempfile
+from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.logging_config import get_logger
@@ -20,7 +18,6 @@ from app.models.inventory import Inventory, InventoryTransaction
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.schemas.purchasing import (
-    POStatus,
     PurchaseOrderCreate,
     PurchaseOrderUpdate,
     PurchaseOrderListResponse,
@@ -301,7 +298,7 @@ async def add_po_line(
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Get next line number
-    next_line = max([l.line_number for l in po.lines], default=0) + 1
+    next_line = max([line.line_number for line in po.lines], default=0) + 1
 
     line = PurchaseOrderLine(
         purchase_order_id=po.id,

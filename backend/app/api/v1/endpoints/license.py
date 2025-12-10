@@ -19,8 +19,16 @@ import hashlib
 from app.db.session import get_db
 from app.api.v1.endpoints.auth import get_current_admin_user
 from app.models.user import User
+# License model is disabled - see note at top of file
 # from app.models.license import License  # Disabled until ready
 from app.core.features import Tier
+
+# Type stub for License to avoid undefined name errors when feature is disabled
+# This will be removed when license feature is enabled
+try:
+    from app.models.license import License
+except ImportError:
+    License = None  # type: ignore
 
 router = APIRouter(prefix="/license", tags=["license"])
 

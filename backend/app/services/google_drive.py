@@ -20,7 +20,6 @@ Environment Variables:
 import os
 from app.logging_config import get_logger
 from typing import Optional, Tuple
-from datetime import datetime
 
 from app.core.config import settings
 

@@ -3,8 +3,7 @@ SQLAlchemy models for customer quotes and uploaded files
 
 Handles quote requests, file uploads, and approval workflow
 """
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Numeric, BigInteger, Boolean,
     DateTime, Date, ForeignKey, func

@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import desc, func, or_
+from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.models.user import User
@@ -340,7 +340,7 @@ async def list_locations(
     db: Session = Depends(get_db),
 ):
     """List all inventory locations"""
-    locations = db.query(InventoryLocation).filter(InventoryLocation.active == True).all()
+    locations = db.query(InventoryLocation).filter(InventoryLocation.active.is_(True)).all()
     return [
         {
             "id": loc.id,

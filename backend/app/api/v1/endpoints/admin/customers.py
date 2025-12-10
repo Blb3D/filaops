@@ -10,8 +10,11 @@ are CRM records for order management. They cannot log in to a portal.
 from typing import List, Optional
 from datetime import datetime, timezone
 import secrets
+import csv
+import io
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, File, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from app.db.session import get_db
@@ -93,8 +96,8 @@ async def list_customers(
     # Order by most recent first
     query = query.order_by(desc(User.created_at))
 
-    # Get total count before pagination
-    total = query.count()
+    # Get total count before pagination (for future pagination metadata)
+    _total = query.count()
     customers = query.offset(skip).limit(limit).all()
 
     # Build response with stats
@@ -581,11 +584,6 @@ async def get_customer_orders(
 # ============================================================================
 # CSV IMPORT
 # ============================================================================
-
-import csv
-import io
-from fastapi import File, UploadFile
-from fastapi.responses import StreamingResponse
 
 
 # Column mapping for common e-commerce platforms

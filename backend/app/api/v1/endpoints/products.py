@@ -89,7 +89,7 @@ async def list_products(
 
         # Apply filters
         if active_only:
-            query = query.filter(Product.active == True)
+            query = query.filter(Product.active.is_(True))
 
         if category:
             query = query.filter(Product.category == category)

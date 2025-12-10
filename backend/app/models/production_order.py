@@ -7,7 +7,7 @@ Integrates with:
 - Routings (process steps to follow)
 - Work Centers & Resources (where/how work happens)
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 

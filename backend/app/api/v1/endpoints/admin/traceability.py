@@ -11,8 +11,8 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, desc, and_, or_
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, desc, and_
+from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.api.v1.endpoints.auth import get_current_user

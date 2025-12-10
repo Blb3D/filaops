@@ -204,7 +204,8 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Set limiter reference in auth module BEFORE including routes
 # This ensures decorators have access to the limiter instance
-from app.api.v1.endpoints import auth
+# Note: Import is here due to circular dependency - limiter must be set before routes are included
+from app.api.v1.endpoints import auth  # noqa: E402
 auth.limiter = limiter
 
 # Include API routes (must be after limiter setup)

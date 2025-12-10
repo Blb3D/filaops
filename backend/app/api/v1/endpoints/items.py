@@ -28,7 +28,6 @@ from app.schemas.item import (
     ItemUpdate,
     ItemListResponse,
     ItemResponse,
-    ItemCSVImportRequest,
     ItemCSVImportResult,
     ItemBulkUpdateRequest,
     MaterialItemCreate,
@@ -61,7 +60,7 @@ async def list_categories(
     query = db.query(ItemCategory)
 
     if not include_inactive:
-        query = query.filter(ItemCategory.is_active == True)
+        query = query.filter(ItemCategory.is_active.is_(True))
 
     if parent_id is not None:
         query = query.filter(ItemCategory.parent_id == parent_id)
@@ -95,7 +94,7 @@ async def get_category_tree(
     """Get categories as a nested tree structure"""
     # Get all active categories
     categories = db.query(ItemCategory).filter(
-        ItemCategory.is_active == True
+        ItemCategory.is_active.is_(True)
     ).order_by(ItemCategory.sort_order, ItemCategory.name).all()
 
     # Build tree
@@ -263,7 +262,7 @@ async def delete_category(
     # Check for child categories
     children = db.query(ItemCategory).filter(
         ItemCategory.parent_id == category_id,
-        ItemCategory.is_active == True
+        ItemCategory.is_active.is_(True)
     ).count()
     if children > 0:
         raise HTTPException(
@@ -274,7 +273,7 @@ async def delete_category(
     # Check for items in this category
     items = db.query(Product).filter(
         Product.category_id == category_id,
-        Product.active == True
+        Product.active.is_(True)
     ).count()
     if items > 0:
         raise HTTPException(
@@ -316,7 +315,7 @@ async def list_items(
 
     # Filters
     if active_only:
-        query = query.filter(Product.active == True)
+        query = query.filter(Product.active.is_(True))
 
     if item_type:
         query = query.filter(Product.item_type == item_type)
@@ -634,7 +633,6 @@ async def get_low_stock_items(
     - **limit**: Maximum number of items to return
     """
     from decimal import Decimal
-    from collections import defaultdict
 
     items_dict = {}  # product_id -> item data
 
@@ -642,7 +640,7 @@ async def get_low_stock_items(
     query = db.query(Product, Inventory).outerjoin(
         Inventory, Product.id == Inventory.product_id
     ).filter(
-        Product.active == True,
+        Product.active.is_(True),
         Product.reorder_point.isnot(None),
     )
 
@@ -714,7 +712,7 @@ async def get_low_stock_items(
                                 source_demand_id=order.id
                             )
                             all_requirements.extend(requirements)
-                        except Exception as e:
+                        except Exception:
                             # Skip if BOM explosion fails (no BOM, etc.)
                             continue
             elif order.order_type == "quote_based" and hasattr(order, 'quote_id') and order.quote_id:
@@ -730,7 +728,7 @@ async def get_low_stock_items(
                             source_demand_id=order.id
                         )
                         all_requirements.extend(requirements)
-                    except Exception as e:
+                    except Exception:
                         # Skip if BOM explosion fails
                         continue
         
@@ -937,7 +935,7 @@ async def delete_item(
     # Check for active BOMs using this item
     bom_count = db.query(BOM).filter(
         BOM.product_id == item_id,
-        BOM.active == True
+        BOM.active.is_(True)
     ).count()
     if bom_count > 0:
         raise HTTPException(
@@ -1505,7 +1503,7 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
     # Check for active BOM (indicates manufactured item)
     bom = db.query(BOM).filter(
         BOM.product_id == item.id,
-        BOM.active == True
+        BOM.active.is_(True)
     ).first()
 
     if bom:
@@ -1519,7 +1517,7 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
         # Get active Routing cost
         routing = db.query(Routing).filter(
             Routing.product_id == item.id,
-            Routing.is_active == True
+            Routing.is_active.is_(True)
         ).first()
         if routing and routing.total_cost:
             routing_cost = float(routing.total_cost)
@@ -1565,7 +1563,7 @@ async def recost_all_items(
     - **category_id**: Filter by category (includes descendants)
     - **cost_source**: Filter by 'manufactured' (has BOM) or 'purchased' (no BOM)
     """
-    query = db.query(Product).filter(Product.active == True)
+    query = db.query(Product).filter(Product.active.is_(True))
 
     if item_type:
         query = query.filter(Product.item_type == item_type)
@@ -1697,7 +1695,7 @@ def _build_item_response(item: Product, db: Session) -> ItemResponse:
     allocated = float(inv.allocated) if inv else 0
 
     # Get BOM count
-    bom_count = db.query(BOM).filter(BOM.product_id == item.id, BOM.active == True).count()
+    bom_count = db.query(BOM).filter(BOM.product_id == item.id, BOM.active.is_(True)).count()
 
     return ItemResponse(
         id=item.id,

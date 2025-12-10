@@ -10,7 +10,6 @@ from app.db.session import get_db
 from app.api.v1.endpoints.auth import get_current_admin_user
 from app.models.user import User
 from app.models.product import Product
-from app.models.inventory import Inventory, InventoryLocation
 from datetime import datetime, timezone
 
 router = APIRouter(prefix="/import", tags=["import"])

@@ -15,13 +15,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 from app.models.sales_order import SalesOrder
 from app.models.production_order import ProductionOrder
 from app.models.inventory import InventoryTransaction, Inventory
-from app.models.bom import BOM, BOMLine
-from app.models.quote import Quote
+from app.models.bom import BOM
 
 
 @dataclass
@@ -212,7 +210,7 @@ class TransactionAuditService:
         elif po.product_id:
             return self.db.query(BOM).filter(
                 BOM.product_id == po.product_id,
-                BOM.active == True
+                BOM.active.is_(True)
             ).first()
         return None
 

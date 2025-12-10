@@ -3,12 +3,11 @@ Work Centers API Endpoints
 
 CRUD operations for work centers and resources (machines).
 """
-from fastapi import APIRouter, HTTPException, Depends, Query, status
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, status
+from typing import Optional
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.logging_config import get_logger
@@ -52,7 +51,7 @@ async def list_work_centers(
         query = query.filter(WorkCenter.center_type == center_type)
 
     if active_only:
-        query = query.filter(WorkCenter.is_active == True)
+        query = query.filter(WorkCenter.is_active.is_(True))
 
     work_centers = query.order_by(WorkCenter.scheduling_priority.desc(), WorkCenter.name).all()
 
@@ -205,7 +204,7 @@ async def list_resources(
     query = db.query(Resource).filter(Resource.work_center_id == wc_id)
 
     if active_only:
-        query = query.filter(Resource.is_active == True)
+        query = query.filter(Resource.is_active.is_(True))
 
     resources = query.order_by(Resource.code).all()
 

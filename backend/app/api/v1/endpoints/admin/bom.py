@@ -3,7 +3,7 @@ BOM Management Endpoints (Admin Only)
 
 Handles Bill of Materials viewing, editing, and approval
 """
-from typing import List, Optional
+from typing import Optional, List
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -27,7 +27,6 @@ from app.schemas.bom import (
     BOMLineUpdate,
     BOMLineResponse,
     BOMRecalculateResponse,
-    BOMBulkAddLinesRequest,
     BOMCopyRequest,
 )
 
@@ -92,7 +91,7 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
         # Check if component has its own BOM (is a sub-assembly)
         component_has_bom = db.query(BOM).filter(
             BOM.product_id == line.component_id,
-            BOM.active == True
+            BOM.active.is_(True)
         ).first() is not None
 
         lines.append({
@@ -178,7 +177,7 @@ async def list_boms(
         query = query.filter(BOM.product_id == product_id)
 
     if active_only:
-        query = query.filter(BOM.active == True)
+        query = query.filter(BOM.active.is_(True))
 
     if search:
         query = query.join(Product).filter(
@@ -199,7 +198,7 @@ async def list_boms(
         # Get routing process cost for this product
         routing = db.query(Routing).filter(
             Routing.product_id == bom.product_id,
-            Routing.is_active == True
+            Routing.is_active.is_(True)
         ).first()
         process_cost = routing.total_cost if routing and routing.total_cost else Decimal("0")
 
@@ -804,7 +803,7 @@ async def get_bom_by_product(
     bom = (
         db.query(BOM)
         .options(joinedload(BOM.product), joinedload(BOM.lines))
-        .filter(BOM.product_id == product_id, BOM.active == True)
+        .filter(BOM.product_id == product_id, BOM.active.is_(True))
         .order_by(desc(BOM.version))
         .first()
     )
@@ -885,7 +884,7 @@ def explode_bom_recursive(
         # Check if this component has its own BOM (sub-assembly)
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))
             .order_by(desc(BOM.version))
             .first()
         )
@@ -959,7 +958,7 @@ def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> D
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1093,7 +1092,7 @@ async def get_cost_rollup(
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1173,7 +1172,7 @@ async def where_used(
     )
 
     if not include_inactive:
-        query = query.filter(BOM.active == True)
+        query = query.filter(BOM.active.is_(True))
 
     lines = query.all()
 
@@ -1248,7 +1247,7 @@ async def validate_bom(
             # Check if it's a sub-assembly
             sub_bom = db.query(BOM).filter(
                 BOM.product_id == component.id,
-                BOM.active == True
+                BOM.active.is_(True)
             ).first()
 
             if not sub_bom:

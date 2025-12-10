@@ -6,7 +6,6 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
 import csv
 import io
 from collections import defaultdict
@@ -246,7 +245,7 @@ async def get_existing_products(
     """
     Get existing products that can be mapped to Amazon items
     """
-    query = db.query(Product).filter(Product.active == True)
+    query = db.query(Product).filter(Product.active.is_(True))
 
     if search:
         search_filter = f"%{search}%"
@@ -343,7 +342,7 @@ async def execute_import(
                 tax_amount=Decimal(str(order.tax)),
                 shipping_cost=Decimal(str(order.shipping)),
                 total_amount=Decimal(str(order.total)),
-                notes=f"Imported from Amazon Business CSV",
+                notes="Imported from Amazon Business CSV",
                 created_by=f"{current_user.first_name} {current_user.last_name}",
                 created_at=datetime.utcnow(),
                 updated_at=datetime.utcnow()

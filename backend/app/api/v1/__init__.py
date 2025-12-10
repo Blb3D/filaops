@@ -19,7 +19,6 @@ from app.api.v1.endpoints import (
     mrp,
     features,
     setup,
-    scheduling,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router

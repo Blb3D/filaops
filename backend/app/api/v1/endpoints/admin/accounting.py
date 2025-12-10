@@ -7,12 +7,12 @@ Provides endpoints for viewing inventory flow through accounting lens:
 These are views into the inventory data, formatted for accounting purposes.
 Actual QuickBooks integration will come in Phase 4.
 """
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, case
+from sqlalchemy import func
 
 from app.db.session import get_db
 from app.models.inventory import Inventory, InventoryTransaction

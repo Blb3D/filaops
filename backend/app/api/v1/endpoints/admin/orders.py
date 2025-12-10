@@ -3,8 +3,8 @@ Admin Orders Management - CSV Import
 """
 import csv
 import io
-from typing import List, Optional
-from decimal import Decimal
+from typing import Optional
+from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
 from fastapi.responses import StreamingResponse
@@ -49,7 +49,7 @@ def clean_price(price_str: str) -> Optional[Decimal]:
         if not cleaned:
             return None
         return Decimal(cleaned)
-    except:
+    except (ValueError, TypeError, InvalidOperation):
         return None
 
 
@@ -91,7 +91,7 @@ def find_or_create_customer(db: Session, email: str, name: str = None,
         try:
             last_num = int(last_customer.customer_number.split("-")[2])
             customer_number = f"CUST-{year}-{last_num + 1:06d}"
-        except:
+        except (ValueError, IndexError):
             customer_number = f"CUST-{year}-000001"
     else:
         customer_number = f"CUST-{year}-000001"
@@ -271,7 +271,7 @@ async def import_orders_csv(
                         if quantity <= 0:
                             quantity = 1
                         break
-                    except:
+                    except (ValueError, TypeError):
                         pass
             
             # Find unit price
@@ -384,7 +384,7 @@ async def import_orders_csv(
                 if "@placeholder.local" in order_data["customer_email"] and not create_customers:
                     result.errors.append({
                         "order_id": order_id,
-                        "error": f"Customer email missing and create_customers=false - order skipped"
+                        "error": "Customer email missing and create_customers=false - order skipped"
                     })
                     result.skipped += 1
                     continue
@@ -469,7 +469,7 @@ async def import_orders_csv(
                 try:
                     last_num = int(last_order.order_number.split("-")[2])
                     order_number = f"SO-{year}-{last_num + 1:06d}"
-                except:
+                except (ValueError, IndexError):
                     order_number = f"SO-{year}-000001"
             else:
                 order_number = f"SO-{year}-000001"

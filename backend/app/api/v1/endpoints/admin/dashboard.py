@@ -3,11 +3,11 @@ Admin Dashboard Endpoints
 
 Central hub for admin operations - provides summary data and navigation context
 """
-from typing import List, Optional
+from typing import Optional
 from decimal import Decimal
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from pydantic import BaseModel
@@ -126,7 +126,7 @@ async def get_dashboard(
         .join(Product)
         .filter(
             Product.type == "custom",
-            BOM.active == True,
+            BOM.active.is_(True),
         )
         .count()
     )
@@ -252,7 +252,7 @@ async def get_dashboard(
         .join(Product)
         .filter(
             Product.type == "custom",
-            BOM.active == True,
+            BOM.active.is_(True),
         )
         .order_by(desc(BOM.created_at))
         .limit(10)
@@ -289,9 +289,8 @@ async def get_dashboard_summary(
 
     Returns counts for quotes, orders, production, BOMs, and actionable alerts.
     """
-    from app.models.inventory import Inventory
     from app.models.product import Product
-    from sqlalchemy import func, or_
+    from sqlalchemy import func
     from decimal import Decimal
     
     now = datetime.utcnow()
@@ -326,14 +325,15 @@ async def get_dashboard_summary(
     boms_needing_review = (
         db.query(BOM)
         .join(Product)
-        .filter(BOM.active == True)
+        .filter(BOM.active.is_(True))
         .count()
     )
-    active_boms = db.query(BOM).filter(BOM.active == True).count()
+    active_boms = db.query(BOM).filter(BOM.active.is_(True)).count()
 
     # Low Stock Items (below reorder point + MRP shortages)
     # Use the same logic as /items/low-stock endpoint - just get the count
-    from sqlalchemy import or_, func
+    from sqlalchemy import or_
+    from app.models.inventory import Inventory
     from collections import defaultdict
     from app.models.sales_order import SalesOrderLine
     from app.services.mrp import MRPService, ComponentRequirement
@@ -344,7 +344,7 @@ async def get_dashboard_summary(
     
     # Get all products with reorder points
     products_with_reorder = db.query(Product).filter(
-        Product.active == True,
+        Product.active.is_(True),
         Product.reorder_point.isnot(None),
         Product.reorder_point > 0
     ).all()
@@ -525,7 +525,7 @@ async def get_pending_bom_reviews(
     """
     boms = (
         db.query(BOM)
-        .filter(BOM.active == True)
+        .filter(BOM.active.is_(True))
         .order_by(desc(BOM.created_at))
         .limit(limit)
         .all()

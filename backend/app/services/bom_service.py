@@ -17,6 +17,8 @@ from decimal import Decimal
 from app.models import Product, Quote, BOM, BOMLine
 from app.services.material_service import (
     get_material_product_for_bom,
+    get_material_product,
+    create_material_product,
     MaterialColorNotAvailableError,
     MaterialNotFoundError,
     ColorNotFoundError,
@@ -112,16 +114,16 @@ def parse_box_dimensions(box_name: str) -> Optional[Tuple[float, float, float]]:
     match = re.search(pattern_with_in, box_name, re.IGNORECASE)
 
     if match:
-        l, w, h = float(match.group(1)), float(match.group(2)), float(match.group(3))
-        return (l, w, h)
+        length, width, height = float(match.group(1)), float(match.group(2)), float(match.group(3))
+        return (length, width, height)
 
     # Match patterns like "9x6x4 Black", "12x9x4" (dimensions at start of name)
     pattern_no_in = r'^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)'
     match = re.search(pattern_no_in, box_name)
 
     if match:
-        l, w, h = float(match.group(1)), float(match.group(2)), float(match.group(3))
-        return (l, w, h)
+        length, width, height = float(match.group(1)), float(match.group(2)), float(match.group(3))
+        return (length, width, height)
 
     return None
 
@@ -165,7 +167,7 @@ def determine_best_box(quote: Quote, db: Session) -> Optional[Product]:
     # 2. Products in packaging/shipping categories
     box_products = db.query(Product).filter(
         and_(
-            Product.active == True,
+            Product.active.is_(True),
             Product.name.like('%box%')  # Match boxes by name
         )
     ).all()

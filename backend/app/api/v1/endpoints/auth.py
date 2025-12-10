@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from slowapi import Limiter
-from slowapi.util import get_remote_address
+# Note: get_remote_address is used via limiter key_func in main.py
 
 from app.db.session import get_db
 from app.models.user import User, RefreshToken, PasswordResetRequest
@@ -366,7 +366,7 @@ async def refresh_access_token(
     stored_token = db.query(RefreshToken).filter(
         RefreshToken.token_hash == token_hash,
         RefreshToken.user_id == user_id,
-        RefreshToken.revoked == False
+        RefreshToken.revoked.is_(False)
     ).first()
 
     if not stored_token or not stored_token.is_valid:
@@ -920,7 +920,7 @@ async def complete_password_reset(
     # Revoke all existing refresh tokens for security
     db.query(RefreshToken).filter(
         RefreshToken.user_id == user.id,
-        RefreshToken.revoked == False
+        RefreshToken.revoked.is_(False)
     ).update({"revoked": True, "revoked_at": datetime.utcnow()})
 
     db.commit()

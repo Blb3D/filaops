@@ -61,7 +61,7 @@ def resolve_material_code(db: Session, code: str) -> str:
     # First try exact match (already a full code)
     material = db.query(MaterialType).filter(
         MaterialType.code == code_upper,
-        MaterialType.active == True
+        MaterialType.active.is_(True)
     ).first()
 
     if material:
@@ -70,8 +70,8 @@ def resolve_material_code(db: Session, code: str) -> str:
     # Try matching by base_material (e.g., 'PLA' matches base_material='PLA')
     material = db.query(MaterialType).filter(
         MaterialType.base_material == code_upper,
-        MaterialType.active == True,
-        MaterialType.is_customer_visible == True  # Prefer customer-visible variants
+        MaterialType.active.is_(True),
+        MaterialType.is_customer_visible.is_(True)  # Prefer customer-visible variants
     ).order_by(MaterialType.display_order).first()
 
     if material:
@@ -80,7 +80,7 @@ def resolve_material_code(db: Session, code: str) -> str:
     # Fallback: Try without customer_visible filter
     material = db.query(MaterialType).filter(
         MaterialType.base_material == code_upper,
-        MaterialType.active == True
+        MaterialType.active.is_(True)
     ).order_by(MaterialType.display_order).first()
 
     if material:
@@ -108,7 +108,7 @@ def get_material_type(db: Session, code: str) -> MaterialType:
 
     material = db.query(MaterialType).filter(
         MaterialType.code == resolved_code,
-        MaterialType.active == True
+        MaterialType.active.is_(True)
     ).first()
 
     if not material:
@@ -133,7 +133,7 @@ def get_color(db: Session, code: str) -> Color:
     """
     color = db.query(Color).filter(
         Color.code == code,
-        Color.active == True
+        Color.active.is_(True)
     ).first()
     
     if not color:
@@ -153,10 +153,10 @@ def get_available_material_types(db: Session, customer_visible_only: bool = True
     Returns:
         List of MaterialType objects ordered by display_order
     """
-    query = db.query(MaterialType).filter(MaterialType.active == True)
+    query = db.query(MaterialType).filter(MaterialType.active.is_(True))
     
     if customer_visible_only:
-        query = query.filter(MaterialType.is_customer_visible == True)
+        query = query.filter(MaterialType.is_customer_visible.is_(True))
     
     return query.order_by(MaterialType.display_order).all()
 
@@ -190,16 +190,16 @@ def get_available_colors_for_material(
         and_(
             MaterialColor.color_id == Color.id,
             MaterialColor.material_type_id == material.id,
-            MaterialColor.active == True
+            MaterialColor.active.is_(True)
         )
     ).filter(
-        Color.active == True
+        Color.active.is_(True)
     )
     
     if customer_visible_only:
         query = query.filter(
-            Color.is_customer_visible == True,
-            MaterialColor.is_customer_visible == True
+            Color.is_customer_visible.is_(True),
+            MaterialColor.is_customer_visible.is_(True)
         )
     
     if in_stock_only:
@@ -210,7 +210,7 @@ def get_available_colors_for_material(
                 Product.material_type_id == material.id,
                 Product.color_id == Color.id,
                 Product.item_type == 'supply',
-                Product.active == True
+                Product.active.is_(True)
             )
         ).join(
             Inventory,
@@ -318,7 +318,7 @@ def get_material_product(
 
     product = db.query(Product).filter(
         Product.sku == sku,
-        Product.active == True
+        Product.active.is_(True)
     ).first()
 
     return product
@@ -452,9 +452,9 @@ def get_portal_material_options(db: Session) -> List[dict]:
         # Get ALL customer-visible colors for this material type
         colors = db.query(Color).join(MaterialColor).filter(
             MaterialColor.material_type_id == material.id,
-            Color.is_customer_visible == True,
-            MaterialColor.is_customer_visible == True,
-            Color.active == True
+            Color.is_customer_visible.is_(True),
+            MaterialColor.is_customer_visible.is_(True),
+            Color.active.is_(True)
         ).order_by(Color.display_order).all()
 
         if not colors:
@@ -571,7 +571,7 @@ def get_material_product_for_bom(
     mat_inv = db.query(MaterialInventory).filter(
         MaterialInventory.material_type_id == product.material_type_id,
         MaterialInventory.color_id == product.color_id,
-        MaterialInventory.active == True
+        MaterialInventory.active.is_(True)
     ).first()
     
     return product, mat_inv

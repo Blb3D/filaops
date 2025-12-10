@@ -8,7 +8,7 @@ Supports unified item management for:
 - Services (non-physical items like machine time)
 """
 from pydantic import BaseModel, Field
-from typing import Optional, List, Literal
+from typing import Optional, List
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum

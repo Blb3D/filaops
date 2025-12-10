@@ -4,7 +4,7 @@ Customer Pydantic Schemas
 For admin management of customers (users with account_type='customer')
 """
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 
 

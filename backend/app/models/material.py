@@ -5,7 +5,6 @@ Handles material types, colors, and inventory tracking for 3D printing materials
 Designed to support FDM filaments now, with extensibility for resin/powder later.
 """
 from datetime import datetime
-from decimal import Decimal
 from sqlalchemy import (
     Column, Integer, String, Numeric, Boolean, DateTime, 
     ForeignKey, Text, UniqueConstraint, Index

@@ -13,7 +13,6 @@ from app.api.v1.endpoints.auth import get_current_admin_user
 from app.models.user import User
 from app.models.product import Product
 from app.models.sales_order import SalesOrder
-from app.models.inventory import Inventory
 
 router = APIRouter(prefix="/export", tags=["export"])
 
@@ -24,7 +23,7 @@ async def export_products(
     db: Session = Depends(get_db)
 ):
     """Export products to CSV"""
-    products = db.query(Product).filter(Product.active == True).all()
+    products = db.query(Product).filter(Product.active.is_(True)).all()
     
     output = io.StringIO()
     writer = csv.writer(output)

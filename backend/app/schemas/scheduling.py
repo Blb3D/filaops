@@ -3,7 +3,7 @@ Scheduling and Capacity Management Schemas
 """
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class CapacityCheckRequest(BaseModel):

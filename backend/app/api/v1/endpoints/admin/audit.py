@@ -4,7 +4,7 @@ Transaction Audit Endpoints
 Provides endpoints for auditing inventory transactions and finding gaps
 in the order-to-ship lifecycle.
 """
-from typing import List, Optional
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
