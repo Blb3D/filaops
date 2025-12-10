@@ -4,7 +4,7 @@ Admin User Management Schemas
 For creating and managing admin/operator users (not customers).
 Customers are managed separately via /admin/customers.
 """
-from typing import Optional, List
+from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, EmailStr, Field
 
