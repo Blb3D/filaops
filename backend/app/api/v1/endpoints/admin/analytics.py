@@ -69,9 +69,15 @@ async def get_analytics_dashboard(
     db: Session = Depends(get_db)
 ):
     """
-    Get comprehensive analytics dashboard (Pro feature)
+    Return a consolidated analytics dashboard for the specified rolling period.
     
-    Returns revenue, customer, product, and profit metrics
+    Generates revenue, customer, product, and profit metrics computed for the period ending at now and starting `days` days earlier. Revenue metrics include totals for multiple lookback windows, growth vs the previous period, and average order value. Customer metrics include totals, active and new customers for the last 30 days, top customers by revenue, and average customer value. Product metrics include active product counts, top-selling products, low-stock counts, and products with associated BOMs. Profit metrics include total cost, gross profit and margin, and per-product profitability for the top products.
+    
+    Parameters:
+        days (int): Number of days in the reporting window (default 30).
+    
+    Returns:
+        AnalyticsDashboard: Aggregated dashboard containing `revenue`, `customers`, `products`, `profit`, `period_start`, and `period_end`.
     """
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
@@ -265,4 +271,3 @@ async def get_analytics_dashboard(
         period_start=start_date,
         period_end=end_date
     )
-

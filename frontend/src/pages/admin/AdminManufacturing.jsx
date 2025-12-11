@@ -18,6 +18,15 @@ const RESOURCE_STATUSES = [
   { value: "offline", label: "Offline", color: "red" },
 ];
 
+/**
+ * Renders the Manufacturing admin UI for managing work centers, resources, and routings.
+ *
+ * Provides tabs to view and manage work centers and routings, modal dialogs for creating and editing
+ * work centers, resources, and routings, and actions for syncing Bambu printers and seeding routing templates.
+ * Handles fetching and refreshing data, showing success/error toasts, and confirming destructive actions.
+ *
+ * @returns {JSX.Element} The component's rendered React element.
+ */
 export default function AdminManufacturing() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("work-centers");
@@ -1385,7 +1394,21 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
   );
 }
 
-// Simple Routing Modal (for now)
+/**
+ * Render a modal for creating a routing with a configurable sequence of operations.
+ *
+ * Displays a form to select a product, optionally set a routing code and name,
+ * add/edit/remove ordered operations (each tied to a work center, run time, and setup time),
+ * and submit the assembled routing to the API. Shows inline validation for product selection
+ * and success/error toasts for submission results.
+ *
+ * @param {Object[]} products - Available products for the routing. Each product must include `id`, `sku`, and `name`.
+ * @param {Object[]} workCenters - Available work centers to assign to operations. Each must include `id`, `code`, and `name`.
+ * @param {() => void} onClose - Callback invoked when the modal is cancelled/closed.
+ * @param {string} token - Authorization bearer token used for the API request when creating a routing.
+ * @param {() => void} onSuccess - Callback invoked after a routing is successfully created (used to refresh parent data and close the modal).
+ * @returns {JSX.Element} The routing creation modal element.
+ */
 function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
   const toast = useToast();
   const [form, setForm] = useState({

@@ -27,6 +27,15 @@ import AdminSettings from "./pages/admin/AdminSettings";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
+/**
+ * Application root component that configures client-side routing and toast context.
+ *
+ * Defines public routes (setup, onboarding, pricing, auth) and a nested admin panel
+ * under `/admin` (wrapped with AdminLayout) with routes for dashboard, orders,
+ * quotes, customers, inventory, users, settings, and related admin pages.
+ *
+ * @returns {JSX.Element} The root React element containing BrowserRouter, ToastProvider, and route definitions.
+ */
 export default function App() {
   return (
     <BrowserRouter>

@@ -3,6 +3,16 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+/**
+ * Render the admin Shipping page and UI for managing orders ready to ship.
+ *
+ * Displays orders with their production and label status, allows creating shipping labels,
+ * marking orders as shipped, viewing order details, and printing labels. The component
+ * fetches and refreshes order and production-status data, manages modal state for label
+ * creation, and shows success/error feedback via toast notifications.
+ *
+ * @returns {JSX.Element} The rendered admin shipping interface.
+ */
 export default function AdminShipping() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

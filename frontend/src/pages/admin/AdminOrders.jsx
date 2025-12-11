@@ -21,6 +21,15 @@ const paymentColors = {
   refunded: "bg-gray-500/20 text-gray-400",
 };
 
+/**
+ * Renders the admin order management UI for viewing, filtering, and acting on sales orders.
+ *
+ * The component displays a searchable and filterable list of orders, a create-order modal,
+ * and a detail modal for individual orders. It supports updating order status, generating
+ * production orders, and shows success/error feedback via toast notifications.
+ *
+ * @returns {JSX.Element} The admin orders management interface.
+ */
 export default function AdminOrders() {
   const navigate = useNavigate();
   const toast = useToast();

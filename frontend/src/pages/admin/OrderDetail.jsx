@@ -12,6 +12,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+/**
+ * Admin "Order Command Center" component for viewing and acting on a single sales order.
+ *
+ * Fetches the sales order and related production orders, derives material and capacity
+ * requirements (via BOM explosion and routing lookups), and provides UI actions to
+ * create production orders and navigate to purchasing/shipping flows.
+ *
+ * The component reads the admin token from localStorage and shows loading and error
+ * states while performing network requests.
+ *
+ * @returns {JSX.Element} The UI for inspecting an order, its material/capacity requirements, work orders, and available actions.
+ */
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();

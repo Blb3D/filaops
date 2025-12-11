@@ -62,6 +62,17 @@ const STEPS = [
   { id: 3, name: "Review", description: "Review and submit" },
 ];
 
+/**
+ * Render a modal wizard to create a sales order, including customer selection, product lines, BOM/routing-driven product creation, and a review/submit flow.
+ *
+ * The wizard loads customers, products, components, work centers, routing templates, and material types when opened; allows adding existing products or creating new products (with BOM, routing, images, and cost/pricing calculations) inline; and submits a sales order payload to the API. State is preserved to sessionStorage when navigating away to create customers or items.
+ *
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Controls whether the wizard modal is visible.
+ * @param {() => void} props.onClose - Callback invoked when the wizard is closed or cancelled.
+ * @param {(order: Object) => void} [props.onSuccess] - Optional callback invoked with the created order after successful submission.
+ * @returns {JSX.Element|null} A React element for the sales order wizard, or `null` when `isOpen` is false.
+ */
 export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);

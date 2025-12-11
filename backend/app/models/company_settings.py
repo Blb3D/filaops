@@ -57,4 +57,10 @@ class CompanySettings(Base):
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
 
     def __repr__(self):
+        """
+        Return a concise developer-facing representation of the CompanySettings instance.
+        
+        Returns:
+            str: String in the form "<CompanySettings(company_name={company_name})>" where `{company_name}` is the instance's company_name attribute.
+        """
         return f"<CompanySettings(company_name={self.company_name})>"

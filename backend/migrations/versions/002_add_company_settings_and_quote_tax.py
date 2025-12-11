@@ -21,6 +21,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """
+    Apply database schema changes for company settings and extended quote fields.
+    
+    Creates the company_settings table if it does not exist; conditionally adds subtotal, tax_rate, tax_amount, image_data, image_filename, image_mime_type, and customer_id columns to the quotes table; when customer_id is added, creates an index and a foreign key to users(id); and alters quotes.material_type to allow NULL values.
+    """
     from sqlalchemy import inspect
     from alembic import context
 
@@ -95,6 +100,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop foreign key and index
+    """
+    Reverts the migration by removing company settings and the quote-related schema additions.
+    
+    Drops the foreign key and index on quotes.customer_id, removes the columns added to the quotes table (customer_id, image_mime_type, image_filename, image_data, tax_amount, tax_rate, subtotal), and drops the company_settings table.
+    """
     op.drop_constraint('fk_quotes_customer_id', 'quotes', type_='foreignkey')
     op.drop_index('ix_quotes_customer_id', table_name='quotes')
 

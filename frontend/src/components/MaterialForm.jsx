@@ -8,6 +8,17 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "../config/api";
 
+/**
+ * Render a modal form for creating a material item (filament), including the ability to create a new color inline for the selected material type.
+ *
+ * Performs necessary network requests to fetch material types and colors, create a new color for the selected type, and submit the new material. Manages local loading and error states and invokes callbacks on close and on successful creation.
+ *
+ * @param {Object} props - Component props.
+ * @param {boolean} props.isOpen - Whether the modal is visible.
+ * @param {() => void} props.onClose - Callback invoked to close the modal.
+ * @param {(createdMaterial: Object) => void} [props.onSuccess] - Optional callback invoked with the created material data after successful submission.
+ * @returns {JSX.Element|null} A React element for the modal form when open, or `null` when closed.
+ */
 export default function MaterialForm({
   isOpen,
   onClose,
@@ -403,4 +414,3 @@ export default function MaterialForm({
     </div>
   );
 }
-

@@ -197,10 +197,18 @@ def list_colors_for_material(
     db: Session = Depends(get_db)
 ):
     """
-    Get available colors for a specific material type (for second dropdown).
-
-    Called when user selects a material type to populate the color dropdown.
-    For admin use, set customer_visible_only=false to see all colors.
+    Retrieve available color options for a material type.
+    
+    Parameters:
+        in_stock_only (bool): If True, include only colors that are currently in stock; if False, include colors regardless of inventory.
+        customer_visible_only (bool): If True, include only colors visible to customers; if False, include all colors (admin view).
+    
+    Returns:
+        ColorsResponse: Object with `material_type` set to the requested code and `colors` as a list of simple color options (code, name, hex).
+    
+    Raises:
+        HTTPException: 404 if the material type does not exist.
+        HTTPException: 500 for other unexpected errors.
     """
     try:
         colors = get_available_colors_for_material(
@@ -255,14 +263,16 @@ def create_color_for_material(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Create a new color and link it to a material type.
-
-    This endpoint allows creating colors on-the-fly when setting up materials,
-    without requiring a CSV import.
-
-    - Creates the color in the colors table
-    - Creates a MaterialColor link to the specified material type
-    - Returns the created color info
+    Create a color (if needed) and associate it with the specified material type.
+    
+    Creates a new Color when no existing color matches the provided or generated code, ensures the color is linked to the material type, and returns details about the created or linked color.
+    
+    Parameters:
+        material_type_code (str): Code of the material type to associate the color with.
+        color_data (ColorCreate): Color input data (name, optional code, optional hex_code).
+    
+    Returns:
+        ColorCreateResponse: The created or linked color's id, code, name, hex_code, material_type_code, and a status message.
     """
     # Check admin permission
     if not current_user.is_admin:
@@ -351,10 +361,25 @@ def get_materials_for_bom(
     db: Session = Depends(get_db)
 ):
     """
-    Get all materials formatted for BOM usage.
-
-    Returns materials with their linked product_id (creates Product records if needed).
-    This is the proper way to add materials to BOMs - they become regular items.
+    Produce a list of materials formatted for inclusion in a bill of materials (BOM).
+    
+    Ensures a Product record exists for each material/color pair when necessary and gathers inventory availability for BOM consumption.
+    
+    Returns:
+        dict: A mapping with key "items" to a list of material entries. Each entry is a dict with the following keys:
+            - id: product id to reference in the BOM
+            - sku: product SKU
+            - name: human-readable name combining material and color
+            - description: product or material description
+            - item_type: item classification (e.g., "supply")
+            - procurement_type: procurement method (e.g., "buy")
+            - unit: measurement unit (e.g., "kg")
+            - standard_cost: numeric standard cost for the product
+            - in_stock: `true` if any quantity is available, `false` otherwise
+            - quantity_available: numeric available quantity (in kg)
+            - material_code: material type code
+            - color_code: color code
+            - color_hex: color hex string (when available)
     """
     from app.services.material_service import (
         get_available_material_types,

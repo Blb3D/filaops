@@ -15,6 +15,17 @@ const ITEM_TYPES = [
   { value: "service", label: "Service", color: "green" },
 ];
 
+/**
+ * Render the admin interface for managing items and categories, including search,
+ * server-side pagination, item creation/editing, BOM and routing editors, bulk updates,
+ * recosting, and category management.
+ *
+ * The component maintains UI state (filters, pagination, modals, selections), performs
+ * authenticated API calls to fetch categories and paginated items, and surfaces toast
+ * notifications for user actions and errors.
+ *
+ * @returns {JSX.Element} The admin items management UI.
+ */
 export default function AdminItems() {
   const toast = useToast();
   const [items, setItems] = useState([]);
@@ -898,7 +909,21 @@ export default function AdminItems() {
   );
 }
 
-// Bulk Update Modal
+/**
+ * Render a modal form that applies selected field updates to multiple items at once.
+ *
+ * Renders controls for Category, Item Type, Procurement Type, and Active status; only non-empty fields are included in the update payload. Shows a warning if no fields are chosen and resets the form after a successful submit.
+ *
+ * @param {Object[]} categories - Available categories for the Category selector; each object should include at least `{ id, name, is_active }`.
+ * @param {number} selectedCount - Number of items currently selected for the bulk update.
+ * @param {(updateData: Object) => void} onSave - Callback invoked with an update object containing only the fields to change. Possible keys:
+ *   - `category_id` (number) — category id to set; use `0` to clear the category.
+ *   - `item_type` (string) — item type value.
+ *   - `procurement_type` (string) — procurement type value.
+ *   - `is_active` (boolean) — active status.
+ * @param {() => void} onClose - Callback invoked to close the modal without saving.
+ * @returns {JSX.Element} The modal element for performing bulk updates.
+ */
 function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({

@@ -10,6 +10,14 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * AdminCustomers React component that provides a UI for managing customers.
+ *
+ * Handles fetching and filtering the customer list, computing basic stats,
+ * and coordinating create/edit/view customer modals and CSV import flow.
+ *
+ * @returns {JSX.Element} JSX element for the admin customers management UI.
+ */
 export default function AdminCustomers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

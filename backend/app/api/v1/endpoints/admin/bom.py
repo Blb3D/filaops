@@ -73,7 +73,25 @@ def get_component_inventory(component_id: int, db: Session) -> dict:
 
 
 def build_bom_response(bom: BOM, db: Session) -> dict:
-    """Build a full BOM response with product info and lines"""
+    """
+    Build a detailed dictionary representation of a BOM, including its product metadata and an entry per BOM line with component details, costs, inventory, and sub-assembly indicator.
+    
+    Parameters:
+        bom (BOM): The BOM ORM instance to serialize.
+        db (Session): Active SQLAlchemy session used to query components, inventory, and sub-assemblies.
+    
+    Returns:
+        dict: A dictionary containing BOM fields and a "lines" list. Top-level keys include:
+            - id, product_id, product_sku, product_name, code, name, version, revision, active,
+              total_cost, assembly_time_minutes, effective_date, notes, created_at
+            - lines (list): Each item is a dict with:
+                - id, bom_id, component_id, quantity, sequence, scrap_factor, notes
+                - component_sku, component_name, component_unit
+                - component_cost (float or None), line_cost (float or None)
+                - inventory_on_hand (float), inventory_available (float)
+                - is_available (bool), shortage (float)
+                - has_bom (bool) — true when the component has an active sub-assembly BOM
+    """
     lines = []
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -167,9 +185,31 @@ async def list_boms(
     search: Optional[str] = None,
 ):
     """
-    List all BOMs with summary info.
-
-    Admin only. Supports filtering by product, active status, and search.
+    Return a paginated list of BOM summaries filtered by the provided criteria.
+    
+    Parameters:
+        skip (int): Number of records to skip for pagination.
+        limit (int): Maximum number of records to return.
+        product_id (Optional[int]): If provided, only include BOMs for this product ID.
+        active_only (bool): If True, include only BOMs marked active.
+        search (Optional[str]): Case-insensitive substring to match against product SKU, product name, BOM code, or BOM name.
+    
+    Returns:
+        list[dict]: A list of dictionaries, each containing summary fields for a BOM:
+            - id: BOM id
+            - product_id: associated product id
+            - product_sku: product SKU or None
+            - product_name: product name or None
+            - code: BOM code
+            - name: BOM name
+            - version: BOM version
+            - revision: BOM revision
+            - active: boolean active flag
+            - material_cost: material/component cost (Decimal)
+            - process_cost: routing/process cost (Decimal)
+            - total_cost: material_cost + process_cost (Decimal)
+            - line_count: number of BOM lines
+            - created_at: creation timestamp
     """
     query = db.query(BOM).options(joinedload(BOM.product), joinedload(BOM.lines))
 
@@ -796,9 +836,15 @@ async def get_bom_by_product(
     db: Session = Depends(get_db),
 ):
     """
-    Get the active BOM for a product.
-
-    Admin only. Returns the most recent active BOM.
+    Retrieve the most recent active BOM for the specified product.
+    
+    Requires an admin user. 
+    
+    Returns:
+        A detailed BOM response dictionary containing BOM metadata and its lines.
+    
+    Raises:
+        HTTPException: 404 if no active BOM exists for the product.
     """
     bom = (
         db.query(BOM)
@@ -830,18 +876,27 @@ def explode_bom_recursive(
     max_depth: int = 10
 ) -> list:
     """
-    Recursively explode a BOM into all leaf components.
-
-    Args:
-        bom_id: The BOM to explode
-        db: Database session
-        parent_qty: Quantity multiplier from parent (for nested BOMs)
-        level: Current depth level
-        visited: Set of visited BOM IDs (circular reference detection)
-        max_depth: Maximum recursion depth
-
+    Recursively expand a BOM into its constituent leaf components across all sub-assemblies.
+    
+    Builds and returns a list of component entries representing each occurrence of a component in the BOM tree. Each entry includes component identifiers, metadata (sku, name, unit), quantities (base and effective including scrap and parent multipliers), level in the BOM tree, parent BOM id, whether the component is a sub-assembly and its sub-BOM id, inventory available, and a line cost computed from the component cost and effective quantity.
+    
+    Parameters:
+        bom_id (int): ID of the BOM to explode.
+        db (Session): Database session used to load BOMs, products, and inventory.
+        parent_qty (Decimal): Multiplier propagated from the parent level; defaults to 1.
+        level (int): Current depth level in the recursion; root BOM starts at 0.
+        visited (set): Set of BOM IDs visited so far to detect circular references.
+        max_depth (int): Maximum recursion depth allowed; when exceeded an error entry is returned.
+    
     Returns:
-        List of exploded components with quantities and levels
+        list: A list of dicts for each exploded component or error dicts. Component dict keys include:
+            - component_id, component_sku, component_name, component_unit
+            - component_cost (float), base_quantity (float), effective_quantity (float)
+            - scrap_factor (float), level (int), parent_bom_id (int)
+            - is_sub_assembly (bool), sub_bom_id (int | None)
+            - inventory_available (float), line_cost (float)
+        Error dicts may be returned instead of component entries with keys like:
+            - error ("circular_reference" or "max_depth_exceeded"), bom_id or level, and message.
     """
     if visited is None:
         visited = set()
@@ -928,9 +983,12 @@ def explode_bom_recursive(
 
 def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> Decimal:
     """
-    Calculate total BOM cost including all sub-assembly costs.
-
-    This recursively sums costs through the entire BOM tree.
+    Compute the rolled-up cost of a BOM, including costs of any sub-assemblies.
+    
+    Recursively traverses the BOM tree, multiplying each line's unit cost (direct component cost or sub-assembly rolled-up cost) by the effective quantity (quantity adjusted by scrap factor). If the BOM is not found or a circular reference is detected, that branch contributes 0 to the total.
+    
+    Returns:
+        Decimal: Total rolled-up cost for the BOM identified by `bom_id`.
     """
     if visited is None:
         visited = set()
@@ -1069,9 +1127,33 @@ async def get_cost_rollup(
     db: Session = Depends(get_db),
 ):
     """
-    Get a detailed cost breakdown with sub-assembly costs rolled up.
-
-    Shows each component's contribution to total cost, including nested sub-assemblies.
+    Provide a detailed cost breakdown for a BOM with sub-assembly costs rolled up.
+    
+    For each top-level BOM line this returns the component identity, quantities, unit cost source (rolled-up from a sub-assembly, direct component cost, or missing), and the computed line cost. Also returns summary totals comparing the computed rolled-up cost to the BOM's stored material cost.
+    
+    Returns:
+        result (dict): Summary and breakdown containing:
+            bom_id (int): The queried BOM id.
+            product_sku (str|None): SKU of the BOM's finished product, if available.
+            product_name (str|None): Name of the BOM's finished product, if available.
+            stored_cost (float): The BOM's stored total_cost (0 if not set).
+            rolled_up_cost (float): Sum of all computed line costs including rolled-up sub-assembly costs.
+            cost_difference (float): `rolled_up_cost - stored_cost`.
+            has_sub_assemblies (bool): True if any line uses a sub-assembly BOM as its cost source.
+            sub_assembly_count (int): Number of lines that use sub-assembly costs.
+            direct_cost (float): Sum of line costs that use direct component costs.
+            sub_assembly_cost (float): Sum of line costs that use rolled-up sub-assembly costs.
+            breakdown (list[dict]): Per-line entries with keys:
+                component_id (int): Component product id.
+                component_sku (str): Component SKU.
+                component_name (str): Component name.
+                quantity (float): Line quantity as stored on the BOM line.
+                effective_quantity (float): Quantity after applying scrap_factor.
+                unit_cost (float): Unit cost used for the line (rolled-up sub-assembly cost or component cost, 0 if missing).
+                line_cost (float): Computed cost for this line = unit_cost * effective_quantity.
+                cost_source (str): One of "sub_assembly", "direct", or "missing".
+                is_sub_assembly (bool): True if the line uses a sub-assembly BOM.
+                sub_bom_id (int|None): Sub-BOM id when applicable.
     """
     bom = db.query(BOM).options(joinedload(BOM.product), joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
     if not bom:
@@ -1151,12 +1233,30 @@ async def where_used(
     include_inactive: bool = False,
 ):
     """
-    Find all BOMs that use a specific product as a component.
-
-    Useful for understanding impact of component changes.
-
-    - **product_id**: The component to search for
-    - **include_inactive**: Include inactive BOMs in results
+    List BOMs that use the given product as a component.
+    
+    Parameters:
+    	product_id (int): ID of the component product to search for.
+    	include_inactive (bool): If True, include BOMs where `active` is False; otherwise only active BOMs are returned.
+    
+    Returns:
+    	usage (dict): Summary of where the component is used with keys:
+    		- component_id: The queried product ID.
+    		- component_sku: SKU of the component product.
+    		- component_name: Name of the component product.
+    		- used_in_count: Number of distinct BOMs that include the component.
+    		- used_in: List of per-BOM usage objects, each containing:
+    			- bom_id: BOM id.
+    			- bom_code: BOM code.
+    			- product_id: Product id the BOM belongs to.
+    			- product_sku: SKU of the BOM's product (or None).
+    			- product_name: Name of the BOM's product (or None).
+    			- active: BOM active flag.
+    			- quantity_used: Total quantity of the component used in that BOM.
+    			- line_id: An example BOMLine id referencing the component.
+    
+    Raises:
+    	HTTPException: 404 if the component product does not exist.
     """
     # Verify product exists
     product = db.query(Product).filter(Product.id == product_id).first()
@@ -1211,9 +1311,22 @@ async def validate_bom(
     db: Session = Depends(get_db),
 ):
     """
-    Validate a BOM for issues like circular references, missing costs, etc.
-
-    Returns a list of warnings and errors.
+    Validate a BOM and collect issues such as missing components, missing costs, invalid quantities, and circular references.
+    
+    Parameters:
+        bom_id (int): ID of the BOM to validate.
+    
+    Returns:
+        dict: Summary of validation including:
+            - bom_id: The validated BOM ID.
+            - product_sku: SKU of the BOM's product, or None.
+            - is_valid: `true` if no errors were found, `false` otherwise.
+            - error_count: Number of errors found.
+            - warning_count: Number of warnings found.
+            - issues: List of issue objects; each issue contains at minimum `severity` and `code`, and may include `message`, `line_id`, `component_id`, or `bom_id`.
+    
+    Raises:
+        HTTPException: 404 if the BOM with the given `bom_id` is not found.
     """
     bom = db.query(BOM).options(joinedload(BOM.product), joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
     if not bom:

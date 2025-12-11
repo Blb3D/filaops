@@ -25,6 +25,13 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * Render the admin users management interface including user list, filters, stats, and modals for creating/editing users and resetting passwords.
+ *
+ * Fetches user data from the admin API using a token stored in localStorage and provides actions to create, update, deactivate, reactivate, and reset user passwords. Displays status and role chips, search and role filters, counts for admins/operators/inactive users, and uses toast notifications for operation results.
+ *
+ * @returns {JSX.Element} The admin users management UI.
+ */
 export default function AdminUsers() {
   const toast = useToast();
   const [users, setUsers] = useState([]);
@@ -483,7 +490,17 @@ export default function AdminUsers() {
   );
 }
 
-// User Create/Edit Modal
+/**
+ * Render a modal for creating a new user or editing an existing user.
+ *
+ * Displays a form for email, name, role, (temporary) password when creating, and status when editing.
+ * Validates temporary password length for new users and calls save/close callbacks.
+ *
+ * @param {Object} props.user - Optional existing user object; when provided the form is used for editing and password is optional.
+ * @param {(payload: Object) => void} props.onSave - Called with the user payload when the form is submitted.
+ * @param {() => void} props.onClose - Called to close the modal without saving.
+ * @returns {JSX.Element} The user create/edit modal element.
+ */
 function UserModal({ user, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -704,7 +721,14 @@ function UserModal({ user, onSave, onClose }) {
   );
 }
 
-// Reset Password Modal
+/**
+ * Render a modal that lets an admin set a new password for a specific user.
+ *
+ * @param {{email: string}} user - The user whose password will be reset; used to display target email.
+ * @param {(newPassword: string) => void} onReset - Called with the new password when reset is submitted.
+ * @param {() => void} onClose - Called to close the modal without making changes.
+ * @returns {JSX.Element} The modal element for resetting the user's password.
+ */
 function ResetPasswordModal({ user, onReset, onClose }) {
   const toast = useToast();
   const [newPassword, setNewPassword] = useState("");

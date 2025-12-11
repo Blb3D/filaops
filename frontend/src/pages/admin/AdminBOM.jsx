@@ -3,7 +3,15 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
-// Modal Component
+/**
+ * Render a centered modal dialog with a backdrop and close controls when open.
+ * @param {{isOpen: boolean, onClose: function, title: import('react').ReactNode, children: import('react').ReactNode}} props
+ * @param {boolean} props.isOpen - Whether the modal is visible.
+ * @param {function} props.onClose - Callback invoked when the backdrop or close button is clicked.
+ * @param {import('react').ReactNode} props.title - Content displayed in the modal header.
+ * @param {import('react').ReactNode} props.children - Modal body content.
+ * @returns {import('react').ReactElement|null} A React element representing the modal, or `null` when closed.
+ */
 function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
@@ -284,7 +292,23 @@ function PurchaseRequestModal({ line, onClose, token, onSuccess }) {
   );
 }
 
-// BOM Detail View
+/**
+ * Render a detailed editor and viewer for a Bill of Materials (BOM), including component lines,
+ * cost rollup, routing/process path, exploded BOM view, and actions to add/update/delete lines,
+ * apply routing templates, create purchase requests, and start production orders.
+ *
+ * Provides UI and handlers for fetching and persisting BOM-related data (products, cost rollup,
+ * routing templates, product routing), inline editing of component quantities, applying routing
+ * templates with per-operation time overrides, and creating production or purchase requests.
+ *
+ * @param {Object} props
+ * @param {Object} props.bom - BOM object to display and edit (must include id, lines, product_id, total_cost, etc.).
+ * @param {() => void} props.onClose - Callback invoked when the detail view should be closed.
+ * @param {() => void} props.onUpdate - Callback invoked after changes that require the parent to refresh BOM data.
+ * @param {string} props.token - Authorization token used for API requests.
+ * @param {(bom: Object) => void} props.onCreateProductionOrder - Callback invoked when user requests to create a production order for this BOM.
+ * @returns {JSX.Element} The BOM detail view UI.
+ */
 function BOMDetailView({
   bom,
   onClose,
@@ -2045,6 +2069,15 @@ function CreateProductionOrderModal({
   );
 }
 
+/**
+ * Render the admin Bill of Materials interface with listing, filtering, and management actions.
+ *
+ * Provides a searchable/filterable BOM list and modals to view details, create new BOMs,
+ * copy or delete existing BOMs, and create production orders. Fetches BOM data from the API,
+ * manages selection and modal state, and shows success/error toasts for mutating actions.
+ *
+ * @returns {JSX.Element} The rendered Admin BOM React component.
+ */
 export default function AdminBOM() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

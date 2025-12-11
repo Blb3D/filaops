@@ -11,6 +11,15 @@ const statusColors = {
   cancelled: "bg-red-500/20 text-red-400",
 };
 
+/**
+ * Render the administrative Purchasing interface with tabs for purchase orders, vendors, Amazon import, and low-stock management.
+ *
+ * Provides data fetching, filtering, vendor and PO CRUD, Amazon import parsing/execution, low-stock overview, and modal workflows
+ * (Vendor, PO, PO details, Receive, Create New Item). Side effects include network requests to the backend and toast notifications
+ * for success/error feedback.
+ *
+ * @returns {JSX.Element} The Admin Purchasing React component UI.
+ */
 export default function AdminPurchasing() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("orders"); // orders | vendors | import | low-stock
@@ -1555,7 +1564,14 @@ export default function AdminPurchasing() {
 
 // ============================================================================
 // Vendor Modal Component
-// ============================================================================
+/**
+ * Render a modal dialog for creating or editing a vendor; manages the vendor form state and validates required fields.
+ *
+ * @param {{name?:string,code?:string,contact_name?:string,email?:string,phone?:string,website?:string,address_line1?:string,address_line2?:string,city?:string,state?:string,postal_code?:string,country?:string,payment_terms?:string,account_number?:string,notes?:string,is_active?:boolean}|undefined} vendor - Existing vendor object to pre-fill the form; omit to create a new vendor.
+ * @param {Function} onClose - Callback invoked when the modal is closed or cancelled.
+ * @param {Function} onSave - Callback invoked with the vendor form object when the user submits a valid form.
+ * @returns {JSX.Element} The vendor modal component.
+ */
 
 function VendorModal({ vendor, onClose, onSave }) {
   const toast = useToast();
@@ -1849,7 +1865,23 @@ function VendorModal({ vendor, onClose, onSave }) {
 
 // ============================================================================
 // PO Modal Component (Create/Edit)
-// ============================================================================
+/**
+ * Render a modal for creating a new purchase order or editing an existing one.
+ *
+ * Presents form fields for vendor, dates, tracking, financials, document link, notes,
+ * and (for new POs) editable line items. Performs basic validation and normalizes
+ * form values before invoking the save handler.
+ *
+ * @param {Object|null} po - Existing purchase order to edit; when null a new PO is created and line items can be added.
+ * @param {Array<Object>} vendors - List of vendor objects (expected at least { id, name, code, is_active }) used to populate the vendor select.
+ * @param {Array<Object>} products - List of product objects (expected at least { id, sku, name }) used to populate line-item selects.
+ * @param {Function} onClose - Callback invoked to close the modal without saving.
+ * @param {Function} onSave - Callback invoked with the prepared PO payload when the form is submitted.
+ *   For edits (when `po` is provided) the payload contains top-level PO fields:
+ *     { vendor_id, order_date, expected_date, tracking_number, carrier, tax_amount, shipping_cost, payment_method, payment_reference, document_url, notes }
+ *   For new POs the payload includes the above fields plus a `lines` array:
+ *     lines: [{ product_id, quantity_ordered, unit_cost, notes }, ...]
+ */
 
 function POModal({ po, vendors, products, onClose, onSave }) {
   const toast = useToast();
@@ -2675,7 +2707,22 @@ function PODetailModal({
 
 // ============================================================================
 // Receive Modal Component
-// ============================================================================
+/**
+ * Render a modal for recording received quantities against a purchase order.
+ *
+ * Displays each outstanding PO line with inputs for quantity to receive, lot number, and notes,
+ * validates at least one line has a positive quantity, and submits a consolidated receive payload.
+ *
+ * @param {Object} props
+ * @param {Object} props.po - Purchase order object; expected to include `po_number` and `lines` (each line should have `id`, `product_sku`, `product_name`, `quantity_ordered`, and `quantity_received`).
+ * @param {Function} props.onClose - Called when the modal is closed or cancelled.
+ * @param {Function} props.onReceive - Called with the receive payload when the form is submitted. Payload shape:
+ *   {
+ *     lines: Array<{ line_id: number|string, quantity_received: number, lot_number: string|null, notes: string|null }>,
+ *     notes: string|null
+ *   }
+ * @returns {JSX.Element} The Receive modal component.
+ */
 
 function ReceiveModal({ po, onClose, onReceive }) {
   const toast = useToast();
