@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
@@ -977,6 +977,7 @@ function QuoteDetailModal({
   const token = localStorage.getItem("adminToken");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [imageUrl, setImageUrl] = useState(null);
+  const imageUrlRef = useRef(null);
 
   const isExpired = new Date(quote.expires_at) < new Date();
   const canConvert =
@@ -994,6 +995,7 @@ function QuoteDetailModal({
         })
         .then((blob) => {
           const url = URL.createObjectURL(blob);
+          imageUrlRef.current = url;
           setImageUrl(url);
         })
         .catch(() => setImageUrl(null));
@@ -1001,13 +1003,14 @@ function QuoteDetailModal({
       setImageUrl(null);
     }
 
-    // Cleanup blob URL on unmount
+    // Cleanup blob URL on unmount (use ref to avoid stale closure)
     return () => {
-      if (imageUrl && imageUrl.startsWith("blob:")) {
-        URL.revokeObjectURL(imageUrl);
+      if (imageUrlRef.current) {
+        URL.revokeObjectURL(imageUrlRef.current);
+        imageUrlRef.current = null;
       }
     };
-  }, [quote.id, quote.has_image]);
+  }, [quote.id, quote.has_image, token]);
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];

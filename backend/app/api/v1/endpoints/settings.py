@@ -95,13 +95,18 @@ class CompanySettingsUpdate(BaseModel):
 # ============================================================================
 
 def get_or_create_settings(db: Session) -> CompanySettings:
-    """Get existing settings or create default"""
+    """Get existing settings or create default (handles race condition)"""
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
     if not settings:
-        settings = CompanySettings(id=1)
-        db.add(settings)
-        db.commit()
-        db.refresh(settings)
+        try:
+            settings = CompanySettings(id=1)
+            db.add(settings)
+            db.commit()
+            db.refresh(settings)
+        except Exception:
+            # Another request created it first - rollback and fetch
+            db.rollback()
+            settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
     return settings
 
 
