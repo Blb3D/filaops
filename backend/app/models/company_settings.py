@@ -7,7 +7,6 @@ Stores company-wide settings including:
 - Tax configuration
 - Quote/Invoice settings
 """
-from datetime import datetime
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, LargeBinary, func
 
 from app.db.base import Base

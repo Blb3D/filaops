@@ -357,7 +357,7 @@ export default function AdminItems() {
 
       const data = await res.json();
       setRecostResult(data);
-      toast.success(`Recosted ${data.updated_count || 0} items`);
+      toast.success(`Recosted ${data.updated || 0} items`);
       fetchItems(); // Refresh list to show new costs
     } catch (err) {
       toast.error(err.message);

@@ -27,7 +27,7 @@ python-dateutil==2.8.2
 httpx==0.25.1
 
 # PDF Generation (pure Python, no system deps)
-reportlab==4.2.5
+reportlab==4.4.6
 
 # Development & Code Quality
 mypy==1.7.1

@@ -16,15 +16,11 @@ from sqlalchemy import desc, func
 from app.db.session import get_db
 from app.models.user import User
 from app.models.quote import Quote
-from app.models.sales_order import SalesOrder, SalesOrderLine
-from app.models.product import Product
+from app.models.sales_order import SalesOrder
 from app.models.company_settings import CompanySettings
 from app.logging_config import get_logger
 from app.api.v1.endpoints.auth import get_current_user
 from pydantic import BaseModel, Field
-from typing import Optional
-from decimal import Decimal
-from datetime import date
 
 logger = get_logger(__name__)
 

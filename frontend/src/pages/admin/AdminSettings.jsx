@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
-
-const API_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 const AdminSettings = () => {
+  const toast = useToast();
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -40,7 +39,7 @@ const AdminSettings = () => {
     try {
       const token = localStorage.getItem("adminToken");
       if (!token) {
-        setError("Not logged in. Please log in again.");
+        toast.error("Not logged in. Please log in again.");
         setLoading(false);
         return;
       }
@@ -70,13 +69,12 @@ const AdminSettings = () => {
           quote_terms: data.quote_terms || "",
           quote_footer: data.quote_footer || "",
         });
-        setError(null);
-      } else {
+        } else {
         const errData = await response.json().catch(() => ({}));
-        setError(errData.detail || `Error ${response.status}: Failed to load settings`);
+        toast.error(errData.detail || `Error ${response.status}: Failed to load settings`);
       }
     } catch (err) {
-      setError("Failed to load settings: " + err.message);
+      toast.error("Failed to load settings: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -93,8 +91,6 @@ const AdminSettings = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     setSaving(true);
-    setError(null);
-    setSuccess(null);
 
     try {
       const token = localStorage.getItem("adminToken");
@@ -116,14 +112,13 @@ const AdminSettings = () => {
       if (response.ok) {
         const data = await response.json();
         setSettings(data);
-        setSuccess("Settings saved successfully!");
-        setTimeout(() => setSuccess(null), 3000);
+        toast.success("Settings saved successfully!");
       } else {
         const err = await response.json();
-        setError(err.detail || "Failed to save settings");
+        toast.error(err.detail || "Failed to save settings");
       }
     } catch (err) {
-      setError("Failed to save settings");
+      toast.error("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -134,7 +129,6 @@ const AdminSettings = () => {
     if (!file) return;
 
     setUploadingLogo(true);
-    setError(null);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -148,15 +142,14 @@ const AdminSettings = () => {
       });
 
       if (response.ok) {
-        setSuccess("Logo uploaded successfully!");
+        toast.success("Logo uploaded successfully!");
         fetchSettings();
-        setTimeout(() => setSuccess(null), 3000);
       } else {
         const err = await response.json();
-        setError(err.detail || "Failed to upload logo");
+        toast.error(err.detail || "Failed to upload logo");
       }
     } catch (err) {
-      setError("Failed to upload logo");
+      toast.error("Failed to upload logo");
     } finally {
       setUploadingLogo(false);
     }
@@ -173,12 +166,11 @@ const AdminSettings = () => {
       });
 
       if (response.ok) {
-        setSuccess("Logo deleted successfully!");
+        toast.success("Logo deleted successfully!");
         fetchSettings();
-        setTimeout(() => setSuccess(null), 3000);
       }
     } catch (err) {
-      setError("Failed to delete logo");
+      toast.error("Failed to delete logo");
     }
   };
 
@@ -194,18 +186,6 @@ const AdminSettings = () => {
           Configure your company information, logo, and tax settings
         </p>
       </div>
-
-      {error && (
-        <div className="bg-red-900/50 border border-red-500/30 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
-        </div>
-      )}
-
-      {success && (
-        <div className="bg-green-900/50 border border-green-500/30 rounded-lg p-4">
-          <p className="text-green-400">{success}</p>
-        </div>
-      )}
 
       <form onSubmit={handleSave} className="space-y-6">
         {/* Company Logo */}

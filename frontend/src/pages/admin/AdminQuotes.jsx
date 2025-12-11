@@ -146,11 +146,11 @@ export default function AdminQuotes() {
         throw new Error(err.detail || "Failed to update status");
       }
 
+      const updated = await res.json();
       toast.success(`Quote ${newStatus}`);
       fetchQuotes();
       fetchStats();
       if (viewingQuote?.id === quoteId) {
-        const updated = await res.json();
         setViewingQuote(updated);
       }
     } catch (err) {
@@ -596,7 +596,7 @@ function QuoteFormModal({ quote, onSave, onClose, token }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.product_name || !form.unit_price) {
-      alert("Product and unit price are required");
+      toast.error("Product and unit price are required");
       return;
     }
     setSaving(true);
