@@ -15,6 +15,16 @@ const ITEM_TYPES = [
   { value: "service", label: "Service", color: "green" },
 ];
 
+/**
+ * Render the admin items management UI with category navigation, filters, stats,
+ * item list, bulk actions, and modals for creating/editing items, materials, categories,
+ * BOMs, and routings.
+ *
+ * The component handles fetching categories and items, client-side filtering,
+ * bulk updates, and recost operations, and surfaces success/error notifications.
+ *
+ * @returns {JSX.Element} The admin items management UI.
+ */
 export default function AdminItems() {
   const toast = useToast();
   const [items, setItems] = useState([]);
@@ -827,7 +837,21 @@ export default function AdminItems() {
   );
 }
 
-// Bulk Update Modal
+/**
+ * Modal form for selecting fields to apply as a bulk update to multiple items.
+ *
+ * Builds an update payload from the user-selected fields and invokes `onSave`
+ * with only the fields that should be changed. The special category handling:
+ * an empty selection means "keep current", while a value of "0" means "clear
+ * category". The `is_active` field is converted to a boolean when present.
+ * If no fields are selected, a warning toast is shown and `onSave` is not called.
+ *
+ * @param {Object} props
+ * @param {Array<{id: number, name: string, is_active: boolean}>} props.categories - Available categories; only active categories are shown in the list.
+ * @param {number} props.selectedCount - Number of items selected for the bulk update (used for UI labels).
+ * @param {(updateData: {category_id?: number, item_type?: string, procurement_type?: string, is_active?: boolean}) => void} props.onSave - Callback invoked with the update payload containing only the fields to change.
+ * @param {() => void} props.onClose - Callback invoked to close the modal without saving.
+ */
 function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({

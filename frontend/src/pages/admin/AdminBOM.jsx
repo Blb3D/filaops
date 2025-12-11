@@ -3,7 +3,16 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
-// Modal Component
+/**
+ * Render a centered fullscreen modal dialog that displays the provided title and children.
+ *
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Whether the modal is visible.
+ * @param {() => void} props.onClose - Callback invoked to close the modal; also called when the backdrop is clicked.
+ * @param {string} props.title - Header title shown at the top of the modal.
+ * @param {React.ReactNode} props.children - Content rendered inside the modal container.
+ * @returns {JSX.Element|null} The modal element when visible, `null` otherwise.
+ */
 function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
@@ -284,7 +293,16 @@ function PurchaseRequestModal({ line, onClose, token, onSuccess }) {
   );
 }
 
-// BOM Detail View
+/**
+ * Render a detailed, editable view of a BOM including lines, cost rollup, routing/process path, and actions for adding/updating/deleting lines, exploding the BOM, and creating production or purchase requests.
+ *
+ * @param {Object} bom - The BOM object to display and manage; expected to include fields like id, code, version, product_id, product, lines, and total_cost.
+ * @param {() => void} onClose - Callback invoked when the detail view should be closed.
+ * @param {() => void} onUpdate - Callback invoked after mutating the BOM (add/update/delete/recalculate) to trigger parent refresh.
+ * @param {string} token - Bearer token used for authenticated API requests performed by the view.
+ * @param {(bom: Object) => void} onCreateProductionOrder - Callback invoked with the BOM when the user requests to create a production order.
+ * @returns {JSX.Element} The BOM detail view component.
+ */
 function BOMDetailView({
   bom,
   onClose,
@@ -2045,6 +2063,13 @@ function CreateProductionOrderModal({
   );
 }
 
+/**
+ * Render the Bill of Materials administration interface including list view, filters, and modals for viewing, creating, copying, deleting BOMs, and creating production orders.
+ *
+ * The component manages fetching BOM data, URL-driven auto-opening of a BOM, local UI state for modals and selected items, and user actions (view, copy, delete, create production order). It obtains an auth token from localStorage and uses toast notifications for user feedback.
+ *
+ * @returns {JSX.Element} A React element representing the Admin BOM management UI.
+ */
 export default function AdminBOM() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

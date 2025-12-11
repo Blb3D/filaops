@@ -21,6 +21,16 @@ const paymentColors = {
   refunded: "bg-gray-500/20 text-gray-400",
 };
 
+/**
+ * Manage and display sales orders in the admin UI.
+ *
+ * Renders a full order management interface that fetches and lists sales orders,
+ * provides search and status filters, shows order details in a modal, allows
+ * advancing or setting order status, generates production orders for an order,
+ * and opens a create-order wizard.
+ *
+ * @returns {JSX.Element} The admin orders UI component.
+ */
 export default function AdminOrders() {
   const navigate = useNavigate();
   const toast = useToast();

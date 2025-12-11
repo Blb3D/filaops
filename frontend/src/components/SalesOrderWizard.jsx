@@ -62,6 +62,16 @@ const STEPS = [
   { id: 3, name: "Review", description: "Review and submit" },
 ];
 
+/**
+ * Render a multi-step modal UI for creating a sales order, including customer selection,
+ * product selection/creation (with BOM and routing), and final review/submission.
+ *
+ * @param {object} props
+ * @param {boolean} props.isOpen - Controls visibility of the wizard modal.
+ * @param {() => void} props.onClose - Callback invoked when the wizard is closed or cancelled.
+ * @param {(order: object) => void} [props.onSuccess] - Optional callback invoked with the created order object after successful submission.
+ * @returns {JSX.Element|null} A React element for the sales order wizard modal, or `null` when `isOpen` is false.
+ */
 export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);

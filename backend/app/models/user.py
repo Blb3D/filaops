@@ -68,6 +68,12 @@ class User(Base):
     sales_orders = relationship("SalesOrder", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):
+        """
+        Return a concise developer-facing representation of the User including id, email, and status.
+        
+        Returns:
+            str: String in the form "<User(id={id}, email='{email}', status='{status}')>".
+        """
         return f"<User(id={self.id}, email='{self.email}', status='{self.status}')>"
 
     @property

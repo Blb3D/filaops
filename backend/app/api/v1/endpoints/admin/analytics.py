@@ -69,9 +69,13 @@ async def get_analytics_dashboard(
     db: Session = Depends(get_db)
 ):
     """
-    Get comprehensive analytics dashboard (Pro feature)
+    Builds an analytics dashboard covering revenue, customer, product, and profit metrics for a recent time window.
     
-    Returns revenue, customer, product, and profit metrics
+    Parameters:
+        days (int): Number of days for the reporting window; period_end is now (UTC) and period_start is now minus `days`. Defaults to 30.
+    
+    Returns:
+        AnalyticsDashboard: Composite object containing RevenueMetrics, CustomerMetrics, ProductMetrics, ProfitMetrics, and period_start/period_end datetimes. Note: `revenue_growth` will be `None` if the previous period's revenue is zero.
     """
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
@@ -265,4 +269,3 @@ async def get_analytics_dashboard(
         period_start=start_date,
         period_end=end_date
     )
-

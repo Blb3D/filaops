@@ -4,6 +4,14 @@ import ProductionScheduler from "../../components/ProductionScheduler";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+/**
+ * Admin interface for viewing and managing production orders with Kanban and scheduler views.
+ *
+ * Renders a dashboard that fetches and displays production orders, allows creating orders,
+ * scheduling, filtering/searching, and performing status transitions with user feedback.
+ * Includes modals for creating and scheduling orders and a toggle between Kanban and scheduler layouts.
+ * @returns {React.ReactElement} The AdminProduction component UI.
+ */
 export default function AdminProduction() {
   const toast = useToast();
   const [productionOrders, setProductionOrders] = useState([]);

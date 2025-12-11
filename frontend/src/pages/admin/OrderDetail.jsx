@@ -12,6 +12,18 @@ import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+/**
+ * Render the admin Order Detail view and manage its data lifecycle.
+ *
+ * Renders a full-page interface for inspecting a sales order — including order summary,
+ * material (BOM) requirements, capacity (routing) requirements, and related production
+ * orders — and provides actions to create production orders and initiate purchase orders.
+ * The component fetches order data and associated production orders when mounted/when the
+ * route orderId changes, triggers BOM explosion and optional routing lookups to derive
+ * material and capacity requirements, and displays loading/error states.
+ *
+ * @returns {JSX.Element} The OrderDetail React component UI for viewing and acting on a sales order.
+ */
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();

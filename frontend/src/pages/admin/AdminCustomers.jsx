@@ -10,6 +10,13 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * Renders the admin customers interface for listing, searching, filtering, importing, creating, editing, and viewing customer records.
+ *
+ * Provides: realtime stats (total, active, with orders, total revenue), client-side search and status filter, CSV import flow, modals for creating/editing customers and viewing customer details, and API integration for fetching and saving customers.
+ *
+ * @returns {JSX.Element} The Admin Customers page component.
+ */
 export default function AdminCustomers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

@@ -165,7 +165,12 @@ class QuoteStatsResponse(BaseModel):
 # ============================================================================
 
 def generate_quote_number(db: Session) -> str:
-    """Generate next quote number in format Q-YYYY-NNN"""
+    """
+    Generate the next quote number using the format Q-YYYY-NNN.
+    
+    Returns:
+        str: Quote number where YYYY is the current UTC year and NNN is a zero-padded, incrementing sequence for that year (e.g., "Q-2025-001").
+    """
     year = datetime.utcnow().year
 
     # Get the highest quote number for this year
@@ -199,7 +204,18 @@ async def list_quotes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all quotes with optional filtering"""
+    """
+    List quotes optionally filtered by status or a text search, with pagination.
+    
+    Parameters:
+        status (Optional[str]): Status to filter by (e.g., "pending", "approved").
+        search (Optional[str]): Case-insensitive substring match against quote number, product name, customer name, or customer email.
+        skip (int): Number of items to skip for pagination.
+        limit (int): Maximum number of items to return.
+    
+    Returns:
+        List[Quote]: Quotes matching the provided filters, ordered by creation time (newest first).
+    """
     query = db.query(Quote).order_by(desc(Quote.created_at))
 
     if status:
@@ -223,7 +239,21 @@ async def get_quote_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get quote statistics for dashboard"""
+    """
+    Return aggregated quote metrics used by the dashboard.
+    
+    Returns:
+        QuoteStatsResponse: Object containing:
+            - total: total number of quotes
+            - pending: number of quotes with status "pending"
+            - approved: number of quotes with status "approved"
+            - accepted: number of quotes with status "accepted"
+            - rejected: number of quotes with status "rejected"
+            - converted: number of quotes with status "converted"
+            - expired: number of quotes that were "pending" or "approved" and whose expires_at is before now
+            - total_value: sum of `total_price` for all quotes (Decimal)
+            - pending_value: sum of `total_price` for quotes with status "pending" (Decimal)
+    """
     now = datetime.utcnow()
 
     total = db.query(Quote).count()
@@ -261,7 +291,15 @@ async def get_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get quote details"""
+    """
+    Retrieve a single quote by its ID.
+    
+    Returns:
+        Quote: The Quote ORM instance for the requested quote.
+    
+    Raises:
+        HTTPException: 404 if the quote with the given ID does not exist.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -277,7 +315,18 @@ async def create_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new manual quote"""
+    """
+    Create a manual quote from the provided request data and persist it to the database.
+    
+    Parameters:
+        request (ManualQuoteCreate): Data for the manual quote. The `valid_days` field determines the quote's expiration time; `apply_tax` may override company tax settings.
+    
+    Returns:
+        quote (Quote): The persisted Quote object with computed subtotal, tax fields (if applicable), total_price, status set to "pending", and an assigned quote number.
+    
+    Raises:
+        HTTPException: 400 Bad Request if `customer_id` is provided but does not correspond to an existing user with account_type "customer".
+    """
     quote_number = generate_quote_number(db)
     expires_at = datetime.utcnow() + timedelta(days=request.valid_days)
 
@@ -352,7 +401,20 @@ async def update_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update quote details"""
+    """
+    Update fields of an existing manual quote and recalculate pricing when unit price, quantity, or tax applicability change.
+    
+    Parameters:
+        quote_id (int): ID of the quote to update.
+        request (ManualQuoteUpdate): Fields to update. The `apply_tax` field is handled specially (it's not persisted directly on the model but toggles whether tax is applied and triggers tax rate lookup from CompanySettings).
+    
+    Returns:
+        Quote: The updated quote record.
+    
+    Raises:
+        HTTPException: 404 if the quote does not exist.
+        HTTPException: 400 if the quote has already been converted or if a provided `customer_id` does not reference a valid customer.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -435,7 +497,24 @@ async def update_quote_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update quote status (approve, reject, cancel, accept)"""
+    """
+    Update the status of an existing quote and persist related metadata.
+    
+    Validates the requested status, prevents changes to already converted quotes, and applies side effects:
+    - When status is "approved": sets `approved_at`, `approved_by`, and `approval_method` = "manual".
+    - When status is "rejected": sets `rejection_reason`.
+    - If `admin_notes` are provided, updates `admin_notes`.
+    The quote's `updated_at` is set and the updated quote is saved and returned.
+    
+    Parameters:
+        request (QuoteStatusUpdate): Payload containing the target `status` (allowed: "pending", "approved", "rejected", "accepted", "cancelled"), optional `rejection_reason`, and optional `admin_notes`.
+    
+    Returns:
+        quote (Quote): The updated quote instance.
+    
+    Raises:
+        HTTPException: If the quote is not found (404), if the requested status is invalid (400), or if the quote is already converted and cannot be changed (400).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -485,7 +564,22 @@ async def convert_quote_to_order(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Convert an accepted/approved quote to a sales order"""
+    """
+    Convert an approved or accepted quote into a new sales order and link the order to the quote.
+    
+    Performs validation and persistence: verifies the quote exists, is in an allowed status ("approved" or "accepted"), is not already converted, and is not expired; then creates a SalesOrder populated from the quote, updates the quote's status and linkage, and returns a summary of the created order.
+    
+    Raises:
+        HTTPException: 404 if the quote does not exist.
+        HTTPException: 400 if the quote is not in an allowed status, is already converted, or has expired.
+    
+    Returns:
+        dict: {
+            "message": confirmation message including the generated order number,
+            "order_id": integer ID of the created sales order,
+            "order_number": string order number (e.g., "SO-2025-0001")
+        }
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -590,7 +684,13 @@ async def delete_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a quote (only if not converted)"""
+    """
+    Delete a quote if it has not been converted.
+    
+    Raises:
+        HTTPException: 404 if the quote with the given ID does not exist.
+        HTTPException: 400 if the quote has already been converted and cannot be deleted.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -621,7 +721,21 @@ async def upload_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload an image for a quote (product photo/render)"""
+    """
+    Upload an image for a quote (product photo/render).
+    
+    Parameters:
+    	quote_id (int): ID of the quote to attach the image to.
+    	file (UploadFile): Image file to upload. Allowed MIME types: image/png, image/jpeg, image/jpg, image/gif, image/webp. Maximum size: 5MB.
+    	current_user (User): Authenticated user performing the upload (omitted from generated docs if provided by dependency injection).
+    	db (Session): Database session (omitted from generated docs if provided by dependency injection).
+    
+    Returns:
+    	dict: Confirmation object containing `message` and uploaded `filename`.
+    
+    Raises:
+    	HTTPException: If the quote is not found (404), the file MIME type is not allowed (400), or the file exceeds 5MB (400).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -663,7 +777,15 @@ async def get_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get the image for a quote"""
+    """
+    Return the stored image for a quote as an HTTP response with appropriate content type and inline filename.
+    
+    Returns:
+        Response: HTTP response containing the image bytes, Content-Type set to the quote's MIME type (defaults to "image/png"), and a Content-Disposition header with the stored filename (or "quote_image.png").
+    
+    Raises:
+        HTTPException: 404 if the quote does not exist or if no image is uploaded for the quote.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -692,7 +814,16 @@ async def delete_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete the image for a quote"""
+    """
+    Delete the stored image and associated metadata for a quote and persist the change.
+    
+    Updates the quote record to remove image data, filename, and MIME type, sets the update timestamp, and commits the change.
+    
+    @returns
+    	dict: Confirmation message: `{"message": "Image deleted"}`.
+    
+    @raises HTTPException: 404 if the quote with the given `quote_id` does not exist.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -721,7 +852,14 @@ async def generate_quote_pdf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate a PDF for a quote using ReportLab with company logo, image, and tax"""
+    """
+    Generate a PDF document for a quote using company settings, quote data, and optional images.
+    
+    Builds a styled PDF (header with optional logo, quote and customer info, item table with subtotal/tax/total, notes, validity, terms, and footer) and returns it as a downloadable file named using the quote number.
+    
+    Returns:
+        StreamingResponse: PDF content with media type "application/pdf" and a Content-Disposition attachment filename of "<quote_number>.pdf".
+    """
     import io
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter

@@ -18,6 +18,15 @@ const RESOURCE_STATUSES = [
   { value: "offline", label: "Offline", color: "red" },
 ];
 
+/**
+ * Renders the Admin Manufacturing UI for managing work centers, resources, and routings.
+ *
+ * Displays tabs for Work Centers and Routings, fetches and refreshes relevant lists,
+ * and coordinates modals and handlers for creating, editing, deleting, syncing, and seeding
+ * work centers, resources, and routings while surfacing feedback via toast notifications.
+ *
+ * @returns {JSX.Element} The AdminManufacturing React component UI.
+ */
 export default function AdminManufacturing() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("work-centers");
@@ -1385,7 +1394,16 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
   );
 }
 
-// Simple Routing Modal (for now)
+/**
+ * Render a modal UI for creating a routing and its sequence of operations.
+ *
+ * @param {Array<Object>} products - Available products for selection (expected fields: `id`, `sku`, `name`).
+ * @param {Array<Object>} workCenters - Available work centers for operations (expected fields: `id`, `code`, `name`).
+ * @param {Function} onClose - Callback invoked to close the modal without creating a routing.
+ * @param {string} token - Admin JWT used to authenticate the API request that creates the routing.
+ * @param {Function} onSuccess - Callback invoked after a routing is successfully created.
+ * @returns {JSX.Element} The modal element containing the routing creation form and operations editor.
+ */
 function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
   const toast = useToast();
   const [form, setForm] = useState({

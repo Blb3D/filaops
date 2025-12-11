@@ -27,6 +27,15 @@ import AdminSettings from "./pages/admin/AdminSettings";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
+/**
+ * Main application component that configures routing and top-level providers.
+ *
+ * Sets up the BrowserRouter and ToastProvider and declares the route hierarchy
+ * for setup/onboarding, authentication and password reset, public pages
+ * (pricing), and the nested admin ERP panel with its child routes.
+ *
+ * @returns {JSX.Element} The root React element containing the router and providers.
+ */
 export default function App() {
   return (
     <BrowserRouter>

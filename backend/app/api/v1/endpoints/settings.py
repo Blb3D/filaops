@@ -97,7 +97,12 @@ class CompanySettingsUpdate(BaseModel):
 # ============================================================================
 
 def get_or_create_settings(db: Session) -> CompanySettings:
-    """Get existing settings or create default"""
+    """
+    Retrieve the singleton CompanySettings record, creating and persisting a default if none exists.
+    
+    Returns:
+        CompanySettings: The CompanySettings instance with id = 1 (created and persisted if it did not previously exist).
+    """
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
     if not settings:
         settings = CompanySettings(id=1)
@@ -108,7 +113,15 @@ def get_or_create_settings(db: Session) -> CompanySettings:
 
 
 def settings_to_response(settings: CompanySettings) -> CompanySettingsResponse:
-    """Convert settings model to response with computed fields"""
+    """
+    Builds a CompanySettingsResponse from a CompanySettings ORM instance, computing tax_rate_percent when a tax rate exists.
+    
+    Parameters:
+        settings (CompanySettings): The ORM settings instance to convert.
+    
+    Returns:
+        CompanySettingsResponse: Response model with fields copied from `settings`. `tax_rate_percent` is a float percentage when `tax_rate` is present, otherwise `None`.
+    """
     tax_rate_percent = None
     if settings.tax_rate is not None:
         tax_rate_percent = float(settings.tax_rate) * 100
@@ -148,7 +161,12 @@ async def get_company_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get company settings"""
+    """
+    Retrieve the current company settings.
+    
+    Returns:
+        CompanySettingsResponse: The current company settings; if no settings record exists one is created and returned.
+    """
     settings = get_or_create_settings(db)
     return settings_to_response(settings)
 
@@ -159,7 +177,17 @@ async def update_company_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update company settings"""
+    """
+    Update the persistent company settings using the provided partial update data.
+    
+    Only users with the admin role may perform this operation; the function persists changes and returns the updated settings.
+    
+    Returns:
+        CompanySettingsResponse: The updated company settings.
+    
+    Raises:
+        HTTPException: Status 403 if the current user is not an admin.
+    """
     # Require admin role
     if not current_user.is_admin:
         raise HTTPException(
@@ -197,7 +225,19 @@ async def upload_company_logo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload company logo"""
+    """
+    Store an uploaded company logo in the company settings after validating its MIME type and size.
+    
+    Parameters:
+        file (UploadFile): Image file to upload. Allowed MIME types: image/png, image/jpeg, image/jpg, image/gif, image/webp. Maximum size: 2 MB.
+    
+    Returns:
+        dict: {"message": "Logo uploaded successfully", "filename": "<original filename>"}.
+    
+    Raises:
+        HTTPException: 403 if the current user is not an admin.
+        HTTPException: 400 if the file MIME type is not allowed or the file size exceeds 2 MB.
+    """
     # Require admin role
     if not current_user.is_admin:
         raise HTTPException(
@@ -238,7 +278,15 @@ async def upload_company_logo(
 async def get_company_logo(
     db: Session = Depends(get_db),
 ):
-    """Get company logo image (no auth required for PDF generation)"""
+    """
+    Serve the stored company logo image for public access (used e.g. when generating PDFs).
+    
+    Raises an HTTP 404 error if no settings record exists or no logo has been uploaded.
+    
+    Returns:
+        A Response containing the raw image bytes, with the image MIME type (or "image/png" if unknown)
+        and a Content-Disposition header set inline with the stored filename (or "logo.png" if missing).
+    """
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
 
     if not settings or not settings.logo_data:
@@ -261,7 +309,15 @@ async def delete_company_logo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete company logo"""
+    """
+    Delete the stored company logo and clear its filename and MIME type metadata.
+    
+    Returns:
+        dict: {"message": "Logo deleted"} on success.
+    
+    Raises:
+        HTTPException: 403 Forbidden if the current user is not an admin.
+    """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

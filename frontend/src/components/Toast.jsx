@@ -2,6 +2,12 @@ import { createContext, useContext, useState, useCallback } from "react";
 
 const ToastContext = createContext(null);
 
+/**
+ * Supplies toast management and a toast API to descendant components and renders active toasts.
+ *
+ * @param {{children: import('react').ReactNode}} props - Children to render inside the provider.
+ * @returns {import('react').ReactElement} A provider element that exposes toast methods and renders the ToastContainer alongside children.
+ */
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
 
@@ -37,6 +43,12 @@ export function ToastProvider({ children }) {
   );
 }
 
+/**
+ * Access the toast API provided by ToastProvider.
+ *
+ * @returns {object} The toast API object with methods to create and remove toasts (for example: `success`, `error`, `warning`, `info`).
+ * @throws {Error} If called outside of a ToastProvider.
+ */
 export function useToast() {
   const context = useContext(ToastContext);
   if (!context) {
@@ -45,6 +57,14 @@ export function useToast() {
   return context;
 }
 
+/**
+ * Render a fixed-position container of active toast notifications.
+ *
+ * @param {Object} props - Component props.
+ * @param {{id: string|number, message: string, type: string}[]} props.toasts - Active toasts to display.
+ * @param {(id: string|number) => void} props.removeToast - Callback invoked with a toast id to remove that toast.
+ * @returns {JSX.Element|null} The rendered container element, or `null` when there are no toasts.
+ */
 function ToastContainer({ toasts, removeToast }) {
   if (toasts.length === 0) return null;
 
@@ -57,6 +77,17 @@ function ToastContainer({ toasts, removeToast }) {
   );
 }
 
+/**
+ * Renders a single toast message with type-specific styling, icon, and a close button.
+ *
+ * @param {{ toast: { id: string|number, message: string, type?: 'success'|'error'|'warning'|'info' }, onClose: function }} props - Component props.
+ * @param {Object} props.toast - The toast data to display.
+ * @param {string|number} props.toast.id - Unique identifier for the toast.
+ * @param {string} props.toast.message - Message text shown in the toast.
+ * @param {'success'|'error'|'warning'|'info'} [props.toast.type='info'] - Visual type of the toast.
+ * @param {function} props.onClose - Callback invoked when the toast close button is clicked.
+ * @returns {JSX.Element} A styled toast element with an accessible role of "alert".
+ */
 function ToastItem({ toast, onClose }) {
   const styles = {
     success: {

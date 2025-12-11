@@ -25,6 +25,13 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * Render the admin user management interface including user list, filters, stats, and modals for creating/editing users, deactivating/reactivating accounts, and resetting passwords.
+ *
+ * Displays counts for total active users, admins, operators, and inactive users; supports client-side search and role filtering; and provides actions that call the admin API and show toast notifications for success/error.
+ *
+ * @returns {JSX.Element} The rendered admin users management UI.
+ */
 export default function AdminUsers() {
   const toast = useToast();
   const [users, setUsers] = useState([]);
@@ -483,7 +490,17 @@ export default function AdminUsers() {
   );
 }
 
-// User Create/Edit Modal
+/**
+ * Render a modal form for creating a new user or editing an existing user.
+ *
+ * Renders form fields for email, name, role, and (when editing) status; when creating, requires a temporary password of at least 8 characters. Submits a payload to `onSave` (omitting `password` when editing and the password field is left empty) and calls `onClose` to dismiss the modal.
+ *
+ * @param {{user?: Object, onSave: function, onClose: function}} props - Component props.
+ * @param {Object} [props.user] - Existing user to edit; when omitted the modal creates a new user.
+ * @param {function(Object): void} props.onSave - Called with the user payload when the form is submitted.
+ * @param {function(): void} props.onClose - Called to close the modal without saving.
+ * @returns {JSX.Element} The user create/edit modal element.
+ */
 function UserModal({ user, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({
@@ -704,7 +721,15 @@ function UserModal({ user, onSave, onClose }) {
   );
 }
 
-// Reset Password Modal
+/**
+ * Render a modal for resetting a user's password.
+ *
+ * Validates that the new password is at least 8 characters and calls `onReset` with the new password when submitted. Provides a control to generate a random 12-character password and an option to reveal the password; displays the target user's email for context.
+ * @param {{email: string, id?: string}} user - User object for whom the password will be reset (used for display).
+ * @param {(newPassword: string) => void} onReset - Callback invoked with the new password when the reset is confirmed.
+ * @param {() => void} onClose - Callback to close the modal without performing a reset.
+ * @returns {JSX.Element} The reset password modal element.
+ */
 function ResetPasswordModal({ user, onReset, onClose }) {
   const toast = useToast();
   const [newPassword, setNewPassword] = useState("");

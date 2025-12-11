@@ -128,23 +128,36 @@ class Quote(Base):
 
     @property
     def is_expired(self) -> bool:
-        """Check if quote has expired"""
+        """
+        Determine whether the quote's expiration timestamp is before the current UTC time.
+        
+        Returns:
+            bool: `true` if the quote has expired, `false` otherwise.
+        """
         return datetime.utcnow() > self.expires_at
 
     @property
     def has_image(self) -> bool:
-        """Check if quote has an image attached"""
+        """
+        Indicates whether the quote has an attached image.
+        
+        Returns:
+            `true` if `image_data` is present, `false` otherwise.
+        """
         return self.image_data is not None
 
     @property
     def is_auto_approvable(self) -> bool:
         """
-        Check if quote meets auto-approval criteria
-
-        Auto-approve if:
-        1. Total price < $50
-        2. File size < 100MB
-        3. If ABS/ASA: dimensions < 200x200x100mm
+        Determine whether the quote satisfies automatic approval rules.
+        
+        A quote is auto-approvable when all of the following are met:
+        - total price is less than $50,
+        - file size is at most 100 megabytes,
+        - if material type is ABS or ASA, dimensions do not exceed 200×200×100 millimeters.
+        
+        Returns:
+            true if the quote meets all auto-approval criteria, false otherwise.
         """
         # Price check
         if self.total_price >= 50:
