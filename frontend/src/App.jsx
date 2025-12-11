@@ -27,6 +27,15 @@ import AdminSettings from "./pages/admin/AdminSettings";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
+/**
+ * Top-level application router that provides global toasts and registers all public and admin routes.
+ *
+ * The component wraps the route tree in a BrowserRouter and a ToastProvider, defines first-run pages
+ * (setup, onboarding), auth and password-reset routes, a public pricing page, and an admin section
+ * mounted at `/admin` which uses AdminLayout and includes nested admin routes and redirects.
+ *
+ * @returns {JSX.Element} The root React element containing the BrowserRouter, ToastProvider, and Routes.
+ */
 export default function App() {
   return (
     <BrowserRouter>

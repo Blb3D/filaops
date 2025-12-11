@@ -13,6 +13,14 @@ const STATUS_OPTIONS = [
   { value: "cancelled", label: "Cancelled", color: "gray" },
 ];
 
+/**
+ * Render the admin quotes management page with list, filters, stats, and modals for creating, viewing, and managing quotes.
+ *
+ * Renders a searchable and filterable quotes table, statistics cards, controls to create/edit/delete/convert quotes,
+ * and modals for quote creation/editing and detailed quote view (including image upload, status updates, PDF download, and conversion to orders).
+ *
+ * @returns {JSX.Element} The admin quotes management UI component.
+ */
 export default function AdminQuotes() {
   const navigate = useNavigate();
   const toast = useToast();
@@ -487,7 +495,18 @@ export default function AdminQuotes() {
   );
 }
 
-// Quote Form Modal Component - Now with Product Selection, Customer, and Tax
+/**
+ * Modal form for creating or editing a quote with product selection, customer details, and tax/total preview.
+ *
+ * Shows a two-step UI: select an existing product with BOM, then enter quantity, pricing, customer info, notes,
+ * and optional tax settings (driven by company settings). Builds a payload containing only accepted fields and
+ * invokes the provided save callback. When editing, the form is pre-filled from the passed quote.
+ *
+ * @param {Object|null} quote - Existing quote object to edit, or `null` to create a new quote.
+ * @param {Function} onSave - Callback invoked with the quote payload when the form is submitted.
+ * @param {Function} onClose - Callback to close the modal.
+ * @param {string} token - Admin authentication token used for API requests to load products, customers, and settings.
+ */
 function QuoteFormModal({ quote, onSave, onClose, token }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1=product, 2=customer+details
@@ -961,7 +980,25 @@ function QuoteFormModal({ quote, onSave, onClose, token }) {
   );
 }
 
-// Quote Detail Modal Component
+/**
+ * Render a modal showing detailed information and actions for a single quote.
+ *
+ * Displays product, customer, image, validity, notes, linked order info, and action buttons
+ * for approving, rejecting, converting, downloading PDF, editing, deleting, and image upload/delete.
+ *
+ * @param {Object} props
+ * @param {Object} props.quote - Quote object to display (expects fields like id, quote_number, created_at, expires_at, status, product_name, quantity, unit_price, total_price, customer_name, customer_email, customer_id, has_image, sales_order_id, converted_at, customer_notes, admin_notes).
+ * @param {function():void} props.onClose - Called to close the modal.
+ * @param {function():void} props.onEdit - Called to begin editing the quote.
+ * @param {function(number, string, string=):Promise<void>} props.onUpdateStatus - Called to update a quote's status. Signature: (quoteId, status, rejectionReason?) where rejectionReason is provided for "rejected".
+ * @param {function(number):Promise<void>} props.onConvert - Called to convert the quote to an order (receives quote id).
+ * @param {function(Object):Promise<void>} props.onDownloadPDF - Called to download the quote PDF (receives the quote object).
+ * @param {function(number):Promise<void>} props.onDelete - Called to delete the quote (receives quote id).
+ * @param {function(string):string} props.getStatusStyle - Returns a CSS class string for a given status value.
+ * @param {function():void=} props.onRefresh - Optional callback to refresh parent data after image/upload or other updates.
+ *
+ * @returns {JSX.Element} The quote detail modal element.
+ */
 function QuoteDetailModal({
   quote,
   onClose,

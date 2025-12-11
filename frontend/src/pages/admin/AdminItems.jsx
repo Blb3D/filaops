@@ -15,6 +15,16 @@ const ITEM_TYPES = [
   { value: "service", label: "Service", color: "green" },
 ];
 
+/**
+ * Admin interface for managing items, categories, and related operations.
+ *
+ * Renders a full-featured items management UI including category tree navigation,
+ * item listing with search and filters, statistics tiles, bulk selection and bulk
+ * update actions, recost operation, and modals/editors for creating/editing
+ * items, materials, categories, BOMs, and routings.
+ *
+ * @returns {JSX.Element} The rendered Admin Items management component.
+ */
 export default function AdminItems() {
   const toast = useToast();
   const [items, setItems] = useState([]);
@@ -827,7 +837,19 @@ export default function AdminItems() {
   );
 }
 
-// Bulk Update Modal
+/**
+ * Render a modal for applying bulk updates to the currently selected items.
+ *
+ * Presents controls to change category, item type, procurement type, and active status.
+ * Only fields explicitly chosen will be included in the update payload; selecting the special
+ * "No Category" option will clear category for the affected items.
+ *
+ * @param {{id?: number, name?: string, is_active?: boolean}[]} categories - Available categories to assign; only active categories are shown.
+ * @param {number} selectedCount - Number of items currently selected for the bulk update.
+ * @param {(updateData: Object) => void} onSave - Called with an object containing only the fields to update (e.g., `{ category_id: 12, item_type: 'component', is_active: false }`).
+ * @param {() => void} onClose - Called to close the modal without saving.
+ * @returns {JSX.Element} The bulk update modal element.
+ */
 function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({

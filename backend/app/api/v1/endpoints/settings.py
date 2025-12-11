@@ -97,7 +97,12 @@ class CompanySettingsUpdate(BaseModel):
 # ============================================================================
 
 def get_or_create_settings(db: Session) -> CompanySettings:
-    """Get existing settings or create default"""
+    """
+    Return the singleton CompanySettings record, creating and persisting a default record with id=1 if none exists.
+    
+    Returns:
+        CompanySettings: The existing or newly created settings record (id == 1).
+    """
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
     if not settings:
         settings = CompanySettings(id=1)
@@ -108,7 +113,17 @@ def get_or_create_settings(db: Session) -> CompanySettings:
 
 
 def settings_to_response(settings: CompanySettings) -> CompanySettingsResponse:
-    """Convert settings model to response with computed fields"""
+    """
+    Builds a CompanySettingsResponse from a CompanySettings model.
+    
+    Computes `tax_rate_percent` as `tax_rate * 100` when `tax_rate` is present and sets `has_logo` based on whether `logo_data` exists.
+    
+    Parameters:
+        settings (CompanySettings): Database model instance containing stored company settings.
+    
+    Returns:
+        CompanySettingsResponse: Response model populated from `settings`; `tax_rate_percent` is a float percentage or `None`, and `has_logo` indicates presence of logo data.
+    """
     tax_rate_percent = None
     if settings.tax_rate is not None:
         tax_rate_percent = float(settings.tax_rate) * 100
@@ -148,7 +163,12 @@ async def get_company_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get company settings"""
+    """
+    Retrieve the application's company settings; creates a default settings record if none exists.
+    
+    Returns:
+        CompanySettingsResponse: The company settings payload including contact info, tax and quote configuration, logo metadata, and last updated timestamp.
+    """
     settings = get_or_create_settings(db)
     return settings_to_response(settings)
 
@@ -159,7 +179,18 @@ async def update_company_settings(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update company settings"""
+    """
+    Apply partial updates to the singleton company settings record; only users with admin role may perform this action.
+    
+    Parameters:
+        data (CompanySettingsUpdate): Partial settings to apply. If `tax_rate_percent` is provided, it is converted from a 0–100 percent value to the internal `tax_rate` Decimal (percent/100); if `tax_rate_percent` is `None`, `tax_rate` will be cleared.
+    
+    Returns:
+        CompanySettingsResponse: The updated, persisted company settings.
+    
+    Raises:
+        HTTPException: With status 403 if the current user does not have an admin role.
+    """
     # Require admin role
     if not current_user.is_admin:
         raise HTTPException(
@@ -197,7 +228,22 @@ async def upload_company_logo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload company logo"""
+    """
+    Store a new company logo after validating the uploaded file's MIME type and size.
+    
+    Parameters:
+        file (UploadFile): Image file uploaded via form data. Allowed MIME types: image/png, image/jpeg, image/jpg, image/gif, image/webp. Maximum size: 2 MB.
+    
+    Returns:
+        dict: A dictionary containing:
+            - message (str): Confirmation message.
+            - filename (str): The stored filename of the uploaded logo.
+    
+    Raises:
+        HTTPException: Raised with status 403 if the current user is not an admin.
+        HTTPException: Raised with status 400 if the file's MIME type is not allowed.
+        HTTPException: Raised with status 400 if the file size exceeds 2 MB.
+    """
     # Require admin role
     if not current_user.is_admin:
         raise HTTPException(
@@ -238,7 +284,15 @@ async def upload_company_logo(
 async def get_company_logo(
     db: Session = Depends(get_db),
 ):
-    """Get company logo image (no auth required for PDF generation)"""
+    """
+    Return the stored company logo as an HTTP response for inline display; no authentication required.
+    
+    Raises:
+        HTTPException: with 404 status if no logo is uploaded.
+    
+    Returns:
+        Response: HTTP response containing the logo binary, Content-Type set to the stored MIME type (or "image/png"), and a Content-Disposition header for inline display with the stored filename (or "logo.png").
+    """
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
 
     if not settings or not settings.logo_data:
@@ -261,7 +315,15 @@ async def delete_company_logo(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete company logo"""
+    """
+    Deletes the stored company logo and clears its filename and MIME type metadata.
+    
+    Raises:
+        HTTPException: 403 if the current user is not an administrator.
+    
+    Returns:
+        dict: {"message": "Logo deleted"} confirming the deletion.
+    """
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

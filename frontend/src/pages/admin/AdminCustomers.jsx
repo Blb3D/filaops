@@ -10,6 +10,10 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+/**
+ * Render the admin customers management interface, including list, filters, stats, and modals for viewing, creating, editing, and importing customers.
+ * @returns {JSX.Element} The admin customers management React component.
+ */
 export default function AdminCustomers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

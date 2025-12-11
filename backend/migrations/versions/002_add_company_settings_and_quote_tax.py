@@ -21,6 +21,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """
+    Create the company_settings table if absent, add tax/image/customer fields to the quotes table as needed, and make quotes.material_type nullable.
+    
+    This migration will:
+    - Create a new company_settings table with company metadata, logo fields, tax settings, default quote/invoice settings, and timestamps when the table does not already exist.
+    - Add the following columns to the quotes table if they are missing: subtotal, tax_rate, tax_amount, image_data, image_filename, image_mime_type, and customer_id.
+    - If customer_id is added, create an index named `ix_quotes_customer_id` on quotes.customer_id and a foreign key `fk_quotes_customer_id` referencing users.id.
+    - Alter quotes.material_type to allow NULL values.
+    """
     from sqlalchemy import inspect
     from alembic import context
 
@@ -95,6 +104,11 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop foreign key and index
+    """
+    Revert the schema changes applied by the corresponding upgrade migration.
+    
+    This removes the foreign key constraint and index on quotes.customer_id, drops the added quote columns (customer_id, image_mime_type, image_filename, image_data, tax_amount, tax_rate, subtotal), and drops the company_settings table.
+    """
     op.drop_constraint('fk_quotes_customer_id', 'quotes', type_='foreignkey')
     op.drop_index('ix_quotes_customer_id', table_name='quotes')
 

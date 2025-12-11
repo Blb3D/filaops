@@ -21,6 +21,15 @@ const paymentColors = {
   refunded: "bg-gray-500/20 text-gray-400",
 };
 
+/**
+ * Render the admin Order Management interface for viewing and managing sales orders.
+ *
+ * Provides listing, search, and status filtering; viewing order details; advancing or setting order status;
+ * generating production orders; and creating new orders via a wizard. Performs authenticated API requests
+ * using the admin token stored in localStorage and displays toast notifications for operation results.
+ *
+ * @returns {JSX.Element} The admin orders management UI.
+ */
 export default function AdminOrders() {
   const navigate = useNavigate();
   const toast = useToast();

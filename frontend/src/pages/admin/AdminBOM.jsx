@@ -3,7 +3,15 @@ import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
-// Modal Component
+/**
+ * Render a centered modal dialog with a backdrop and a header close control when open.
+ * @param {Object} props
+ * @param {boolean} props.isOpen - Whether the modal is visible.
+ * @param {function} props.onClose - Callback invoked when the backdrop or close button is clicked.
+ * @param {string} props.title - Title text displayed in the modal header.
+ * @param {import('react').ReactNode} props.children - Content rendered inside the modal body.
+ * @returns {import('react').ReactElement|null} The modal element when open, or `null` when closed.
+ */
 function Modal({ isOpen, onClose, title, children }) {
   if (!isOpen) return null;
 
@@ -284,7 +292,18 @@ function PurchaseRequestModal({ line, onClose, token, onSuccess }) {
   );
 }
 
-// BOM Detail View
+/**
+ * Render the detailed BOM editor and viewer, including lines, cost rollup, routing/process path, and related actions.
+ *
+ * Renders BOM header info, a table of BOM lines with add/edit/delete and purchase request actions, an explodable multi-level view, routing/process-path management with timing overrides, and controls to recalculate costs or create production orders.
+ *
+ * @param {Object} props.bom - The BOM to display and edit (includes id, product_id, lines, total_cost, version, revision, etc.).
+ * @param {Function} props.onClose - Callback invoked when the detail view should be closed.
+ * @param {Function} props.onUpdate - Callback invoked after changes that require the parent to refresh (e.g., add/update/delete line, recalc, routing changes).
+ * @param {string} props.token - Authorization token used for API requests.
+ * @param {Function} [props.onCreateProductionOrder] - Optional callback invoked with the BOM when user requests creation of a production order.
+ * @returns {JSX.Element} The BOM detail view component.
+ */
 function BOMDetailView({
   bom,
   onClose,
@@ -2045,6 +2064,13 @@ function CreateProductionOrderModal({
   );
 }
 
+/**
+ * Admin interface for managing Bills of Materials (BOMs), including listing, filtering, viewing details, copying, deleting, and creating BOMs and production orders.
+ *
+ * Renders a searchable, filterable BOM table and coordinates detail, creation, and production-order modals. Handles fetching BOMs, opening a BOM detail view, copying and deleting BOMs, and initiating production-order creation. Reads an admin token from localStorage and respects optional URL query parameters for auto-opening a BOM or pre-filling production quote context.
+ *
+ * @returns {JSX.Element} The rendered Admin BOM management UI.
+ */
 export default function AdminBOM() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();

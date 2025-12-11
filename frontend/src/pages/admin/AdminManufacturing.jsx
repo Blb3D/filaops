@@ -18,6 +18,15 @@ const RESOURCE_STATUSES = [
   { value: "offline", label: "Offline", color: "red" },
 ];
 
+/**
+ * Admin interface for managing manufacturing work centers, resources, and production routings.
+ *
+ * Renders tabs for Work Centers and Routings, handles loading and error states, performs CRUD
+ * operations and sync/seed actions against the API, and exposes modals for creating/editing
+ * work centers, resources, and routings.
+ *
+ * @returns {JSX.Element} The admin manufacturing UI containing lists, action buttons, and modals. 
+ */
 export default function AdminManufacturing() {
   const toast = useToast();
   const [activeTab, setActiveTab] = useState("work-centers");
@@ -1385,7 +1394,16 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
   );
 }
 
-// Simple Routing Modal (for now)
+/**
+ * Modal UI for creating a routing by composing a sequence of operations for a product.
+ *
+ * @param {Array<Object>} products - Available products to select for the routing (objects must include `id`, `sku`, and `name`).
+ * @param {Array<Object>} workCenters - Available work centers to assign to operations (objects must include `id`, `code`, and `name`).
+ * @param {Function} onClose - Callback invoked to close the modal without saving.
+ * @param {string} token - Admin API token used to authenticate the routing creation request.
+ * @param {Function} onSuccess - Callback invoked after a routing is successfully created (should refresh parent data and close the modal).
+ * @returns {JSX.Element} The routing creation modal element.
+ */
 function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
   const toast = useToast();
   const [form, setForm] = useState({

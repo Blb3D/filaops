@@ -165,7 +165,12 @@ class QuoteStatsResponse(BaseModel):
 # ============================================================================
 
 def generate_quote_number(db: Session) -> str:
-    """Generate next quote number in format Q-YYYY-NNN"""
+    """
+    Produce the next sequential quote identifier for the current UTC year.
+    
+    Returns:
+        str: Quote number in the format "Q-YYYY-NNN" where NNN is a zero-padded sequence starting at 001 (e.g., "Q-2025-001").
+    """
     year = datetime.utcnow().year
 
     # Get the highest quote number for this year
@@ -199,7 +204,18 @@ async def list_quotes(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all quotes with optional filtering"""
+    """
+    Retrieve a paginated list of quotes, optionally filtered by status or a free-text search.
+    
+    Parameters:
+        status (Optional[str]): Exact status to filter quotes by.
+        search (Optional[str]): Case-insensitive substring match against quote number, product name, customer name, or customer email.
+        skip (int): Number of records to skip for pagination (offset).
+        limit (int): Maximum number of records to return.
+    
+    Returns:
+        List[Quote]: List of Quote ORM records that match the provided filters and pagination.
+    """
     query = db.query(Quote).order_by(desc(Quote.created_at))
 
     if status:
@@ -261,7 +277,18 @@ async def get_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get quote details"""
+    """
+    Retrieve detailed information for a quote by its ID.
+    
+    Parameters:
+        quote_id (int): ID of the quote to retrieve.
+    
+    Returns:
+        Quote: The quote instance matching the provided ID.
+    
+    Raises:
+        HTTPException: 404 if no quote exists with the given ID.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -277,7 +304,14 @@ async def create_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Create a new manual quote"""
+    """
+    Create a new manual quote and persist it to the database.
+    
+    Calculates subtotal from unit price and quantity, determines whether tax applies (uses the request override or company settings), computes tax amount and total price when applicable, validates that an optional customer_id refers to an existing customer account, sets sensible defaults (material_type defaults to "PLA", status set to "pending", file_format to "manual", file_size_bytes to 0), sets expires_at based on request.valid_days, and saves the created Quote.
+    
+    Returns:
+        Quote: The persisted Quote instance with computed pricing, tax fields, generated quote_number, timestamps, and any database-assigned identifiers.
+    """
     quote_number = generate_quote_number(db)
     expires_at = datetime.utcnow() + timedelta(days=request.valid_days)
 
@@ -352,7 +386,25 @@ async def update_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update quote details"""
+    """
+    Update fields and pricing of an existing manual quote.
+    
+    Updates editable fields on the specified quote, recalculates subtotal, tax, and total_price when unit_price, quantity, or the `apply_tax` flag change, and persists the updated quote.
+    
+    Parameters:
+        request (ManualQuoteUpdate): Update payload. If `apply_tax` is provided it overrides company tax settings:
+            - If `apply_tax` is true, the company's tax_rate (if present) will be applied and tax_amount/total_price updated.
+            - If `apply_tax` is false, any existing tax fields will be cleared and total_price set to subtotal.
+            - If `apply_tax` is omitted, existing tax_rate is preserved and totals are recalculated against the new subtotal.
+        (current_user and db are injected and not documented.)
+    
+    Raises:
+        HTTPException 404: If the quote with `quote_id` does not exist.
+        HTTPException 400: If the quote status is "converted" (editing forbidden) or if a provided `customer_id` does not reference an existing customer.
+    
+    Returns:
+        Quote: The updated Quote ORM instance with refreshed fields (including updated_at).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -435,7 +487,21 @@ async def update_quote_status(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update quote status (approve, reject, cancel, accept)"""
+    """
+    Update the status of a quote and record related metadata.
+    
+    Validates the requested status against allowed values, prevents changes for already converted quotes, and when transitioning to "approved" records approval timestamp, approver, and approval method; when transitioning to "rejected" records the rejection reason. Also stores optional administrative notes and updates the quote's updated timestamp.
+    
+    Parameters:
+        quote_id: ID of the quote to update.
+        request: Payload containing the new `status` and optional `rejection_reason` and `admin_notes`.
+    
+    Returns:
+        The updated Quote instance.
+    
+    Raises:
+        HTTPException: If the quote is not found (404), if the requested status is invalid (400), or if attempting to change the status of a converted quote (400).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -485,7 +551,19 @@ async def convert_quote_to_order(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Convert an accepted/approved quote to a sales order"""
+    """
+    Convert an approved or accepted quote into a new sales order and link the created order to the quote.
+    
+    Parameters:
+        quote_id (int): ID of the quote to convert.
+    
+    Raises:
+        HTTPException: 404 if the quote is not found.
+        HTTPException: 400 if the quote is not approved/accepted, already converted, or has expired.
+    
+    Returns:
+        dict: Confirmation containing keys `message` (str), `order_id` (int), and `order_number` (str).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -590,7 +668,13 @@ async def delete_quote(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a quote (only if not converted)"""
+    """
+    Delete a quote unless it has already been converted.
+    
+    Raises:
+        HTTPException: 404 if the quote with `quote_id` does not exist.
+        HTTPException: 400 if the quote's status is "converted" and therefore cannot be deleted.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -621,7 +705,17 @@ async def upload_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Upload an image for a quote (product photo/render)"""
+    """
+    Attach an image to a quote record and persist it to the database.
+    
+    Accepts an uploaded image file, validates its MIME type (PNG, JPEG, JPG, GIF, WebP) and size (maximum 5 MB), then stores the file bytes, original filename, and MIME type on the quote record and updates its timestamp before committing.
+    
+    Raises:
+    	HTTPException: If the quote does not exist (404), if the file MIME type is not allowed (400), or if the file size exceeds 5 MB (400).
+    
+    Returns:
+    	dict: Confirmation containing `message` (success text) and `filename` (the stored filename).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -663,7 +757,15 @@ async def get_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get the image for a quote"""
+    """
+    Retrieve the binary image associated with a quote.
+    
+    Returns:
+        Response: HTTP response containing the image bytes, using the quote's MIME type (fallback to "image/png") and a Content-Disposition filename.
+    
+    Raises:
+        HTTPException: 404 if the quote does not exist or if no image is uploaded for the quote.
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -692,7 +794,15 @@ async def delete_quote_image(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete the image for a quote"""
+    """
+    Remove the stored image and related metadata from a quote.
+    
+    Returns:
+        dict: Confirmation message, e.g. {"message": "Image deleted"}.
+    
+    Raises:
+        HTTPException: If the quote with the given ID does not exist (404).
+    """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
         raise HTTPException(
@@ -721,7 +831,18 @@ async def generate_quote_pdf(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate a PDF for a quote using ReportLab with company logo, image, and tax"""
+    """
+    Generate a downloadable PDF representation of a quote, including company branding, optional quote image, itemized pricing, tax breakdown, notes, validity, and terms.
+    
+    Parameters:
+        quote_id (int): ID of the quote to render as PDF.
+    
+    Returns:
+        StreamingResponse: PDF file stream with Content-Disposition attachment named "<quote_number>.pdf".
+    
+    Raises:
+        HTTPException: 404 if the specified quote does not exist.
+    """
     import io
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import letter

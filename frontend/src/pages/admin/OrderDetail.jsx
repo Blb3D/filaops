@@ -12,6 +12,15 @@ import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+/**
+ * Render the admin Order detail page and manage its data, interactions, and UI state.
+ *
+ * Fetches and displays a sales order and its related material and capacity requirements,
+ * retrieves associated production orders, supports generating production orders,
+ * and navigates to purchasing or production views for creating purchase or work orders.
+ *
+ * @returns {JSX.Element} The rendered Order detail page UI.
+ */
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
