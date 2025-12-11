@@ -1,24 +1,31 @@
 /**
  * MaterialForm - Simple form for creating material items (filament)
- * 
+ *
  * Uses the new POST /api/v1/items/material endpoint.
  * Pre-filled for material creation with material type and color selection.
+ * Allows creating new colors on-the-fly if none exist for the material type.
  */
 import { useState, useEffect } from "react";
 import { API_URL } from "../config/api";
 
-export default function MaterialForm({ 
-  isOpen, 
-  onClose, 
-  onSuccess 
+export default function MaterialForm({
+  isOpen,
+  onClose,
+  onSuccess
 }) {
   const token = localStorage.getItem("adminToken");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  
+
   const [materialTypes, setMaterialTypes] = useState([]);
   const [colors, setColors] = useState([]);
   const [selectedMaterialType, setSelectedMaterialType] = useState("");
+
+  // Color creation state
+  const [showColorForm, setShowColorForm] = useState(false);
+  const [newColorName, setNewColorName] = useState("");
+  const [newColorHex, setNewColorHex] = useState("#000000");
+  const [creatingColor, setCreatingColor] = useState(false);
 
   const [formData, setFormData] = useState({
     material_type_code: "",
@@ -40,6 +47,9 @@ export default function MaterialForm({
       });
       setSelectedMaterialType("");
       setError(null);
+      setShowColorForm(false);
+      setNewColorName("");
+      setNewColorHex("#000000");
     }
   }, [isOpen]);
 
@@ -80,6 +90,51 @@ export default function MaterialForm({
     } catch (err) {
       // Colors fetch failure - color selector will be empty
       setColors([]);
+    }
+  };
+
+  const handleCreateColor = async () => {
+    if (!newColorName.trim()) {
+      setError("Color name is required");
+      return;
+    }
+
+    setCreatingColor(true);
+    setError(null);
+
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/materials/types/${selectedMaterialType}/colors`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: newColorName.trim(),
+            hex_code: newColorHex || null,
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Failed to create color");
+      }
+
+      const data = await res.json();
+
+      // Refresh colors list and select the new color
+      await fetchColors(selectedMaterialType);
+      setFormData({ ...formData, color_code: data.code });
+      setShowColorForm(false);
+      setNewColorName("");
+      setNewColorHex("#000000");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setCreatingColor(false);
     }
   };
 
@@ -177,22 +232,97 @@ export default function MaterialForm({
               <label className="block text-sm font-medium mb-1">
                 Color <span className="text-red-500">*</span>
               </label>
-              <select
-                required
-                value={formData.color_code}
-                onChange={(e) => setFormData({ ...formData, color_code: e.target.value })}
-                className="w-full px-3 py-2 border rounded-md"
-                disabled={!formData.material_type_code}
-              >
-                <option value="">
-                  {formData.material_type_code ? "Select color..." : "Select material type first"}
-                </option>
-                {colors.map((color) => (
-                  <option key={color.code} value={color.code}>
-                    {color.name} {color.hex && `(${color.hex})`}
-                  </option>
-                ))}
-              </select>
+
+              {!showColorForm ? (
+                <>
+                  <select
+                    required={!showColorForm}
+                    value={formData.color_code}
+                    onChange={(e) => setFormData({ ...formData, color_code: e.target.value })}
+                    className="w-full px-3 py-2 border rounded-md"
+                    disabled={!formData.material_type_code}
+                  >
+                    <option value="">
+                      {formData.material_type_code
+                        ? colors.length === 0
+                          ? "No colors available - create one below"
+                          : "Select color..."
+                        : "Select material type first"}
+                    </option>
+                    {colors.map((color) => (
+                      <option key={color.code} value={color.code}>
+                        {color.name} {color.hex && `(${color.hex})`}
+                      </option>
+                    ))}
+                  </select>
+
+                  {formData.material_type_code && (
+                    <button
+                      type="button"
+                      onClick={() => setShowColorForm(true)}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                    >
+                      <span>+</span> Create new color for this material
+                    </button>
+                  )}
+                </>
+              ) : (
+                <div className="border rounded-md p-3 bg-gray-50 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-700">New Color</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowColorForm(false);
+                        setNewColorName("");
+                        setNewColorHex("#000000");
+                      }}
+                      className="text-gray-500 hover:text-gray-700 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Color Name *</label>
+                    <input
+                      type="text"
+                      value={newColorName}
+                      onChange={(e) => setNewColorName(e.target.value)}
+                      placeholder="e.g., Mystic Blue"
+                      className="w-full px-3 py-2 border rounded-md text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Hex Color (optional)</label>
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="color"
+                        value={newColorHex}
+                        onChange={(e) => setNewColorHex(e.target.value)}
+                        className="w-10 h-10 border rounded cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={newColorHex}
+                        onChange={(e) => setNewColorHex(e.target.value)}
+                        placeholder="#000000"
+                        className="flex-1 px-3 py-2 border rounded-md text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleCreateColor}
+                    disabled={creatingColor || !newColorName.trim()}
+                    className="w-full px-3 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 text-sm"
+                  >
+                    {creatingColor ? "Creating..." : "Create Color"}
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Initial Quantity */}

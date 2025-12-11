@@ -230,6 +230,122 @@ def list_colors_for_material(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class ColorCreate(BaseModel):
+    """Schema for creating a new color"""
+    name: str
+    code: str | None = None  # Auto-generated if not provided
+    hex_code: str | None = None
+
+
+class ColorCreateResponse(BaseModel):
+    """Response after creating a color"""
+    id: int
+    code: str
+    name: str
+    hex_code: str | None
+    material_type_code: str
+    message: str
+
+
+@router.post("/types/{material_type_code}/colors", response_model=ColorCreateResponse)
+def create_color_for_material(
+    material_type_code: str,
+    color_data: ColorCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Create a new color and link it to a material type.
+
+    This endpoint allows creating colors on-the-fly when setting up materials,
+    without requiring a CSV import.
+
+    - Creates the color in the colors table
+    - Creates a MaterialColor link to the specified material type
+    - Returns the created color info
+    """
+    # Check admin permission
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Admin access required to create colors"
+        )
+
+    # Find material type
+    material_type = db.query(MaterialType).filter(
+        MaterialType.code == material_type_code
+    ).first()
+
+    if not material_type:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Material type not found: {material_type_code}"
+        )
+
+    # Generate code if not provided
+    color_code = color_data.code
+    if not color_code:
+        # Generate from name: "Mystic Blue" -> "MYSTIC_BLUE"
+        color_code = color_data.name.upper().replace(" ", "_").replace("-", "_")
+        # Ensure it's unique
+        base_code = color_code
+        counter = 1
+        while db.query(Color).filter(Color.code == color_code).first():
+            color_code = f"{base_code}_{counter}"
+            counter += 1
+
+    # Check if code already exists
+    existing_color = db.query(Color).filter(Color.code == color_code).first()
+
+    if existing_color:
+        # Color exists - just need to link it to this material type
+        color = existing_color
+
+        # Check if already linked
+        existing_link = db.query(MaterialColor).filter(
+            MaterialColor.material_type_id == material_type.id,
+            MaterialColor.color_id == color.id
+        ).first()
+
+        if existing_link:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Color '{color.name}' is already linked to {material_type.name}"
+            )
+    else:
+        # Create new color
+        color = Color(
+            code=color_code,
+            name=color_data.name,
+            hex_code=color_data.hex_code,
+            active=True,
+            is_customer_visible=True,
+            display_order=100
+        )
+        db.add(color)
+        db.flush()
+
+    # Create MaterialColor link
+    material_color = MaterialColor(
+        material_type_id=material_type.id,
+        color_id=color.id,
+        is_customer_visible=True,
+        active=True
+    )
+    db.add(material_color)
+    db.commit()
+    db.refresh(color)
+
+    return ColorCreateResponse(
+        id=color.id,
+        code=color.code,
+        name=color.name,
+        hex_code=color.hex_code,
+        material_type_code=material_type_code,
+        message=f"Color '{color.name}' created and linked to {material_type.name}"
+    )
+
+
 @router.get("/for-bom")
 def get_materials_for_bom(
     db: Session = Depends(get_db)
