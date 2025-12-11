@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import SalesOrderWizard from "../../components/SalesOrderWizard";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 const statusColors = {
   pending: "bg-yellow-500/20 text-yellow-400",
@@ -22,6 +23,7 @@ const paymentColors = {
 
 export default function AdminOrders() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -89,6 +91,7 @@ export default function AdminOrders() {
       );
 
       if (res.ok) {
+        toast.success("Order status updated");
         fetchOrders();
         if (selectedOrder?.id === orderId) {
           const updated = await res.json();
@@ -96,10 +99,10 @@ export default function AdminOrders() {
         }
       } else {
         const errorData = await res.json();
-        alert(`Failed to update order status: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to update order status: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to update order status: ${err.message || "Network error"}`);
+      toast.error(`Failed to update order status: ${err.message || "Network error"}`);
     }
   };
 
@@ -123,15 +126,9 @@ export default function AdminOrders() {
 
       if (res.ok) {
         if (data.created_orders?.length > 0) {
-          alert(
-            `Production Order(s) created: ${data.created_orders.join(", ")}`
-          );
+          toast.success(`Production Order(s) created: ${data.created_orders.join(", ")}`);
         } else if (data.existing_orders?.length > 0) {
-          alert(
-            `Production Order(s) already exist: ${data.existing_orders.join(
-              ", "
-            )}`
-          );
+          toast.info(`Production Order(s) already exist: ${data.existing_orders.join(", ")}`);
         }
         fetchOrders();
         setSelectedOrder(null);

@@ -90,6 +90,9 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
   // Line items state
   const [lineItems, setLineItems] = useState([]);
 
+  // Product search state
+  const [productSearch, setProductSearch] = useState("");
+
   // New item wizard state
   const [showItemWizard, setShowItemWizard] = useState(false);
   const [itemWizardStep, setItemWizardStep] = useState(1); // 1=basic, 2=bom, 3=pricing
@@ -1228,12 +1231,9 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
                     <input
                       type="text"
                       placeholder="Search products by SKU or name..."
+                      value={productSearch}
+                      onChange={(e) => setProductSearch(e.target.value)}
                       className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white pl-10"
-                      onChange={(e) => {
-                        // Filter products based on search
-                        const search = e.target.value.toLowerCase();
-                        if (!search) return;
-                      }}
                     />
                     <svg
                       className="w-5 h-5 absolute left-3 top-3.5 text-gray-500"
@@ -1248,18 +1248,44 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
                         d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                       />
                     </svg>
+                    {productSearch && (
+                      <button
+                        onClick={() => setProductSearch("")}
+                        className="absolute right-3 top-3.5 text-gray-500 hover:text-white"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
 
                   {/* Product Grid */}
                   <div className="grid grid-cols-3 gap-3 max-h-[300px] overflow-auto">
-                    {products
-                      .filter(
-                        (p) =>
-                          p.has_bom ||
-                          p.item_type === "finished_good" ||
-                          p.category === "Finished Goods"
-                      )
-                      .map((product) => (
+                    {(() => {
+                      const searchTerm = productSearch.trim().toLowerCase();
+                      const filteredProducts = products.filter((p) => {
+                        // Must be a sellable product (has BOM for costing)
+                        if (!p.has_bom) return false;
+
+                        // Filter by search term
+                        if (!searchTerm) return true;
+                        const nameMatch = (p.name || "").toLowerCase().includes(searchTerm);
+                        const skuMatch = (p.sku || "").toLowerCase().includes(searchTerm);
+                        return nameMatch || skuMatch;
+                      });
+
+                      if (filteredProducts.length === 0) {
+                        return (
+                          <div className="col-span-3 text-center py-8 text-gray-500">
+                            {searchTerm
+                              ? `No products with BOM found matching "${productSearch}"`
+                              : "No products with BOM available. Create a BOM for your products to sell them."}
+                          </div>
+                        );
+                      }
+
+                      return filteredProducts.map((product) => (
                         <button
                           key={product.id}
                           onClick={() => addLineItem(product)}
@@ -1275,7 +1301,8 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
                             ${parseFloat(product.selling_price || 0).toFixed(2)}
                           </div>
                         </button>
-                      ))}
+                      ));
+                    })()}
                   </div>
 
                   {/* Selected Line Items */}

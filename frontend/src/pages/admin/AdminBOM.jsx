@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 // Modal Component
 function Modal({ isOpen, onClose, title, children }) {
@@ -291,6 +292,7 @@ function BOMDetailView({
   token,
   onCreateProductionOrder,
 }) {
+  const toast = useToast();
   const [lines, setLines] = useState(bom.lines || []);
   const [loading, setLoading] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
@@ -452,10 +454,10 @@ function BOMDetailView({
         setSelectedTemplateId("");
       } else {
         const errData = await res.json();
-        alert(`Failed to apply routing template: ${errData.detail || "Unknown error"}`);
+        toast.error(`Failed to apply routing template: ${errData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to apply routing template: ${err.message || "Network error"}`);
+      toast.error(`Failed to apply routing template: ${err.message || "Network error"}`);
     } finally {
       setApplyingTemplate(false);
     }
@@ -469,6 +471,35 @@ function BOMDetailView({
         [field]: parseFloat(value) || 0,
       },
     }));
+  };
+
+  // Save operation time to server and refresh routing
+  const saveOperationTime = async (operationId, field, value) => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/routings/operations/${operationId}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            [field]: parseFloat(value) || 0,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        // Refresh the routing to get updated costs
+        await fetchProductRouting();
+      } else {
+        const errData = await res.json();
+        toast.error(`Failed to update operation: ${errData.detail || "Unknown error"}`);
+      }
+    } catch (err) {
+      toast.error(`Failed to update operation: ${err.message || "Network error"}`);
+    }
   };
 
   // Calculate total process cost from routing
@@ -497,10 +528,10 @@ function BOMDetailView({
         setExplodedData(data);
         setShowExploded(true);
       } else {
-        alert("Failed to load exploded BOM view. Please try again.");
+        toast.error("Failed to load exploded BOM view. Please try again.");
       }
     } catch (err) {
-      alert(`Failed to load exploded BOM: ${err.message || "Network error"}`);
+      toast.error(`Failed to load exploded BOM: ${err.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -567,10 +598,10 @@ function BOMDetailView({
         onUpdate();
       } else {
         const errorData = await res.json();
-        alert(`Failed to add BOM line: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to add BOM line: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to add BOM line: ${err.message || "Network error"}`);
+      toast.error(`Failed to add BOM line: ${err.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -598,10 +629,10 @@ function BOMDetailView({
         onUpdate();
       } else {
         const errorData = await res.json();
-        alert(`Failed to update BOM line: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to update BOM line: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to update BOM line: ${err.message || "Network error"}`);
+      toast.error(`Failed to update BOM line: ${err.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -625,10 +656,10 @@ function BOMDetailView({
         onUpdate();
       } else {
         const errorData = await res.json();
-        alert(`Failed to delete BOM line: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to delete BOM line: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to delete BOM line: ${err.message || "Network error"}`);
+      toast.error(`Failed to delete BOM line: ${err.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -649,10 +680,10 @@ function BOMDetailView({
         onUpdate();
       } else {
         const errorData = await res.json();
-        alert(`Failed to recalculate BOM cost: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to recalculate BOM cost: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to recalculate BOM cost: ${err.message || "Network error"}`);
+      toast.error(`Failed to recalculate BOM cost: ${err.message || "Network error"}`);
     } finally {
       setLoading(false);
     }
@@ -1103,14 +1134,47 @@ function BOMDetailView({
                                 e.target.value
                               )
                             }
+                            onBlur={(e) =>
+                              saveOperationTime(
+                                op.id,
+                                "run_time_minutes",
+                                e.target.value
+                              )
+                            }
                             className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
                           />
                           <span className="text-gray-500 text-xs ml-1">
                             min
                           </span>
                         </td>
-                        <td className="py-2 px-3 text-gray-400">
-                          {formatTime(op.setup_time_minutes)}
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={
+                              timeOverrides[op.operation_code]
+                                ?.setup_time_minutes ??
+                              parseFloat(op.setup_time_minutes || 0)
+                            }
+                            onChange={(e) =>
+                              updateOperationTime(
+                                op.operation_code,
+                                "setup_time_minutes",
+                                e.target.value
+                              )
+                            }
+                            onBlur={(e) =>
+                              saveOperationTime(
+                                op.id,
+                                "setup_time_minutes",
+                                e.target.value
+                              )
+                            }
+                            className="w-16 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                          />
+                          <span className="text-gray-500 text-xs ml-1">
+                            min
+                          </span>
                         </td>
                         <td className="py-2 px-3 text-green-400">
                           ${parseFloat(op.calculated_cost || 0).toFixed(2)}
@@ -1984,6 +2048,7 @@ function CreateProductionOrderModal({
 export default function AdminBOM() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [boms, setBoms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -2079,13 +2144,14 @@ export default function AdminBOM() {
       });
 
       if (res.ok) {
+        toast.success("BOM deleted");
         fetchBOMs();
       } else {
         const errorData = await res.json();
-        alert(`Failed to delete BOM: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to delete BOM: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to delete BOM: ${err.message || "Network error"}`);
+      toast.error(`Failed to delete BOM: ${err.message || "Network error"}`);
     }
   };
 
@@ -2097,13 +2163,14 @@ export default function AdminBOM() {
       });
 
       if (res.ok) {
+        toast.success("BOM copied");
         fetchBOMs();
       } else {
         const errorData = await res.json();
-        alert(`Failed to copy BOM: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to copy BOM: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to copy BOM: ${err.message || "Network error"}`);
+      toast.error(`Failed to copy BOM: ${err.message || "Network error"}`);
     }
   };
 

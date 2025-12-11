@@ -19,6 +19,8 @@ from app.api.v1.endpoints import (
     mrp,
     features,
     setup,
+    quotes,
+    settings,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router
@@ -33,6 +35,9 @@ router.include_router(setup.router)
 
 # Sales Orders
 router.include_router(sales_orders.router)
+
+# Quotes
+router.include_router(quotes.router)
 
 # Products
 router.include_router(
@@ -123,6 +128,9 @@ router.include_router(
     prefix="/scheduling",
     tags=["scheduling"]
 )
+
+# Company Settings
+router.include_router(settings.router)
 
 # License activation (disabled until ready for production)
 # router.include_router(license.router)

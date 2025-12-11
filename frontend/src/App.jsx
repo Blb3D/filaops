@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ToastProvider } from "./components/Toast";
 import AdminLayout from "./components/AdminLayout";
 import Setup from "./pages/Setup";
 import Onboarding from "./pages/Onboarding";
@@ -21,12 +22,15 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminMaterialImport from "./pages/admin/AdminMaterialImport";
 import AdminOrderImport from "./pages/admin/AdminOrderImport";
 import AdminUsers from "./pages/admin/AdminUsers";
+import AdminQuotes from "./pages/admin/AdminQuotes";
+import AdminSettings from "./pages/admin/AdminSettings";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastProvider>
       <Routes>
         {/* Redirect root to admin */}
         <Route path="/" element={<Navigate to="/admin" replace />} />
@@ -50,6 +54,7 @@ export default function App() {
           <Route index element={<AdminDashboard />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="orders/:orderId" element={<OrderDetail />} />
+          <Route path="quotes" element={<AdminQuotes />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="bom" element={<AdminBOM />} />
           <Route
@@ -70,8 +75,10 @@ export default function App() {
             element={<AdminInventoryTransactions />}
           />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

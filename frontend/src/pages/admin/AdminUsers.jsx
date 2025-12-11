@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 // Role options
 const ROLE_OPTIONS = [
@@ -25,6 +26,7 @@ const STATUS_OPTIONS = [
 ];
 
 export default function AdminUsers() {
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -130,11 +132,12 @@ export default function AdminUsers() {
         throw new Error(err.detail || "Failed to save user");
       }
 
+      toast.success(editingUser ? "User updated" : "User created");
       setShowUserModal(false);
       setEditingUser(null);
       fetchUsers();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -158,9 +161,10 @@ export default function AdminUsers() {
         throw new Error(err.detail || "Failed to deactivate user");
       }
 
+      toast.success("User deactivated");
       fetchUsers();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -180,9 +184,10 @@ export default function AdminUsers() {
         throw new Error(err.detail || "Failed to reactivate user");
       }
 
+      toast.success("User reactivated");
       fetchUsers();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -210,11 +215,9 @@ export default function AdminUsers() {
 
       setShowResetPasswordModal(false);
       setResetPasswordUser(null);
-      alert(
-        "Password reset successfully. User will need to log in with the new password."
-      );
+      toast.success("Password reset successfully. User will need to log in with the new password.");
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -482,6 +485,7 @@ export default function AdminUsers() {
 
 // User Create/Edit Modal
 function UserModal({ user, onSave, onClose }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     email: user?.email || "",
     password: "",
@@ -497,7 +501,7 @@ function UserModal({ user, onSave, onClose }) {
 
     // Validation
     if (!user && form.password.length < 8) {
-      alert("Password must be at least 8 characters");
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
@@ -702,13 +706,14 @@ function UserModal({ user, onSave, onClose }) {
 
 // Reset Password Modal
 function ResetPasswordModal({ user, onReset, onClose }) {
+  const toast = useToast();
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (newPassword.length < 8) {
-      alert("Password must be at least 8 characters");
+      toast.error("Password must be at least 8 characters");
       return;
     }
     onReset(newPassword);

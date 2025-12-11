@@ -2,6 +2,35 @@
 
 All notable changes to FilaOps will be documented in this file.
 
+## [1.2.0] - 2025-12-11
+
+### Added
+- **Company Settings**: New admin settings page (`/admin/settings`) for business configuration
+  - Company information (name, address, contact details)
+  - Logo upload with image storage in database
+  - Tax configuration (rate, name, registration number, enable/disable)
+  - Quote defaults (validity days, terms, footer)
+- **Quote Management**: Full quoting system with professional PDF generation
+  - Create and manage quotes linked to customers
+  - Per-quote product image upload
+  - Tax calculation based on company settings
+  - Professional PDF export with company logo, product image, and formatted layout
+  - Compact single-page PDF layout with two-column design
+- **Toast Notification System**: Global toast notifications across all admin pages
+  - Success/error/warning/info notification types
+  - Auto-dismiss with configurable duration
+  - Manual dismiss capability
+  - Consistent feedback for all CRUD operations
+
+### Changed
+- **Admin Navigation**: Added Settings menu item for company configuration
+- **Quote PDFs**: Redesigned to professional single-page layout with image beside quote details
+
+### Technical
+- New database migration for company_settings table and quote enhancements
+- ReportLab PDF generation with dynamic layouts
+- Authenticated image endpoints with blob URL handling in React
+
 ## [1.1.0] - 2025-12-10
 
 ### Added

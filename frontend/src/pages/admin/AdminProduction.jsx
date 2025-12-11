@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import ProductionSchedulingModal from "../../components/ProductionSchedulingModal";
 import ProductionScheduler from "../../components/ProductionScheduler";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 export default function AdminProduction() {
+  const toast = useToast();
   const [productionOrders, setProductionOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -145,7 +147,7 @@ export default function AdminProduction() {
 
       const action = actionEndpoints[newStatus];
       if (!action) {
-        alert(`Invalid status transition: ${newStatus}`);
+        toast.error(`Invalid status transition: ${newStatus}`);
         return;
       }
 
@@ -161,13 +163,14 @@ export default function AdminProduction() {
       );
 
       if (res.ok) {
+        toast.success("Production order status updated");
         fetchProductionOrders();
       } else {
         const errorData = await res.json();
-        alert(`Failed to update status: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to update status: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to update status: ${err.message || "Network error"}`);
+      toast.error(`Failed to update status: ${err.message || "Network error"}`);
     }
   };
 

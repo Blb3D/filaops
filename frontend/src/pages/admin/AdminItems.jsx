@@ -4,6 +4,7 @@ import MaterialForm from "../../components/MaterialForm";
 import BOMEditor from "../../components/BOMEditor";
 import RoutingEditor from "../../components/RoutingEditor";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 // Item type options
 const ITEM_TYPES = [
@@ -15,6 +16,7 @@ const ITEM_TYPES = [
 ];
 
 export default function AdminItems() {
+  const toast = useToast();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [categoryTree, setCategoryTree] = useState([]);
@@ -230,11 +232,12 @@ export default function AdminItems() {
         throw new Error(err.detail || "Failed to save category");
       }
 
+      toast.success(editingCategory ? "Category updated" : "Category created");
       setShowCategoryModal(false);
       setEditingCategory(null);
       fetchCategories();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -265,7 +268,7 @@ export default function AdminItems() {
   // Bulk update handler
   const handleBulkUpdate = async (updateData) => {
     if (selectedItems.size === 0) {
-      alert("Please select at least one item");
+      toast.warning("Please select at least one item");
       return;
     }
 
@@ -288,12 +291,12 @@ export default function AdminItems() {
       }
 
       const data = await res.json();
-      alert(`Successfully updated ${data.message}`);
+      toast.success(`Successfully updated ${data.message}`);
       setSelectedItems(new Set());
       setShowBulkUpdateModal(false);
       fetchItems(); // Refresh list
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -326,9 +329,10 @@ export default function AdminItems() {
 
       const data = await res.json();
       setRecostResult(data);
+      toast.success(`Recosted ${data.updated_count || 0} items`);
       fetchItems(); // Refresh list to show new costs
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setRecosting(false);
     }
@@ -825,6 +829,7 @@ export default function AdminItems() {
 
 // Bulk Update Modal
 function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     category_id: "",
     item_type: "",
@@ -864,7 +869,7 @@ function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
 
     // Check if at least one field is being updated
     if (Object.keys(updateData).length === 0) {
-      alert("Please select at least one field to update");
+      toast.warning("Please select at least one field to update");
       return;
     }
 

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useToast } from './Toast';
 
 const ExportImport = ({ type }) => {
+  const toast = useToast();
   const [importing, setImporting] = useState(false);
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
@@ -26,7 +28,7 @@ const ExportImport = ({ type }) => {
         document.body.removeChild(a);
       }
     } catch (error) {
-      alert(`Export failed: ${error.message || "Unknown error. Please try again."}`);
+      toast.error(`Export failed: ${error.message || "Unknown error. Please try again."}`);
     }
   };
 

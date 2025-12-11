@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 export default function AdminShipping() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const orderIdParam = searchParams.get("orderId");
 
   const [orders, setOrders] = useState([]);
@@ -137,12 +139,12 @@ export default function AdminShipping() {
       }
 
       const data = await res.json();
-      alert(`Label created! Tracking: ${data.tracking_number}`);
+      toast.success(`Label created! Tracking: ${data.tracking_number}`);
       fetchReadyOrders();
       setSelectedOrder(null);
       if (orderIdParam) navigate("/admin/shipping");
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(err.message);
     } finally {
       setCreatingLabel(false);
     }
@@ -163,14 +165,15 @@ export default function AdminShipping() {
       );
 
       if (res.ok) {
+        toast.success("Order marked as shipped");
         fetchReadyOrders();
         setSelectedOrder(null);
       } else {
         const errorData = await res.json();
-        alert(`Failed to update order status: ${errorData.detail || "Unknown error"}`);
+        toast.error(`Failed to update order status: ${errorData.detail || "Unknown error"}`);
       }
     } catch (err) {
-      alert(`Failed to update order status: ${err.message || "Network error"}`);
+      toast.error(`Failed to update order status: ${err.message || "Network error"}`);
     }
   };
 

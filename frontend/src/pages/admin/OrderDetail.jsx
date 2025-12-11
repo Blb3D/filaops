@@ -10,10 +10,12 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 export default function OrderDetail() {
   const { orderId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const token = localStorage.getItem("adminToken");
 
   const [order, setOrder] = useState(null);
@@ -236,7 +238,7 @@ export default function OrderDetail() {
       order?.product_id ||
       (order?.lines && order.lines.length > 0 && order.lines[0].product_id);
     if (!order || !hasProduct) {
-      alert("Order must have a product to create production order");
+      toast.error("Order must have a product to create production order");
       return;
     }
 
@@ -257,11 +259,11 @@ export default function OrderDetail() {
         throw new Error(err.detail || "Failed to create production order");
       }
 
-      alert("Production order created successfully!");
+      toast.success("Production order created successfully!");
       fetchProductionOrders();
       fetchOrder();
     } catch (err) {
-      alert(`Error: ${err.message}`);
+      toast.error(err.message);
     }
   };
 

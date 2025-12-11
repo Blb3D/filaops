@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 const statusColors = {
   draft: "bg-gray-500/20 text-gray-400",
@@ -11,6 +12,7 @@ const statusColors = {
 };
 
 export default function AdminPurchasing() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState("orders"); // orders | vendors | import | low-stock
 
   // Amazon Import State
@@ -176,11 +178,12 @@ export default function AdminPurchasing() {
         throw new Error(err.detail || "Failed to save vendor");
       }
 
+      toast.success(selectedVendor ? "Vendor updated" : "Vendor created");
       setShowVendorModal(false);
       setSelectedVendor(null);
       fetchVendors();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -192,9 +195,10 @@ export default function AdminPurchasing() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error("Failed to delete vendor");
+      toast.success("Vendor deleted");
       fetchVendors();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -219,7 +223,7 @@ export default function AdminPurchasing() {
 
   const handleCreateItem = async () => {
     if (!newItemForm.sku || !newItemForm.name) {
-      alert("SKU and Name are required");
+      toast.warning("SKU and Name are required");
       return;
     }
 
@@ -253,11 +257,12 @@ export default function AdminPurchasing() {
       ]);
       handleMappingChange(createItemForAsin, "product_id", newItem.id);
 
+      toast.success("Item created and mapped");
       setShowCreateItemModal(false);
       setCreateItemForAsin(null);
       setNewItemForm({ sku: "", name: "", item_type: "raw_material" });
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setCreatingItem(false);
     }
@@ -292,11 +297,12 @@ export default function AdminPurchasing() {
         throw new Error(err.detail || "Failed to save PO");
       }
 
+      toast.success(selectedPO ? "Purchase order updated" : "Purchase order created");
       setShowPOModal(false);
       setSelectedPO(null);
       fetchOrders();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -319,12 +325,13 @@ export default function AdminPurchasing() {
         throw new Error(err.detail || "Failed to update status");
       }
 
+      toast.success(`Status updated to ${newStatus}`);
       fetchOrders();
       if (selectedPO?.id === poId) {
         fetchPODetails(poId);
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -348,14 +355,14 @@ export default function AdminPurchasing() {
       }
 
       const result = await res.json();
-      alert(
+      toast.success(
         `Received ${result.total_quantity} items. ${result.transactions_created.length} inventory transactions created.`
       );
       setShowReceiveModal(false);
       fetchOrders();
       fetchPODetails(selectedPO.id);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -381,7 +388,7 @@ export default function AdminPurchasing() {
       }
 
       const result = await res.json();
-      alert(
+      toast.success(
         `File uploaded to ${
           result.storage === "google_drive" ? "Google Drive" : "local storage"
         }`
@@ -389,7 +396,7 @@ export default function AdminPurchasing() {
       fetchPODetails(poId);
       return result;
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
       return null;
     }
   };
@@ -408,12 +415,13 @@ export default function AdminPurchasing() {
         throw new Error(err.detail || "Failed to delete PO");
       }
 
+      toast.success("Purchase order deleted");
       fetchOrders();
       if (selectedPO?.id === poId) {
         setSelectedPO(null);
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -439,13 +447,14 @@ export default function AdminPurchasing() {
         throw new Error(err.detail || "Failed to cancel PO");
       }
 
+      toast.success("Purchase order cancelled");
       fetchOrders();
       if (selectedPO?.id === poId) {
         const updated = await res.json();
         setSelectedPO(updated);
       }
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -493,7 +502,7 @@ export default function AdminPurchasing() {
       });
       setImportMappings(mappings);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -528,12 +537,12 @@ export default function AdminPurchasing() {
 
       const result = await res.json();
       setImportResult(result);
-      alert(
+      toast.success(
         `Import complete! ${result.pos_created} POs created with ${result.lines_created} line items.`
       );
       fetchOrders();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setImporting(false);
     }
@@ -1549,6 +1558,7 @@ export default function AdminPurchasing() {
 // ============================================================================
 
 function VendorModal({ vendor, onClose, onSave }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     name: vendor?.name || "",
     code: vendor?.code || "",
@@ -1571,7 +1581,7 @@ function VendorModal({ vendor, onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.name.trim()) {
-      alert("Vendor name is required");
+      toast.warning("Vendor name is required");
       return;
     }
     onSave(form);
@@ -1842,6 +1852,7 @@ function VendorModal({ vendor, onClose, onSave }) {
 // ============================================================================
 
 function POModal({ po, vendors, products, onClose, onSave }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     vendor_id: po?.vendor_id || "",
     order_date: po?.order_date || "",
@@ -1889,11 +1900,11 @@ function POModal({ po, vendors, products, onClose, onSave }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.vendor_id) {
-      alert("Please select a vendor");
+      toast.warning("Please select a vendor");
       return;
     }
     if (!po && form.lines.length === 0) {
-      alert("Please add at least one line item");
+      toast.warning("Please add at least one line item");
       return;
     }
 
@@ -2667,6 +2678,7 @@ function PODetailModal({
 // ============================================================================
 
 function ReceiveModal({ po, onClose, onReceive }) {
+  const toast = useToast();
   const [lines, setLines] = useState(
     po.lines
       ?.filter(
@@ -2707,7 +2719,7 @@ function ReceiveModal({ po, onClose, onReceive }) {
     };
 
     if (receiveData.lines.length === 0) {
-      alert("Please enter quantities to receive");
+      toast.warning("Please enter quantities to receive");
       return;
     }
 

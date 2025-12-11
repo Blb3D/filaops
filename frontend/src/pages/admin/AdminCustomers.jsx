@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 // Status options
 const STATUS_OPTIONS = [
@@ -12,6 +13,7 @@ const STATUS_OPTIONS = [
 export default function AdminCustomers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -147,11 +149,12 @@ export default function AdminCustomers() {
         return;
       }
 
+      toast.success(editingCustomer ? "Customer updated" : "Customer created");
       setShowCustomerModal(false);
       setEditingCustomer(null);
       fetchCustomers();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -168,7 +171,7 @@ export default function AdminCustomers() {
       const data = await res.json();
       setViewingCustomer(data);
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 

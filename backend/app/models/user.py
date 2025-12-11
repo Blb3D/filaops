@@ -64,7 +64,7 @@ class User(Base):
 
     # Relationships
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
-    quotes = relationship("Quote", back_populates="user", cascade="all, delete-orphan")
+    quotes = relationship("Quote", back_populates="user", foreign_keys="[Quote.user_id]", cascade="all, delete-orphan")
     sales_orders = relationship("SalesOrder", back_populates="user", cascade="all, delete-orphan")
 
     def __repr__(self):

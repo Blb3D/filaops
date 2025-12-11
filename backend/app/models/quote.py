@@ -6,7 +6,7 @@ Handles quote requests, file uploads, and approval workflow
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Numeric, BigInteger, Boolean,
-    DateTime, Date, ForeignKey, func
+    DateTime, Date, ForeignKey, LargeBinary, func
 )
 from sqlalchemy.orm import relationship
 
@@ -31,7 +31,7 @@ class Quote(Base):
     # Product Details
     product_name = Column(String(255), nullable=True)
     quantity = Column(Integer, nullable=False, default=1)
-    material_type = Column(String(50), nullable=False)  # PLA_BASIC, PLA_MATTE, PETG_HF, etc.
+    material_type = Column(String(50), nullable=True)  # PLA_BASIC, PLA_MATTE, PETG_HF, etc. (optional for admin quotes)
     color = Column(String(30), nullable=True)  # Color code: BLK, WHT, CHARCOAL, etc.
     finish = Column(String(50), default="standard")  # standard, smooth, painted
     
@@ -42,8 +42,16 @@ class Quote(Base):
     material_grams = Column(Numeric(10, 2), nullable=True)
     print_time_hours = Column(Numeric(10, 2), nullable=True)
     unit_price = Column(Numeric(10, 2), nullable=True)
-    total_price = Column(Numeric(10, 2), nullable=False)
+    subtotal = Column(Numeric(10, 2), nullable=True)  # unit_price * quantity
+    tax_rate = Column(Numeric(5, 4), nullable=True)  # e.g., 0.0825 for 8.25%
+    tax_amount = Column(Numeric(10, 2), nullable=True)  # calculated tax
+    total_price = Column(Numeric(10, 2), nullable=False)  # subtotal + tax (or just subtotal if no tax)
     margin_percent = Column(Numeric(5, 2), nullable=True)
+
+    # Quote Image (product photo/render)
+    image_data = Column(LargeBinary, nullable=True)
+    image_filename = Column(String(255), nullable=True)
+    image_mime_type = Column(String(100), nullable=True)
 
     # File Metadata
     file_format = Column(String(10), nullable=False)  # .3mf, .stl
@@ -75,6 +83,7 @@ class Quote(Base):
     internal_notes = Column(String(1000), nullable=True)  # Internal processing notes
     
     # Customer Contact (for portal quotes where user_id is generic)
+    customer_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Link to customer record
     customer_email = Column(String(255), nullable=True)  # Email for quote follow-up
     customer_name = Column(String(200), nullable=True)   # Name if not logged in
 
@@ -107,7 +116,8 @@ class Quote(Base):
     expires_at = Column(DateTime(timezone=False), nullable=False)
 
     # Relationships
-    user = relationship("User", back_populates="quotes")
+    user = relationship("User", back_populates="quotes", foreign_keys=[user_id])
+    customer = relationship("User", foreign_keys=[customer_id])  # Link to customer record (optional)
     files = relationship("QuoteFile", back_populates="quote", cascade="all, delete-orphan")
     sales_order = relationship("SalesOrder", back_populates="quote", uselist=False)
     product = relationship("Product", back_populates="quotes")  # Auto-created custom product
@@ -120,6 +130,11 @@ class Quote(Base):
     def is_expired(self) -> bool:
         """Check if quote has expired"""
         return datetime.utcnow() > self.expires_at
+
+    @property
+    def has_image(self) -> bool:
+        """Check if quote has an image attached"""
+        return self.image_data is not None
 
     @property
     def is_auto_approvable(self) -> bool:

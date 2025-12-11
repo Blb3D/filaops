@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import RoutingEditor from "../../components/RoutingEditor";
 import { API_URL } from "../../config/api";
+import { useToast } from "../../components/Toast";
 
 // Work center type options
 const CENTER_TYPES = [
@@ -18,6 +19,7 @@ const RESOURCE_STATUSES = [
 ];
 
 export default function AdminManufacturing() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState("work-centers");
   const [workCenters, setWorkCenters] = useState([]);
   const [routings, setRoutings] = useState([]);
@@ -115,11 +117,12 @@ export default function AdminManufacturing() {
         throw new Error(err.detail || "Failed to save work center");
       }
 
+      toast.success(editingWorkCenter ? "Work center updated" : "Work center created");
       setShowWorkCenterModal(false);
       setEditingWorkCenter(null);
       fetchWorkCenters();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -133,9 +136,10 @@ export default function AdminManufacturing() {
       });
 
       if (!res.ok) throw new Error("Failed to delete");
+      toast.success("Work center deactivated");
       fetchWorkCenters();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -153,9 +157,10 @@ export default function AdminManufacturing() {
       );
 
       if (!res.ok) throw new Error("Failed to delete resource");
+      toast.success("Resource deleted");
       fetchWorkCenters(); // Refresh to update resource counts
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -179,16 +184,12 @@ export default function AdminManufacturing() {
       }
 
       const data = await res.json();
-      alert(
-        `Sync complete!\n\nCreated: ${
-          data.created.join(", ") || "none"
-        }\nUpdated: ${data.updated.join(", ") || "none"}\nSkipped: ${
-          data.skipped.join(", ") || "none"
-        }\n\nFDM-POOL capacity: ${data.pool_capacity_hours} hrs/day`
+      toast.success(
+        `Sync complete! Created: ${data.created.length}, Updated: ${data.updated.length}, Pool capacity: ${data.pool_capacity_hours} hrs/day`
       );
       fetchWorkCenters();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -212,11 +213,12 @@ export default function AdminManufacturing() {
         throw new Error(err.detail || "Failed to save resource");
       }
 
+      toast.success(editingResource ? "Resource updated" : "Resource created");
       setShowResourceModal(false);
       setEditingResource(null);
       fetchWorkCenters();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -250,14 +252,12 @@ export default function AdminManufacturing() {
       }
 
       const data = await res.json();
-      alert(
-        `Templates seeded!\n\nCreated: ${
-          data.created.join(", ") || "none"
-        }\nSkipped: ${data.skipped.join(", ") || "none"}`
+      toast.success(
+        `Templates seeded! Created: ${data.created.length}, Skipped: ${data.skipped.length}`
       );
       fetchRoutings();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -1387,6 +1387,7 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
 
 // Simple Routing Modal (for now)
 function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
+  const toast = useToast();
   const [form, setForm] = useState({
     product_id: "",
     code: "",
@@ -1427,7 +1428,7 @@ function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.product_id) {
-      alert("Please select a product");
+      toast.warning("Please select a product");
       return;
     }
 
@@ -1457,9 +1458,10 @@ function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
         throw new Error(err.detail || "Failed to create routing");
       }
 
+      toast.success("Routing created");
       onSuccess();
     } catch (err) {
-      alert(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
