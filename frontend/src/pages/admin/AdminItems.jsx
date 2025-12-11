@@ -30,6 +30,13 @@ export default function AdminItems() {
     activeOnly: true,
   });
 
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    page: 1,
+    pageSize: 50,
+    total: 0,
+  });
+
   // Modal states
   const [showItemModal, setShowItemModal] = useState(false);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
@@ -53,7 +60,15 @@ export default function AdminItems() {
 
   useEffect(() => {
     fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchItems();
+  }, [selectedCategory, filters.itemType, filters.activeOnly, pagination.page, pagination.pageSize]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPagination((prev) => ({ ...prev, page: 1 }));
   }, [selectedCategory, filters.itemType, filters.activeOnly]);
 
   const fetchCategories = async () => {
@@ -88,11 +103,13 @@ export default function AdminItems() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      params.set("limit", "200");
+      params.set("limit", pagination.pageSize.toString());
+      params.set("offset", ((pagination.page - 1) * pagination.pageSize).toString());
       params.set("active_only", filters.activeOnly.toString());
       if (selectedCategory)
         params.set("category_id", selectedCategory.toString());
       if (filters.itemType !== "all") params.set("item_type", filters.itemType);
+      if (filters.search) params.set("search", filters.search);
 
       const res = await fetch(`${API_URL}/api/v1/items?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -100,6 +117,7 @@ export default function AdminItems() {
       if (!res.ok) throw new Error("Failed to fetch items");
       const data = await res.json();
       setItems(data.items || []);
+      setPagination((prev) => ({ ...prev, total: data.total || 0 }));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -107,15 +125,25 @@ export default function AdminItems() {
     }
   };
 
-  const filteredItems = items.filter((item) => {
-    if (!filters.search) return true;
-    const search = filters.search.toLowerCase();
-    return (
-      item.sku?.toLowerCase().includes(search) ||
-      item.name?.toLowerCase().includes(search) ||
-      item.upc?.toLowerCase().includes(search)
-    );
-  });
+  // Server-side search is now used, so filteredItems is just items
+  const filteredItems = items;
+
+  // Debounced search - trigger fetch when search changes
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (pagination.page === 1) {
+        fetchItems();
+      } else {
+        setPagination((prev) => ({ ...prev, page: 1 }));
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
+
+  // Pagination helpers
+  const totalPages = Math.ceil(pagination.total / pagination.pageSize);
+  const canGoPrev = pagination.page > 1;
+  const canGoNext = pagination.page < totalPages;
 
   // Toggle category expand/collapse
   const toggleExpand = (categoryId) => {
@@ -736,6 +764,42 @@ export default function AdminItems() {
                 )}
               </tbody>
             </table>
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700">
+            <div className="text-sm text-gray-400">
+              Showing {((pagination.page - 1) * pagination.pageSize) + 1} - {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} items
+            </div>
+            <div className="flex items-center gap-2">
+              <select
+                value={pagination.pageSize}
+                onChange={(e) => setPagination((prev) => ({ ...prev, pageSize: parseInt(e.target.value), page: 1 }))}
+                className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+              >
+                <option value={25}>25 per page</option>
+                <option value={50}>50 per page</option>
+                <option value={100}>100 per page</option>
+                <option value={200}>200 per page</option>
+              </select>
+              <button
+                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
+                disabled={!canGoPrev}
+                className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-gray-400">
+                Page {pagination.page} of {totalPages || 1}
+              </span>
+              <button
+                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
+                disabled={!canGoNext}
+                className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+              >
+                Next
+              </button>
+            </div>
+          </div>
           </div>
         )}
       </div>
@@ -761,9 +825,16 @@ export default function AdminItems() {
         onClose={() => {
           setShowMaterialModal(false);
         }}
-        onSuccess={() => {
+        onSuccess={(newItem) => {
           setShowMaterialModal(false);
-          fetchItems();
+          toast.success(`Material created: ${newItem?.sku || 'Success'}`);
+          // Search for the new item so user can see it
+          if (newItem?.sku) {
+            setFilters((prev) => ({ ...prev, search: newItem.sku, itemType: "all" }));
+            setSelectedCategory(null);
+          } else {
+            fetchItems();
+          }
         }}
       />
 
