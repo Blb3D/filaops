@@ -5,6 +5,7 @@ from app.models.production_order import ProductionOrder, ProductionOrderOperatio
 from app.models.print_job import PrintJob
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.sales_order import SalesOrder, SalesOrderLine
+from app.models.payment import Payment
 from app.models.bom import BOM, BOMLine
 from app.models.printer import Printer
 from app.models.quote import Quote, QuoteFile, QuoteMaterial
@@ -35,6 +36,7 @@ __all__ = [
     # Sales
     "SalesOrder",
     "SalesOrderLine",
+    "Payment",
     # Manufacturing
     "BOM",
     "BOMLine",

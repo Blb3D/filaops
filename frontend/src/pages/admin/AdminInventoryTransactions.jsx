@@ -64,20 +64,18 @@ export default function AdminInventoryTransactions() {
   };
 
   const fetchProducts = async () => {
-    const token = localStorage.getItem("adminToken");
-    if (!token) return;
-
     try {
-      const res = await fetch(`${API_URL}/api/v1/items?limit=1000&active_only=true`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // Items endpoint is public (no auth required), max limit is 2000
+      const res = await fetch(`${API_URL}/api/v1/items?limit=2000`);
 
       if (res.ok) {
         const data = await res.json();
         setProducts(data.items || []);
+      } else {
+        console.error("Products fetch failed:", res.status, res.statusText);
       }
     } catch (err) {
-      // Products fetch failure is non-critical - product selector will be empty
+      console.error("Products fetch error:", err);
     }
   };
 

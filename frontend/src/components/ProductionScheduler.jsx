@@ -185,13 +185,17 @@ export default function ProductionScheduler({ onScheduleUpdate }) {
 
     if (!over) return;
 
+    // Ensure over.id is a string with expected format
+    const overId = String(over.id);
+    if (!overId.includes("-slot-")) return;
+
     const orderId = parseInt(active.id);
     const order = [...productionOrders, ...unscheduledOrders].find(
       (o) => o.id === orderId
     );
 
     // Parse drop target (format: "machine-{index}-slot-{hour}")
-    const [machinePart, slotPart] = over.id.split("-slot-");
+    const [machinePart, slotPart] = overId.split("-slot-");
     const machineIndex = parseInt(machinePart.replace("machine-", ""));
     const slotHour = parseInt(slotPart);
 

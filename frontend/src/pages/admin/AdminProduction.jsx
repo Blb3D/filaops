@@ -1,17 +1,20 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import ProductionSchedulingModal from "../../components/ProductionSchedulingModal";
 import ProductionScheduler from "../../components/ProductionScheduler";
+import SplitOrderModal from "../../components/SplitOrderModal";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
 export default function AdminProduction() {
   const toast = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [productionOrders, setProductionOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     status: "all",
-    search: "",
+    search: searchParams.get("search") || "",
   });
 
   // Create order modal state
@@ -30,6 +33,10 @@ export default function AdminProduction() {
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [selectedOrderForScheduling, setSelectedOrderForScheduling] =
     useState(null);
+
+  // Split modal state
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const [selectedOrderForSplit, setSelectedOrderForSplit] = useState(null);
 
   // View mode: kanban or scheduler
   const [viewMode, setViewMode] = useState("kanban"); // kanban or scheduler
@@ -83,6 +90,14 @@ export default function AdminProduction() {
   useEffect(() => {
     fetchProductionOrders();
   }, [fetchProductionOrders]);
+
+  // Update filters if search param changes (e.g., from deep link)
+  useEffect(() => {
+    const searchFromParams = searchParams.get("search");
+    if (searchFromParams && searchFromParams !== filters.search) {
+      setFilters(prev => ({ ...prev, search: searchFromParams }));
+    }
+  }, [searchParams]);
 
   // Fetch products when modal opens
   useEffect(() => {
@@ -268,6 +283,7 @@ export default function AdminProduction() {
               <option value="in_progress">In Progress</option>
               <option value="complete">Complete</option>
               <option value="on_hold">On Hold</option>
+              <option value="split">Split (Parent)</option>
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
@@ -426,6 +442,21 @@ export default function AdminProduction() {
                           Start Now
                         </button>
                       </div>
+                      {order.quantity_ordered > 1 && (
+                        <button
+                          onClick={() => {
+                            setSelectedOrderForSplit(order);
+                            setShowSplitModal(true);
+                          }}
+                          className="w-full mt-2 py-1.5 bg-gray-700/50 text-gray-300 rounded text-sm hover:bg-gray-700 flex items-center justify-center gap-1"
+                          title="Split order across multiple machines"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                          </svg>
+                          Split Order
+                        </button>
+                      )}
                     </div>
                   ))}
                   {groupedOrders.released.length === 0 && (
@@ -543,6 +574,22 @@ export default function AdminProduction() {
             fetchProductionOrders();
             setShowSchedulingModal(false);
             setSelectedOrderForScheduling(null);
+          }}
+        />
+      )}
+
+      {/* Split Order Modal */}
+      {showSplitModal && selectedOrderForSplit && (
+        <SplitOrderModal
+          productionOrder={selectedOrderForSplit}
+          onClose={() => {
+            setShowSplitModal(false);
+            setSelectedOrderForSplit(null);
+          }}
+          onSplit={() => {
+            fetchProductionOrders();
+            setShowSplitModal(false);
+            setSelectedOrderForSplit(null);
           }}
         />
       )}

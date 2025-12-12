@@ -295,8 +295,8 @@ Yes! The Production page shows:
 ### When will Pro/Enterprise be available?
 
 Pro tier is in development. Sign up for updates:
+
 - [GitHub Discussions](https://github.com/Blb3D/filaops/discussions)
-- [Discord](https://discord.gg/filaops)
 
 ---
 
@@ -407,7 +407,6 @@ This usually means:
 1. **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Detailed troubleshooting guide
 2. **[GitHub Issues](https://github.com/Blb3D/filaops/issues)** - Report bugs
 3. **[GitHub Discussions](https://github.com/Blb3D/filaops/discussions)** - Ask questions
-4. **[Discord](https://discord.gg/filaops)** - Community chat
 
 ---
 
@@ -436,7 +435,6 @@ Yes! Use [GitHub Discussions](https://github.com/Blb3D/filaops/discussions) to:
 - **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Detailed troubleshooting
 - **[HOW_IT_WORKS.md](HOW_IT_WORKS.md)** - How FilaOps works
 - **[GitHub Discussions](https://github.com/Blb3D/filaops/discussions)** - Community Q&A
-- **[Discord](https://discord.gg/filaops)** - Real-time chat
 
 ---
 

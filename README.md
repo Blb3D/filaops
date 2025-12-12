@@ -6,6 +6,7 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
 [![Docker Ready](https://img.shields.io/badge/Docker-Ready-blue.svg)](https://www.docker.com/)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/FAhxySnRwa)
 
 ---
 
@@ -31,7 +32,7 @@ cd filaops
 docker-compose up -d
 ```
 
-Open http://localhost:5173 and log in with `admin@filaops.local` / `admin123`
+Open http://localhost:5173 — the **Setup Wizard** will guide you through creating your admin account.
 
 That's it. Database, API, and UI are all pre-configured.
 
@@ -171,6 +172,7 @@ We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Support
 
+- **[Discord](https://discord.gg/FAhxySnRwa)** — Chat with the community
 - **[GitHub Issues](https://github.com/Blb3D/filaops/issues)** — Bug reports
 - **[GitHub Discussions](https://github.com/Blb3D/filaops/discussions)** — Questions and ideas
 - **Email:** info@blb3dprinting.com

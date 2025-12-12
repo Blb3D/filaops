@@ -526,37 +526,40 @@ async def convert_quote_to_order(
 
     order_number = f"SO-{year}-{next_seq:04d}"
 
-    # Build shipping address string
-    shipping_parts = []
-    if quote.shipping_name:
-        shipping_parts.append(quote.shipping_name)
-    if quote.shipping_address_line1:
-        shipping_parts.append(quote.shipping_address_line1)
-    if quote.shipping_address_line2:
-        shipping_parts.append(quote.shipping_address_line2)
-    if quote.shipping_city or quote.shipping_state or quote.shipping_zip:
-        city_state_zip = f"{quote.shipping_city or ''}, {quote.shipping_state or ''} {quote.shipping_zip or ''}".strip(", ")
-        shipping_parts.append(city_state_zip)
-    if quote.shipping_country and quote.shipping_country != "USA":
-        shipping_parts.append(quote.shipping_country)
-
-    shipping_address = "\n".join(shipping_parts) if shipping_parts else None
-
     # Create sales order
+    # Note: quote.subtotal is pre-tax, quote.total_price includes tax
+    # SalesOrder.total_price should be pre-tax (subtotal), grand_total = subtotal + tax + shipping
+    subtotal = quote.subtotal or (quote.unit_price * quote.quantity if quote.unit_price else quote.total_price)
+    tax = quote.tax_amount or Decimal("0")
+    shipping = quote.shipping_cost or Decimal("0")
+
     sales_order = SalesOrder(
         order_number=order_number,
         quote_id=quote.id,
+        user_id=quote.user_id,  # Required: copy from quote
         order_type="quote",
+        source="portal",
+        product_id=quote.product_id,  # Link to product for BOM explosion
         product_name=quote.product_name,
         quantity=quote.quantity,
+        material_type=quote.material_type or "PLA",  # Required: default to PLA if not set
+        finish=quote.finish or "standard",
         unit_price=quote.unit_price,
-        subtotal=quote.total_price,
-        grand_total=quote.total_price,
+        total_price=subtotal,  # Pre-tax subtotal
+        tax_amount=tax,
+        shipping_cost=shipping,
+        grand_total=subtotal + tax + shipping,  # Total including tax and shipping
         status="pending",
         payment_status="pending",
-        customer_email=quote.customer_email,
+        rush_level=quote.rush_level or "standard",
         customer_notes=quote.customer_notes,
-        shipping_address=shipping_address,
+        # Shipping address fields (individual)
+        shipping_address_line1=quote.shipping_address_line1,
+        shipping_address_line2=quote.shipping_address_line2,
+        shipping_city=quote.shipping_city,
+        shipping_state=quote.shipping_state,
+        shipping_zip=quote.shipping_zip,
+        shipping_country=quote.shipping_country or "USA",
     )
 
     db.add(sales_order)

@@ -11,6 +11,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
+import RecordPaymentModal from "../../components/payments/RecordPaymentModal";
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -25,11 +26,19 @@ export default function OrderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [exploding, setExploding] = useState(false);
+  const [paymentSummary, setPaymentSummary] = useState(null);
+  const [payments, setPayments] = useState([]);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isRefund, setIsRefund] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(false);
+  const [addressForm, setAddressForm] = useState({});
+  const [savingAddress, setSavingAddress] = useState(false);
 
   useEffect(() => {
     if (orderId) {
       fetchOrder();
       fetchProductionOrders();
+      fetchPaymentData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
@@ -68,12 +77,16 @@ export default function OrderDetail() {
         data.lines &&
         data.lines.length > 0
       ) {
+        // Line-item order - use first line's product
         const firstLine = data.lines[0];
         if (firstLine.product_id) {
           await explodeBOM(firstLine.product_id, firstLine.quantity);
         }
+      } else if (data.product_id) {
+        // Order has product_id directly (quote-based or manual)
+        await explodeBOM(data.product_id, data.quantity);
       } else if (data.quote_id) {
-        // Quote-based order - fetch quote to get product_id
+        // Fallback: fetch quote to get product_id (legacy orders)
         try {
           const quoteRes = await fetch(
             `${API_URL}/api/v1/quotes/${data.quote_id}`,
@@ -90,8 +103,6 @@ export default function OrderDetail() {
         } catch (err) {
           // Quote fetch failure is non-critical - BOM explosion will just be skipped
         }
-      } else if (data.product_id) {
-        await explodeBOM(data.product_id, data.quantity);
       }
     } catch (err) {
       if (err.message.includes("Failed to fetch")) {
@@ -122,6 +133,79 @@ export default function OrderDetail() {
       }
     } catch (err) {
       // Production orders fetch failure is non-critical - production list will just be empty
+    }
+  };
+
+  const fetchPaymentData = async () => {
+    if (!token || !orderId) return;
+    try {
+      // Fetch payment summary
+      const summaryRes = await fetch(
+        `${API_URL}/api/v1/payments/order/${orderId}/summary`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (summaryRes.ok) {
+        setPaymentSummary(await summaryRes.json());
+      }
+
+      // Fetch payment history
+      const paymentsRes = await fetch(
+        `${API_URL}/api/v1/payments?order_id=${orderId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (paymentsRes.ok) {
+        const data = await paymentsRes.json();
+        setPayments(data.items || []);
+      }
+    } catch (err) {
+      // Payment fetch failure is non-critical
+    }
+  };
+
+  const handlePaymentRecorded = () => {
+    setShowPaymentModal(false);
+    setIsRefund(false);
+    fetchPaymentData();
+    fetchOrder(); // Refresh order to get updated payment_status
+    toast.success(isRefund ? "Refund recorded" : "Payment recorded");
+  };
+
+  const handleEditAddress = () => {
+    setAddressForm({
+      shipping_address_line1: order.shipping_address_line1 || "",
+      shipping_address_line2: order.shipping_address_line2 || "",
+      shipping_city: order.shipping_city || "",
+      shipping_state: order.shipping_state || "",
+      shipping_zip: order.shipping_zip || "",
+      shipping_country: order.shipping_country || "USA",
+    });
+    setEditingAddress(true);
+  };
+
+  const handleSaveAddress = async () => {
+    setSavingAddress(true);
+    try {
+      const res = await fetch(`${API_URL}/api/v1/sales-orders/${orderId}/address`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(addressForm),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to update address");
+      }
+
+      toast.success("Shipping address updated");
+      setEditingAddress(false);
+      fetchOrder();
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setSavingAddress(false);
     }
   };
 
@@ -208,18 +292,21 @@ export default function OrderDetail() {
         if (routingRes.ok) {
           const routing = await routingRes.json();
           if (routing.operations && routing.operations.length > 0) {
-            const capacity = routing.operations.map((op) => ({
-              ...op,
-              setup_time_minutes: op.setup_time_minutes || 0,
-              run_time_minutes: op.run_time_minutes || 0,
-              total_time_minutes:
-                (op.setup_time_minutes || 0) +
-                (op.run_time_minutes || 0) * quantity,
-              work_center_name:
-                op.work_center?.name || op.work_center_name || "N/A",
-              operation_name:
-                op.operation_name || op.operation_code || "Operation",
-            }));
+            const capacity = routing.operations.map((op) => {
+              // Ensure numeric values (API may return strings for decimals)
+              const setupTime = parseFloat(op.setup_time_minutes) || 0;
+              const runTime = parseFloat(op.run_time_minutes) || 0;
+              return {
+                ...op,
+                setup_time_minutes: setupTime,
+                run_time_minutes: runTime,
+                total_time_minutes: setupTime + runTime * quantity,
+                work_center_name:
+                  op.work_center?.name || op.work_center_name || "N/A",
+                operation_name:
+                  op.operation_name || op.operation_code || "Operation",
+              };
+            });
             setCapacityRequirements(capacity);
           }
         }
@@ -373,6 +460,119 @@ export default function OrderDetail() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Shipping Address */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-white">Shipping Address</h2>
+          {!editingAddress && (
+            <button
+              onClick={handleEditAddress}
+              className="text-blue-400 hover:text-blue-300 text-sm"
+            >
+              Edit
+            </button>
+          )}
+        </div>
+
+        {editingAddress ? (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-400 mb-1">Address Line 1</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_address_line1}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_address_line1: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                  placeholder="Street address"
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm text-gray-400 mb-1">Address Line 2</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_address_line2}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_address_line2: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                  placeholder="Apt, suite, etc."
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">City</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_city}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_city: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">State</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_state}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_state: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">ZIP Code</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_zip}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_zip: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Country</label>
+                <input
+                  type="text"
+                  value={addressForm.shipping_country}
+                  onChange={(e) => setAddressForm({ ...addressForm, shipping_country: e.target.value })}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setEditingAddress(false)}
+                className="px-4 py-2 text-gray-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAddress}
+                disabled={savingAddress}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50"
+              >
+                {savingAddress ? "Saving..." : "Save Address"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div>
+            {order.shipping_address_line1 ? (
+              <div className="text-white">
+                <div>{order.shipping_address_line1}</div>
+                {order.shipping_address_line2 && <div>{order.shipping_address_line2}</div>}
+                <div>
+                  {order.shipping_city}, {order.shipping_state} {order.shipping_zip}
+                </div>
+                <div className="text-gray-400">{order.shipping_country || "USA"}</div>
+              </div>
+            ) : (
+              <div className="text-yellow-400 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                No shipping address on file. Click Edit to add one.
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Material Requirements */}
@@ -549,7 +749,7 @@ export default function OrderDetail() {
                   </div>
                 </div>
                 <button
-                  onClick={() => navigate(`/admin/production/${po.id}`)}
+                  onClick={() => navigate(`/admin/production?search=${encodeURIComponent(po.code || `WO-${po.id}`)}`)}
                   className="text-blue-400 hover:text-blue-300 text-sm"
                 >
                   View →
@@ -558,6 +758,135 @@ export default function OrderDetail() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Payments Section */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-white">Payments</h2>
+          <div className="flex gap-2">
+            {paymentSummary && paymentSummary.total_paid > 0 && (
+              <button
+                onClick={() => {
+                  setIsRefund(true);
+                  setShowPaymentModal(true);
+                }}
+                className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 text-red-400 rounded text-sm"
+              >
+                Refund
+              </button>
+            )}
+            <button
+              onClick={() => {
+                setIsRefund(false);
+                setShowPaymentModal(true);
+              }}
+              className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center gap-1"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Record Payment
+            </button>
+          </div>
+        </div>
+
+        {/* Payment Summary */}
+        {paymentSummary && (
+          <div className="grid grid-cols-4 gap-4 mb-4 p-4 bg-gray-800/50 rounded-lg">
+            <div>
+              <div className="text-sm text-gray-400">Order Total</div>
+              <div className="text-white font-medium">
+                ${parseFloat(paymentSummary.order_total || 0).toFixed(2)}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">Paid</div>
+              <div className="text-green-400 font-medium">
+                ${parseFloat(paymentSummary.total_paid || 0).toFixed(2)}
+              </div>
+            </div>
+            {paymentSummary.total_refunded > 0 && (
+              <div>
+                <div className="text-sm text-gray-400">Refunded</div>
+                <div className="text-red-400 font-medium">
+                  ${parseFloat(paymentSummary.total_refunded || 0).toFixed(2)}
+                </div>
+              </div>
+            )}
+            <div>
+              <div className="text-sm text-gray-400">Balance Due</div>
+              <div className={`font-medium ${
+                paymentSummary.balance_due > 0 ? "text-yellow-400" : "text-green-400"
+              }`}>
+                ${parseFloat(paymentSummary.balance_due || 0).toFixed(2)}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Payment History */}
+        {payments.length > 0 ? (
+          <div className="space-y-2">
+            {payments.map((payment) => (
+              <div
+                key={payment.id}
+                className="flex justify-between items-center p-3 bg-gray-800 rounded-lg"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    payment.amount < 0 ? "bg-red-500/20" : "bg-green-500/20"
+                  }`}>
+                    {payment.amount < 0 ? (
+                      <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-white font-medium">
+                      {payment.payment_number}
+                    </div>
+                    <div className="text-sm text-gray-400">
+                      {payment.payment_method}
+                      {payment.check_number && ` #${payment.check_number}`}
+                      {payment.transaction_id && ` - ${payment.transaction_id}`}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className={`font-medium ${payment.amount < 0 ? "text-red-400" : "text-green-400"}`}>
+                    ${Math.abs(parseFloat(payment.amount)).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(payment.payment_date).toLocaleDateString()}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-500">
+            No payments recorded yet
+          </div>
+        )}
+      </div>
+
+      {/* Record Payment Modal */}
+      {showPaymentModal && (
+        <RecordPaymentModal
+          orderId={parseInt(orderId)}
+          isRefund={isRefund}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setIsRefund(false);
+          }}
+          onSuccess={handlePaymentRecorded}
+        />
       )}
     </div>
   );

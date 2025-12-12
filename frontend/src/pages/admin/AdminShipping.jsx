@@ -3,6 +3,31 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
+// Helper to format shipping address from separate fields
+const formatShippingAddress = (order) => {
+  const parts = [];
+  if (order.shipping_address_line1) parts.push(order.shipping_address_line1);
+  if (order.shipping_address_line2) parts.push(order.shipping_address_line2);
+
+  const cityStateZip = [
+    order.shipping_city,
+    order.shipping_state,
+    order.shipping_zip
+  ].filter(Boolean).join(', ');
+  if (cityStateZip) parts.push(cityStateZip);
+
+  if (order.shipping_country && order.shipping_country !== 'USA' && order.shipping_country !== 'US') {
+    parts.push(order.shipping_country);
+  }
+
+  return parts.join('\n');
+};
+
+// Helper to check if order has a shipping address
+const hasShippingAddress = (order) => {
+  return !!(order.shipping_address_line1 || order.shipping_city);
+};
+
 export default function AdminShipping() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -110,7 +135,15 @@ export default function AdminShipping() {
     }
   };
 
-  const handleCreateLabel = async (orderId, carrier = "USPS") => {
+  // State for manual tracking entry
+  const [trackingForm, setTrackingForm] = useState({ carrier: "USPS", tracking_number: "" });
+
+  const handleSaveTracking = async (orderId) => {
+    if (!trackingForm.tracking_number.trim()) {
+      toast.error("Please enter a tracking number");
+      return;
+    }
+
     setCreatingLabel(true);
     try {
       const res = await fetch(
@@ -122,24 +155,19 @@ export default function AdminShipping() {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            carrier: carrier,
-            service:
-              carrier === "USPS"
-                ? "Priority"
-                : carrier === "FedEx"
-                ? "Ground"
-                : "Ground",
+            carrier: trackingForm.carrier,
+            tracking_number: trackingForm.tracking_number.trim(),
           }),
         }
       );
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.detail || "Failed to create shipping label");
+        throw new Error(errData.detail || "Failed to save tracking info");
       }
 
-      const data = await res.json();
-      toast.success(`Label created! Tracking: ${data.tracking_number}`);
+      toast.success(`Order shipped! Tracking: ${trackingForm.tracking_number}`);
+      setTrackingForm({ carrier: "USPS", tracking_number: "" });
       fetchReadyOrders();
       setSelectedOrder(null);
       if (orderIdParam) navigate("/admin/shipping");
@@ -408,13 +436,13 @@ export default function AdminShipping() {
                     </div>
                   )}
 
-                {selectedOrder.shipping_address ? (
+                {hasShippingAddress(selectedOrder) ? (
                   <div className="bg-gray-800 rounded-lg p-4">
                     <h4 className="text-sm font-medium text-gray-300 mb-2">
                       Ship To
                     </h4>
                     <p className="text-white text-sm whitespace-pre-line">
-                      {selectedOrder.shipping_address}
+                      {formatShippingAddress(selectedOrder)}
                     </p>
                   </div>
                 ) : (
@@ -434,34 +462,86 @@ export default function AdminShipping() {
                   </div>
                 )}
 
-                {/* Carrier Selection */}
-                <div className="bg-gray-800 rounded-lg p-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Carrier
-                  </label>
-                  <select
-                    id="carrier-select"
-                    className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white"
-                    defaultValue="USPS"
-                  >
-                    <option value="USPS">USPS</option>
-                    <option value="FedEx">FedEx</option>
-                    <option value="UPS">UPS</option>
-                  </select>
-                </div>
+                {/* Quick Ship Links */}
+                {hasShippingAddress(selectedOrder) && (
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-3">
+                      Create Label at Carrier Website
+                    </h4>
+                    <div className="flex gap-2">
+                      <a
+                        href="https://www.usps.com/ship/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 px-3 bg-blue-600/20 text-blue-400 rounded-lg text-sm text-center hover:bg-blue-600/30 border border-blue-500/30"
+                      >
+                        USPS
+                      </a>
+                      <a
+                        href="https://www.fedex.com/en-us/shipping.html"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 px-3 bg-purple-600/20 text-purple-400 rounded-lg text-sm text-center hover:bg-purple-600/30 border border-purple-500/30"
+                      >
+                        FedEx
+                      </a>
+                      <a
+                        href="https://www.ups.com/ship"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 px-3 bg-yellow-600/20 text-yellow-400 rounded-lg text-sm text-center hover:bg-yellow-600/30 border border-yellow-500/30"
+                      >
+                        UPS
+                      </a>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Opens carrier website in new tab. Copy address above, then enter tracking below.
+                    </p>
+                  </div>
+                )}
+
+                {/* Enter Tracking */}
+                {hasShippingAddress(selectedOrder) && (
+                  <div className="bg-gray-800 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-3">
+                      Enter Tracking Information
+                    </h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Carrier</label>
+                        <select
+                          value={trackingForm.carrier}
+                          onChange={(e) => setTrackingForm({ ...trackingForm, carrier: e.target.value })}
+                          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm"
+                        >
+                          <option value="USPS">USPS</option>
+                          <option value="FedEx">FedEx</option>
+                          <option value="UPS">UPS</option>
+                          <option value="DHL">DHL</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-400 mb-1">Tracking Number</label>
+                        <input
+                          type="text"
+                          value={trackingForm.tracking_number}
+                          onChange={(e) => setTrackingForm({ ...trackingForm, tracking_number: e.target.value })}
+                          placeholder="Enter tracking number..."
+                          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm placeholder-gray-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => {
-                      const carrier =
-                        document.getElementById("carrier-select")?.value ||
-                        "USPS";
-                      handleCreateLabel(selectedOrder.id, carrier);
-                    }}
-                    disabled={creatingLabel || !selectedOrder.shipping_address}
-                    className="flex-1 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handleSaveTracking(selectedOrder.id)}
+                    disabled={creatingLabel || !hasShippingAddress(selectedOrder) || !trackingForm.tracking_number.trim()}
+                    className="flex-1 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {creatingLabel ? "Creating..." : "Create Shipping Label"}
+                    {creatingLabel ? "Saving..." : "Mark as Shipped"}
                   </button>
                   <button
                     onClick={() => {

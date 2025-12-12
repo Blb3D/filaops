@@ -2,6 +2,52 @@
 
 All notable changes to FilaOps will be documented in this file.
 
+## [1.3.0] - 2025-12-11
+
+### Added
+- **Split Production Orders**: Split large production runs across multiple machines or batches
+  - Split released orders into 2+ child orders with custom quantity allocation
+  - Child orders track independently (PO-2025-001-A, PO-2025-001-B, etc.)
+  - Parent order shows "split" status with links to children
+  - Kanban board shows split orders grouped under parent
+- **Production Kanban View**: Visual drag-and-drop production board
+  - Columns: Released, Queued, In Progress, QC, Complete
+  - Drag orders between stages to update status
+  - Color-coded priority indicators
+  - Click to view order details
+- **Inventory Allocation**: Reserve materials when production starts
+  - Items page shows Reserved and Available quantities
+  - Reserved qty deducted from available for planning
+  - Visual indicators for allocation status
+- **Complete Shipping Workflow**: Full order-to-ship flow
+  - Shipping address capture on Order Detail page
+  - Edit address inline with validation
+  - Ship modal with carrier selection (USPS, FedEx, UPS)
+  - Manual tracking number entry
+  - Quick links to carrier websites for label creation
+- **Purchasing Module Refactor**: Extracted components for maintainability
+  - VendorModal, POCreateModal, PODetailModal components
+  - ReceiveModal with improved UX
+  - ProductSearchSelect reusable component
+  - VendorDetailPanel with metrics
+
+### Changed
+- **Items Page**: Added Reserved/Available columns, hidden prices for materials/supplies
+- **Production Orders**: Default quantity_completed to quantity_ordered on completion
+- **Work Order Navigation**: Fixed deep linking with search params
+
+### Fixed
+- **Shipping Address Display**: Address fields now correctly parsed and displayed
+- **Production Completion**: Fixed 0% completion bug (quantity_completed now defaults properly)
+- **Work Order Detail**: Fixed white screen when clicking "View" on work orders
+- **Ship Endpoint**: Created proper `/ship` endpoint with carrier and tracking support
+
+### Technical
+- New migrations: `003_add_sales_order_product_id.py`, `004_add_production_order_split.py`
+- Added `SalesOrderUpdateAddress` schema for address PATCH endpoint
+- Added `ProductionOrderSplitRequest/Response` schemas
+- Split order status added to production order state machine
+
 ## [1.2.0] - 2025-12-11
 
 ### Added

@@ -37,6 +37,10 @@ class ProductionOrder(Base):
     sales_order_id = Column(Integer, ForeignKey('sales_orders.id'), nullable=True)
     sales_order_line_id = Column(Integer, ForeignKey('sales_order_lines.id'), nullable=True)
 
+    # Parent/Child for split orders
+    parent_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True, index=True)
+    split_sequence = Column(Integer, nullable=True)  # 1, 2, 3... for child orders
+
     # Quantities
     quantity_ordered = Column(Numeric(18, 4), nullable=False)
     quantity_completed = Column(Numeric(18, 4), default=0, nullable=False)
@@ -96,6 +100,8 @@ class ProductionOrder(Base):
     print_jobs = relationship("PrintJob", back_populates="production_order")
     operations = relationship("ProductionOrderOperation", back_populates="production_order",
                               cascade="all, delete-orphan", order_by="ProductionOrderOperation.sequence")
+    # Parent/Child split relationships
+    parent_order = relationship("ProductionOrder", remote_side=[id], backref="child_orders", foreign_keys=[parent_order_id])
 
     def __repr__(self):
         return f"<ProductionOrder {self.code}: {self.quantity_ordered} x {self.product.sku if self.product else 'N/A'}>"

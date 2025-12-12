@@ -38,6 +38,7 @@ class SalesOrder(Base):
     # External order ID from marketplace (e.g., Squarespace order number)
 
     # Product Information (copied from quote)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="SET NULL"), nullable=True, index=True)
     product_name = Column(String(255), nullable=True)
     quantity = Column(Integer, nullable=False)
     material_type = Column(String(50), nullable=False)  # PLA, PETG, ABS, ASA, TPU
@@ -98,7 +99,9 @@ class SalesOrder(Base):
     # Relationships
     user = relationship("User", back_populates="sales_orders")
     quote = relationship("Quote", back_populates="sales_order", uselist=False)
+    product = relationship("Product", foreign_keys=[product_id])
     lines = relationship("SalesOrderLine", back_populates="sales_order", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="sales_order", cascade="all, delete-orphan", order_by="Payment.payment_date.desc()")
 
     def __repr__(self):
         return f"<SalesOrder {self.order_number} - {self.status}>"

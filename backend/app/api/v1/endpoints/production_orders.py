@@ -31,6 +31,8 @@ from app.schemas.production_order import (
     ProductionOrderOperationResponse,
     WorkCenterQueue,
     ProductionScheduleSummary,
+    ProductionOrderSplitRequest,
+    ProductionOrderSplitResponse,
 )
 
 router = APIRouter()
@@ -176,10 +178,10 @@ def copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: 
             production_order_id=order.id,
             routing_operation_id=rop.id,
             work_center_id=rop.work_center_id,
-            resource_id=rop.default_resource_id,
+            resource_id=None,  # Resource assigned during scheduling
             sequence=rop.sequence,
             operation_code=rop.operation_code,
-            operation_name=rop.name,
+            operation_name=rop.operation_name,
             planned_setup_minutes=rop.setup_time_minutes or 0,
             planned_run_minutes=(rop.run_time_minutes or 0) * float(order.quantity_ordered),
             status="pending",
@@ -485,8 +487,11 @@ async def complete_production_order(
     if order.status != "in_progress":
         raise HTTPException(status_code=400, detail=f"Cannot complete order in {order.status} status")
 
+    # Default quantity_completed to quantity_ordered if not provided
     if quantity_completed is not None:
         order.quantity_completed = quantity_completed
+    else:
+        order.quantity_completed = order.quantity_ordered
     if quantity_scrapped is not None:
         order.quantity_scrapped = quantity_scrapped
 
@@ -594,6 +599,171 @@ async def hold_production_order(
     db.refresh(order)
 
     return build_production_order_response(order, db)
+
+
+# ============================================================================
+# Split Order
+# ============================================================================
+
+@router.post("/{order_id}/split", response_model=ProductionOrderSplitResponse)
+async def split_production_order(
+    order_id: int,
+    request: ProductionOrderSplitRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Split a production order into multiple child orders.
+
+    Use case: Large runs that need to be split across multiple machines.
+    Each child order gets a portion of the quantity and its own operations.
+
+    Requirements:
+    - Order must be in 'released' status (not yet started)
+    - Split quantities must sum to original quantity
+    - Creates child orders with codes like PO-2025-0001-A, PO-2025-0001-B
+    """
+    order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    # Validate order can be split
+    if order.status != "released":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot split order in '{order.status}' status. Order must be 'released'."
+        )
+
+    if order.parent_order_id:
+        raise HTTPException(status_code=400, detail="Cannot split an order that is already a child of another order")
+
+    if order.child_orders and len(order.child_orders) > 0:
+        raise HTTPException(status_code=400, detail="This order has already been split")
+
+    # Validate split quantities sum to original
+    total_split_qty = sum(s.quantity for s in request.splits)
+    original_qty = int(order.quantity_ordered)
+
+    if total_split_qty != original_qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Split quantities ({total_split_qty}) must equal original quantity ({original_qty})"
+        )
+
+    # Create child orders
+    child_orders = []
+    suffix_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    for idx, split in enumerate(request.splits):
+        suffix = suffix_chars[idx] if idx < 26 else str(idx + 1)
+        child_code = f"{order.code}-{suffix}"
+
+        # Create child order
+        child = ProductionOrder(
+            code=child_code,
+            product_id=order.product_id,
+            bom_id=order.bom_id,
+            routing_id=order.routing_id,
+            sales_order_id=order.sales_order_id,
+            sales_order_line_id=order.sales_order_line_id,
+            parent_order_id=order.id,
+            split_sequence=idx + 1,
+            quantity_ordered=Decimal(str(split.quantity)),
+            quantity_completed=0,
+            quantity_scrapped=0,
+            source=order.source,
+            status="released",  # Child orders are already released
+            priority=order.priority,
+            due_date=order.due_date,
+            assigned_to=order.assigned_to,
+            notes=f"Split from {order.code} (part {idx + 1} of {len(request.splits)})",
+            created_by=current_user.email,
+            released_at=datetime.utcnow(),
+        )
+        db.add(child)
+        db.flush()  # Get the child ID
+
+        # Copy operations from parent, scaling run times proportionally
+        if order.routing_id:
+            routing_ops = (
+                db.query(RoutingOperation)
+                .filter(RoutingOperation.routing_id == order.routing_id)
+                .order_by(RoutingOperation.sequence)
+                .all()
+            )
+
+            for rop in routing_ops:
+                # Scale run time based on quantity ratio
+                base_run_time = float(rop.run_time_minutes or 0)
+                scaled_run_time = base_run_time * split.quantity
+
+                op = ProductionOrderOperation(
+                    production_order_id=child.id,
+                    routing_operation_id=rop.id,
+                    work_center_id=rop.work_center_id,
+                    resource_id=None,  # Resource assigned during scheduling
+                    sequence=rop.sequence,
+                    operation_code=rop.operation_code,
+                    operation_name=rop.operation_name,
+                    planned_setup_minutes=rop.setup_time_minutes or 0,
+                    planned_run_minutes=Decimal(str(scaled_run_time)),
+                    status="queued" if rop.sequence == 1 else "pending",
+                )
+                db.add(op)
+
+        child_orders.append(child)
+
+    # Update parent order status to indicate it was split
+    order.status = "split"
+    order.notes = (order.notes or "") + f"\n[Split into {len(request.splits)} orders on {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}]"
+    order.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    # Build response
+    child_responses = []
+    for child in child_orders:
+        db.refresh(child)
+        product = db.query(Product).filter(Product.id == child.product_id).first()
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == child.sales_order_id).first() if child.sales_order_id else None
+
+        op_count = db.query(ProductionOrderOperation).filter(
+            ProductionOrderOperation.production_order_id == child.id
+        ).count()
+
+        child_responses.append(
+            ProductionOrderListResponse(
+                id=child.id,
+                code=child.code,
+                product_id=child.product_id,
+                product_sku=product.sku if product else None,
+                product_name=product.name if product else None,
+                quantity_ordered=child.quantity_ordered,
+                quantity_completed=child.quantity_completed or 0,
+                quantity_remaining=float(child.quantity_ordered),
+                completion_percent=0,
+                status=child.status,
+                priority=child.priority or 3,
+                source=child.source or "manual",
+                due_date=child.due_date,
+                scheduled_start=child.scheduled_start,
+                scheduled_end=child.scheduled_end,
+                sales_order_id=child.sales_order_id,
+                sales_order_code=sales_order.order_number if sales_order else None,
+                assigned_to=child.assigned_to,
+                operation_count=op_count,
+                current_operation=None,
+                created_at=child.created_at,
+            )
+        )
+
+    return ProductionOrderSplitResponse(
+        parent_order_id=order.id,
+        parent_order_code=order.code,
+        parent_status="split",
+        child_orders=child_responses,
+        message=f"Successfully split {order.code} into {len(child_orders)} orders"
+    )
 
 
 # ============================================================================

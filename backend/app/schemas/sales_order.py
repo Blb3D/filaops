@@ -70,10 +70,20 @@ class SalesOrderUpdatePayment(BaseModel):
 
 
 class SalesOrderUpdateShipping(BaseModel):
-    """Update shipping information"""
+    """Update shipping information (tracking, carrier, date)"""
     tracking_number: Optional[str] = Field(None, max_length=255)
     carrier: Optional[str] = Field(None, max_length=100)
     shipped_at: Optional[datetime] = None
+
+
+class SalesOrderUpdateAddress(BaseModel):
+    """Update shipping address on an order"""
+    shipping_address_line1: Optional[str] = Field(None, max_length=255)
+    shipping_address_line2: Optional[str] = Field(None, max_length=255)
+    shipping_city: Optional[str] = Field(None, max_length=100)
+    shipping_state: Optional[str] = Field(None, max_length=50)
+    shipping_zip: Optional[str] = Field(None, max_length=20)
+    shipping_country: Optional[str] = Field(None, max_length=100)
 
 
 class SalesOrderCancel(BaseModel):
@@ -106,9 +116,18 @@ class SalesOrderListResponse(SalesOrderBase):
     """Sales order list item"""
     id: int
     quote_id: Optional[int]
+    product_id: Optional[int] = None  # Direct product link
     created_at: datetime
     confirmed_at: Optional[datetime]
     estimated_completion_date: Optional[datetime]
+    # Shipping address fields for shipping page
+    shipping_address_line1: Optional[str] = None
+    shipping_address_line2: Optional[str] = None
+    shipping_city: Optional[str] = None
+    shipping_state: Optional[str] = None
+    shipping_zip: Optional[str] = None
+    shipping_country: Optional[str] = None
+    tracking_number: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -135,6 +154,7 @@ class SalesOrderResponse(SalesOrderBase):
     id: int
     user_id: int
     quote_id: Optional[int]
+    product_id: Optional[int] = None  # Direct product link for BOM explosion
 
     # Order type and source
     order_type: Optional[str] = None  # 'quote_based' or 'line_item'

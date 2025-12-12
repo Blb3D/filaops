@@ -343,3 +343,6 @@ ERP_MRP_REVIEW.md
 
 # Backend setup docs (may contain sensitive info)
 backend/GCS_SETUP.md
+
+# Internal metrics tracking (private business data)
+docs/metrics/

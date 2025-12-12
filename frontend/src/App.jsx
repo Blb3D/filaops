@@ -23,6 +23,7 @@ import AdminMaterialImport from "./pages/admin/AdminMaterialImport";
 import AdminOrderImport from "./pages/admin/AdminOrderImport";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminQuotes from "./pages/admin/AdminQuotes";
+import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSettings from "./pages/admin/AdminSettings";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="orders" element={<AdminOrders />} />
           <Route path="orders/:orderId" element={<OrderDetail />} />
           <Route path="quotes" element={<AdminQuotes />} />
+          <Route path="payments" element={<AdminPayments />} />
           <Route path="customers" element={<AdminCustomers />} />
           <Route path="bom" element={<AdminBOM />} />
           <Route

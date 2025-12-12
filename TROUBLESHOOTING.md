@@ -342,29 +342,51 @@ Common issues and solutions for FilaOps installation and operation.
 
 ---
 
+### Stuck at Login Screen (Expected Setup Wizard)
+
+**Problem:** On a fresh Docker install, you see the login screen instead of the setup wizard.
+
+**Cause:** The database has existing user data, likely from:
+
+- A previous installation with persisted volumes
+- Incomplete database cleanup
+
+**Solution - Fresh Start:**
+
+```bash
+# Stop containers and remove all data volumes
+docker-compose down -v
+
+# Start fresh
+docker-compose up -d
+```
+
+This removes the database volume and starts fresh. The setup wizard will appear.
+
+---
+
 ### Login doesn't work / "Invalid credentials"
 
-**Problem:** Admin user doesn't exist or password is wrong.
+**Problem:** Can't log in - admin user doesn't exist or password is wrong.
 
 **Solutions:**
 
-1. **Docker:**
-   - Default: `admin@filaops.local` / `admin123`
-   - If changed, check database or reset:
-     ```bash
-     docker-compose exec db /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P YourPassword -Q "USE FilaOps; UPDATE users SET password_hash='...' WHERE email='admin@filaops.local'"
-     ```
+1. **Docker (fresh install):**
+   - FilaOps doesn't have default credentials
+   - You create your admin account via the Setup Wizard on first run
+   - If you missed setup, run `docker-compose down -v && docker-compose up -d` for fresh start
 
-2. **Manual:**
+2. **Manual (local development):**
    - Default: `admin@localhost` / `admin123`
+   - These are created by `scripts/tools/fresh_database_setup.py`
    - Create admin user:
      ```bash
-     python scripts/create_admin.py
+     python scripts/tools/create_admin.py
      ```
 
-3. **Reset password:**
-   - Use password reset feature (if available)
-   - Or manually update in database
+3. **Reset password (if you forgot it):**
+   - Currently requires database access
+   - See below for manual reset
 
 ---
 
@@ -533,10 +555,6 @@ Common issues and solutions for FilaOps installation and operation.
    - Include logs
    - Describe what you were doing
    - Include your setup (Docker/manual, OS, etc.)
-
-4. **Join Discord:**
-   - [Discord Community](https://discord.gg/filaops)
-   - Real-time help from community
 
 ---
 

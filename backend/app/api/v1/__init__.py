@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     setup,
     quotes,
     settings,
+    payments,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router
@@ -131,6 +132,9 @@ router.include_router(
 
 # Company Settings
 router.include_router(settings.router)
+
+# Payments
+router.include_router(payments.router)
 
 # License activation (disabled until ready for production)
 # router.include_router(license.router)

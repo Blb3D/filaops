@@ -302,7 +302,7 @@ async def list_items(
     search: Optional[str] = Query(None, description="Search SKU or name"),
     active_only: bool = Query(True, description="Only show active items"),
     needs_reorder: bool = Query(False, description="Only show items below reorder point"),
-    limit: int = Query(50, ge=1, le=500),
+    limit: int = Query(50, ge=1, le=2000),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
@@ -310,6 +310,7 @@ async def list_items(
     List items with filtering and pagination
 
     Returns items with inventory summary and reorder status.
+    Max 2000 items per request to support dropdown selectors.
     """
     query = db.query(Product)
 
@@ -816,16 +817,27 @@ async def get_low_stock_items(
     # Convert to list and sort by shortfall (most critical first)
     items = list(items_dict.values())
     items.sort(key=lambda x: x["shortfall"], reverse=True)
-    
+
     # Limit results
     items = items[:limit]
+
+    # Calculate enhanced summary
+    critical_count = sum(1 for i in items if i["available_qty"] <= 0)
+    urgent_count = sum(1 for i in items if 0 < i["available_qty"] <= i["reorder_point"] * 0.5 if i["reorder_point"])
+    low_count = sum(1 for i in items if i["reorder_point"] and i["available_qty"] > i["reorder_point"] * 0.5)
+    mrp_shortage_count = sum(1 for i in items if i["mrp_shortage"] > 0)
+    total_shortfall_value = sum(i["shortfall"] * i["cost"] for i in items)
 
     return {
         "items": items,
         "count": len(items),
         "summary": {
             "total_items_low": len(items),
-            "total_shortfall_value": sum(i["shortfall"] * i["cost"] for i in items),
+            "critical_count": critical_count,  # Zero or negative stock
+            "urgent_count": urgent_count,  # Less than 50% of reorder point
+            "low_count": low_count,  # Above 50% but below reorder point
+            "mrp_shortage_count": mrp_shortage_count,  # Items with MRP-driven shortages
+            "total_shortfall_value": total_shortfall_value,
         }
     }
 

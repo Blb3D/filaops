@@ -326,3 +326,40 @@ class ProductionScheduleSummary(BaseModel):
     orders_overdue: int = 0
     orders_in_progress: int = 0
     total_quantity_to_produce: float = 0
+
+
+# ============================================================================
+# Split Order Schemas
+# ============================================================================
+
+class SplitQuantity(BaseModel):
+    """Quantity for a single split order"""
+    quantity: int = Field(..., gt=0, description="Quantity for this split")
+
+
+class ProductionOrderSplitRequest(BaseModel):
+    """Request to split a production order into multiple child orders"""
+    splits: List[SplitQuantity] = Field(
+        ...,
+        min_length=2,
+        description="List of quantities for each split (must have at least 2)"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "splits": [
+                    {"quantity": 25},
+                    {"quantity": 25}
+                ]
+            }
+        }
+
+
+class ProductionOrderSplitResponse(BaseModel):
+    """Response from splitting a production order"""
+    parent_order_id: int
+    parent_order_code: str
+    parent_status: str
+    child_orders: List[ProductionOrderListResponse]
+    message: str

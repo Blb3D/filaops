@@ -81,12 +81,23 @@ def upgrade() -> None:
         op.add_column('quotes', sa.Column('customer_id', sa.Integer(), nullable=True))
 
         # Create index and foreign key for customer_id (only if we just added the column)
-        op.create_index('ix_quotes_customer_id', 'quotes', ['customer_id'])
-        op.create_foreign_key(
-            'fk_quotes_customer_id',
-            'quotes', 'users',
-            ['customer_id'], ['id']
-        )
+        # Check if index exists first
+        existing_indexes = [idx['name'] for idx in inspector.get_indexes('quotes')]
+        if 'ix_quotes_customer_id' not in existing_indexes:
+            op.create_index('ix_quotes_customer_id', 'quotes', ['customer_id'])
+
+        # Check if foreign key exists first
+        existing_fks = [fk['name'] for fk in inspector.get_foreign_keys('quotes')]
+        if 'fk_quotes_customer_id' not in existing_fks:
+            try:
+                op.create_foreign_key(
+                    'fk_quotes_customer_id',
+                    'quotes', 'users',
+                    ['customer_id'], ['id']
+                )
+            except Exception:
+                # FK creation may fail if users table doesn't have proper PK - skip in this case
+                pass
 
     # Make material_type nullable (for admin quotes that don't specify material)
     # SQL Server requires explicit ALTER COLUMN

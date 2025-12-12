@@ -8,6 +8,7 @@ from typing import List, Optional
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
@@ -28,6 +29,7 @@ from app.schemas.sales_order import (
     SalesOrderUpdateStatus,
     SalesOrderUpdatePayment,
     SalesOrderUpdateShipping,
+    SalesOrderUpdateAddress,
     SalesOrderCancel,
 )
 from app.api.v1.endpoints.auth import get_current_user
@@ -689,6 +691,50 @@ async def update_shipping_info(
 
 
 # ============================================================================
+# ENDPOINT: Update Shipping Address
+# ============================================================================
+
+@router.patch("/{order_id}/address", response_model=SalesOrderResponse)
+async def update_shipping_address(
+    order_id: int,
+    update: SalesOrderUpdateAddress,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update shipping address for an order (admin only)
+    """
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can update shipping address"
+        )
+
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
+
+    if update.shipping_address_line1 is not None:
+        order.shipping_address_line1 = update.shipping_address_line1
+    if update.shipping_address_line2 is not None:
+        order.shipping_address_line2 = update.shipping_address_line2
+    if update.shipping_city is not None:
+        order.shipping_city = update.shipping_city
+    if update.shipping_state is not None:
+        order.shipping_state = update.shipping_state
+    if update.shipping_zip is not None:
+        order.shipping_zip = update.shipping_zip
+    if update.shipping_country is not None:
+        order.shipping_country = update.shipping_country
+
+    order.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+# ============================================================================
 # ENDPOINT: Cancel Sales Order
 # ============================================================================
 
@@ -740,6 +786,84 @@ async def cancel_sales_order(
     db.refresh(order)
 
     return order
+
+
+# ============================================================================
+# ENDPOINT: Create Shipping Label / Ship Order
+# ============================================================================
+
+class ShipOrderRequest(BaseModel):
+    """Request to ship an order"""
+    carrier: str = "USPS"
+    service: Optional[str] = "Priority"
+    tracking_number: Optional[str] = None  # If already have tracking
+
+
+@router.post("/{order_id}/ship")
+async def ship_order(
+    order_id: int,
+    request: ShipOrderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Create shipping label and mark order as shipped.
+
+    For now, this generates a mock tracking number.
+    In production, integrate with carrier APIs (EasyPost, ShipStation, etc.)
+
+    Returns:
+        tracking_number, label_url, carrier info
+    """
+    # Admin-only endpoint
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can ship orders"
+        )
+
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
+
+    # Validate shipping address exists
+    if not order.shipping_address_line1 and not order.shipping_city:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Order has no shipping address. Please add one first."
+        )
+
+    # Generate mock tracking number if not provided
+    # Format: {CARRIER}-{YEAR}{MONTH}{DAY}-{ORDER_ID}{RANDOM}
+    import random
+    import string
+    if request.tracking_number:
+        tracking_number = request.tracking_number
+    else:
+        date_part = datetime.utcnow().strftime("%Y%m%d")
+        random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        carrier_prefix = request.carrier[:3].upper() if request.carrier else "SHP"
+        tracking_number = f"{carrier_prefix}{date_part}{order_id:04d}{random_part}"
+
+    # Update order
+    order.tracking_number = tracking_number
+    order.carrier = request.carrier
+    order.shipped_at = datetime.utcnow()
+    order.status = "shipped"
+    order.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(order)
+
+    return {
+        "message": "Order shipped successfully",
+        "tracking_number": tracking_number,
+        "carrier": request.carrier,
+        "service": request.service,
+        "shipped_at": order.shipped_at.isoformat(),
+        "label_url": None,  # Would be actual label URL with carrier integration
+    }
 
 
 # ============================================================================
@@ -974,6 +1098,7 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
         "id": order.id,
         "user_id": order.user_id,
         "quote_id": order.quote_id,
+        "product_id": getattr(order, "product_id", None),  # For BOM explosion
         "order_number": order.order_number,
         "order_type": order.order_type,
         "source": order.source,

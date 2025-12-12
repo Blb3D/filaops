@@ -628,10 +628,13 @@ export default function AdminItems() {
                     Price
                   </th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-gray-400 uppercase">
-                    Suggested
+                    On Hand
                   </th>
                   <th className="text-right py-3 px-4 text-xs font-medium text-gray-400 uppercase">
-                    On Hand
+                    Reserved
+                  </th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-400 uppercase">
+                    Available
                   </th>
                   <th className="text-center py-3 px-4 text-xs font-medium text-gray-400 uppercase">
                     Status
@@ -681,13 +684,11 @@ export default function AdminItems() {
                         : "-"}
                     </td>
                     <td className="py-3 px-4 text-right text-green-400">
-                      {item.selling_price
+                      {/* Hide price for materials/supplies - not for sale */}
+                      {item.material_type_id || item.item_type === "supply"
+                        ? "-"
+                        : item.selling_price
                         ? `$${parseFloat(item.selling_price).toFixed(2)}`
-                        : "-"}
-                    </td>
-                    <td className="py-3 px-4 text-right text-yellow-400">
-                      {item.suggested_price
-                        ? `$${parseFloat(item.suggested_price).toFixed(2)}`
                         : "-"}
                     </td>
                     <td className="py-3 px-4 text-right">
@@ -698,6 +699,26 @@ export default function AdminItems() {
                       >
                         {item.on_hand_qty != null
                           ? parseFloat(item.on_hand_qty).toFixed(0)
+                          : "-"}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right text-yellow-400">
+                      {item.allocated_qty != null && parseFloat(item.allocated_qty) > 0
+                        ? parseFloat(item.allocated_qty).toFixed(0)
+                        : "-"}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span
+                        className={
+                          item.available_qty != null && parseFloat(item.available_qty) <= 0
+                            ? "text-red-400"
+                            : item.needs_reorder
+                            ? "text-yellow-400"
+                            : "text-green-400"
+                        }
+                      >
+                        {item.available_qty != null
+                          ? parseFloat(item.available_qty).toFixed(0)
                           : "-"}
                       </span>
                     </td>
@@ -755,7 +776,7 @@ export default function AdminItems() {
                 {filteredItems.length === 0 && (
                   <tr>
                     <td
-                      colSpan={11}
+                      colSpan={12}
                       className="py-12 text-center text-gray-500"
                     >
                       No items found

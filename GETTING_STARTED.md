@@ -78,13 +78,18 @@ Creating filaops-frontend ... done
 
 1. Open your browser
 2. Go to: **http://localhost:5173**
-3. You should see the FilaOps login screen!
+3. You should see the FilaOps **Setup Wizard**!
 
-**Default login:**
-- **Email:** `admin@filaops.local`
-- **Password:** `admin123`
+**First-Time Setup:**
 
-**⚠️ Change your password immediately after first login!**
+1. Enter your **email address** (this becomes your admin login)
+2. Enter your **full name**
+3. Set a **strong password** (min 8 chars, upper/lower/number/special)
+4. Click **Create Admin Account**
+
+You'll be logged in automatically!
+
+> **Tip:** If you see the login screen instead of setup, your database may have existing data. Run `docker-compose down -v && docker-compose up -d` for a fresh start.
 
 ---
 

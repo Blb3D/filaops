@@ -23,6 +23,7 @@ from app.schemas.purchasing import (
     PurchaseOrderListResponse,
     PurchaseOrderResponse,
     POLineCreate,
+    POLineUpdate,
     POLineResponse,
     POStatusUpdate,
     ReceivePORequest,
@@ -322,6 +323,67 @@ async def add_po_line(
     db.commit()
     db.refresh(po)
 
+    return await get_purchase_order(po.id, db)
+
+
+@router.put("/{po_id}/lines/{line_id}", response_model=PurchaseOrderResponse)
+async def update_po_line(
+    po_id: int,
+    line_id: int,
+    request: POLineUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Update a line on a purchase order
+
+    Can update quantity_ordered, unit_cost, or notes for draft/ordered POs.
+    Cannot reduce quantity_ordered below quantity_received.
+    """
+    po = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id).first()
+    if not po:
+        raise HTTPException(status_code=404, detail="Purchase order not found")
+
+    if po.status not in ["draft", "ordered"]:
+        raise HTTPException(status_code=400, detail=f"Cannot modify PO in '{po.status}' status")
+
+    line = db.query(PurchaseOrderLine).filter(
+        PurchaseOrderLine.id == line_id,
+        PurchaseOrderLine.purchase_order_id == po_id
+    ).first()
+
+    if not line:
+        raise HTTPException(status_code=404, detail="Line not found")
+
+    # Validate quantity if being updated
+    if request.quantity_ordered is not None:
+        if request.quantity_ordered < line.quantity_received:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot reduce quantity below received amount ({line.quantity_received})"
+            )
+        line.quantity_ordered = request.quantity_ordered
+
+    # Update unit cost if provided
+    if request.unit_cost is not None:
+        line.unit_cost = request.unit_cost
+
+    # Update notes if provided
+    if request.notes is not None:
+        line.notes = request.notes
+
+    # Recalculate line total
+    line.line_total = line.quantity_ordered * line.unit_cost
+    line.updated_at = datetime.utcnow()
+
+    # Recalculate PO totals
+    _calculate_totals(po)
+    po.updated_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(po)
+
+    logger.info(f"Updated line {line_id} on PO {po.po_number}")
     return await get_purchase_order(po.id, db)
 
 

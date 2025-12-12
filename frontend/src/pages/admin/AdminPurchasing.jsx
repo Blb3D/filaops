@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
+import VendorModal from "../../components/purchasing/VendorModal";
+import VendorDetailPanel from "../../components/purchasing/VendorDetailPanel";
+import POCreateModal from "../../components/purchasing/POCreateModal";
+import PODetailModal from "../../components/purchasing/PODetailModal";
+import ReceiveModal from "../../components/purchasing/ReceiveModal";
+
+// Alias for backward compatibility with existing code
+const POModal = POCreateModal;
 
 const statusColors = {
   draft: "bg-gray-500/20 text-gray-400",
@@ -35,6 +43,7 @@ export default function AdminPurchasing() {
 
   // Modals
   const [showVendorModal, setShowVendorModal] = useState(false);
+  const [showVendorDetail, setShowVendorDetail] = useState(false);
   const [showPOModal, setShowPOModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
@@ -62,8 +71,9 @@ export default function AdminPurchasing() {
     fetchProducts();
   }, [activeTab, filters.status]);
 
-  // Fetch low stock count on mount for badge
+  // Fetch vendors and low stock count on mount (vendors needed for PO creation from any tab)
   useEffect(() => {
+    fetchVendors(false); // Silent fetch - don't show loading spinner
     fetchLowStock();
   }, []);
 
@@ -90,8 +100,8 @@ export default function AdminPurchasing() {
     }
   };
 
-  const fetchVendors = async () => {
-    setLoading(true);
+  const fetchVendors = async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/v1/vendors?active_only=false`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -99,15 +109,15 @@ export default function AdminPurchasing() {
       if (!res.ok) throw new Error("Failed to fetch vendors");
       setVendors(await res.json());
     } catch (err) {
-      setError(err.message);
+      if (showLoading) setError(err.message);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
   const fetchProducts = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/items?limit=500`);
+      const res = await fetch(`${API_URL}/api/v1/items?limit=2000`);
       if (res.ok) {
         const data = await res.json();
         setProducts(data.items || []);
@@ -877,12 +887,18 @@ export default function AdminPurchasing() {
               {filteredVendors.map((vendor) => (
                 <tr
                   key={vendor.id}
-                  className="border-b border-gray-800 hover:bg-gray-800/50"
+                  className="border-b border-gray-800 hover:bg-gray-800/50 cursor-pointer"
+                  onClick={() => {
+                    setSelectedVendor(vendor);
+                    setShowVendorDetail(true);
+                  }}
                 >
                   <td className="py-3 px-4 text-white font-medium">
                     {vendor.code}
                   </td>
-                  <td className="py-3 px-4 text-gray-300">{vendor.name}</td>
+                  <td className="py-3 px-4 text-blue-400 hover:text-blue-300">
+                    {vendor.name}
+                  </td>
                   <td className="py-3 px-4 text-gray-400">
                     {vendor.contact_name || "-"}
                   </td>
@@ -911,7 +927,16 @@ export default function AdminPurchasing() {
                       {vendor.is_active ? "Yes" : "No"}
                     </span>
                   </td>
-                  <td className="py-3 px-4 text-right space-x-2">
+                  <td className="py-3 px-4 text-right space-x-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => {
+                        setSelectedVendor(vendor);
+                        setShowVendorDetail(true);
+                      }}
+                      className="text-gray-400 hover:text-white text-sm"
+                    >
+                      View
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedVendor(vendor);
@@ -1263,49 +1288,81 @@ export default function AdminPurchasing() {
       {/* Low Stock Tab */}
       {activeTab === "low-stock" && (
         <div className="space-y-6">
-          {/* Summary Cards */}
+          {/* Enhanced Summary Cards */}
           {lowStockSummary && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
-                <div className="text-3xl font-bold text-orange-400">
-                  {lowStockSummary.total_items_low}
-                </div>
-                <div className="text-sm text-gray-400">
-                  Items Below Reorder Point
-                </div>
-              </div>
+            <div className="grid grid-cols-4 gap-4">
               <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
                 <div className="text-3xl font-bold text-red-400">
-                  ${lowStockSummary.total_shortfall_value?.toFixed(2) || "0.00"}
+                  {lowStockSummary.critical_count || 0}
                 </div>
-                <div className="text-sm text-gray-400">
-                  Est. Shortfall Value
-                </div>
+                <div className="text-sm text-gray-400">Critical (Out of Stock)</div>
               </div>
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-xl p-4">
+                <div className="text-3xl font-bold text-orange-400">
+                  {lowStockSummary.urgent_count || 0}
+                </div>
+                <div className="text-sm text-gray-400">Urgent (&lt;50% Reorder)</div>
+              </div>
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4">
+                <div className="text-3xl font-bold text-yellow-400">
+                  {lowStockSummary.low_count || 0}
+                </div>
+                <div className="text-sm text-gray-400">Low Stock</div>
+              </div>
+              <div className="bg-gray-700/30 border border-gray-600 rounded-xl p-4">
+                <div className="text-3xl font-bold text-white">
+                  ${lowStockSummary.total_shortfall_value?.toFixed(0) || "0"}
+                </div>
+                <div className="text-sm text-gray-400">Shortfall Value</div>
+              </div>
+            </div>
+          )}
+
+          {/* MRP Shortage Alert */}
+          {lowStockSummary?.mrp_shortage_count > 0 && (
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 flex items-center gap-3">
+              <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-blue-300 text-sm">
+                <strong>{lowStockSummary.mrp_shortage_count}</strong> items have MRP-driven shortages from active sales orders
+              </span>
             </div>
           )}
 
           {/* Low Stock Table */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
             <div className="p-4 border-b border-gray-800 flex justify-between items-center">
-              <h3 className="text-lg font-semibold text-white">
-                Items Below Reorder Point
-              </h3>
+              <div>
+                <h3 className="text-lg font-semibold text-white">
+                  Items Requiring Attention
+                </h3>
+                <p className="text-sm text-gray-400 mt-0.5">
+                  {lowStockItems.length} items below reorder point or with MRP shortages
+                </p>
+              </div>
               <button
                 onClick={fetchLowStock}
                 disabled={lowStockLoading}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300"
+                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 flex items-center gap-2"
               >
+                <svg className={`w-4 h-4 ${lowStockLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
                 {lowStockLoading ? "Refreshing..." : "Refresh"}
               </button>
             </div>
 
             {lowStockLoading ? (
               <div className="p-8 text-center text-gray-400">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
                 Loading low stock items...
               </div>
             ) : lowStockItems.length === 0 ? (
-              <div className="p-8 text-center">
+              <div className="p-12 text-center">
+                <svg className="w-16 h-16 mx-auto text-green-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 <div className="text-green-400 text-lg font-medium mb-2">
                   All Stock Levels OK
                 </div>
@@ -1317,6 +1374,9 @@ export default function AdminPurchasing() {
               <table className="w-full">
                 <thead className="bg-gray-800/50">
                   <tr>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
+                      Urgency
+                    </th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
                       Item
                     </th>
@@ -1338,74 +1398,108 @@ export default function AdminPurchasing() {
                   </tr>
                 </thead>
                 <tbody>
-                  {lowStockItems.map((item) => (
-                    <tr
-                      key={item.id}
-                      className="border-b border-gray-800 hover:bg-gray-800/30"
-                    >
-                      <td className="py-3 px-4">
-                        <div className="text-white font-medium">
-                          {item.name}
-                        </div>
-                        <div className="text-gray-500 text-xs">{item.sku}</div>
-                      </td>
-                      <td className="py-3 px-4 text-gray-400 text-sm">
-                        {item.category_name || "-"}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span
-                          className={
-                            item.available_qty <= 0
-                              ? "text-red-400"
-                              : "text-yellow-400"
-                          }
-                        >
-                          {item.available_qty?.toFixed(2)} {item.unit}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-right text-gray-400">
-                        {item.reorder_point?.toFixed(2)} {item.unit}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <span className="text-red-400 font-medium">
-                          -{item.shortfall?.toFixed(2)} {item.unit}
-                        </span>
-                        {item.mrp_shortage > 0 &&
-                          item.shortage_source === "mrp" && (
+                  {lowStockItems.map((item) => {
+                    // Determine urgency level
+                    const isCritical = item.available_qty <= 0;
+                    const isUrgent = !isCritical && item.reorder_point && item.available_qty <= item.reorder_point * 0.5;
+                    const hasMrpShortage = item.mrp_shortage > 0;
+
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`border-b border-gray-800 hover:bg-gray-800/30 ${
+                          isCritical ? 'bg-red-500/5' : isUrgent ? 'bg-orange-500/5' : ''
+                        }`}
+                      >
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            {isCritical && (
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded text-xs font-medium">
+                                CRITICAL
+                              </span>
+                            )}
+                            {isUrgent && (
+                              <span className="px-2 py-0.5 bg-orange-500/20 text-orange-400 rounded text-xs font-medium">
+                                URGENT
+                              </span>
+                            )}
+                            {!isCritical && !isUrgent && (
+                              <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 rounded text-xs font-medium">
+                                LOW
+                              </span>
+                            )}
+                            {hasMrpShortage && (
+                              <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 rounded text-xs" title="MRP shortage from active orders">
+                                MRP
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">
+                          <div className="text-white font-medium">
+                            {item.name}
+                          </div>
+                          <div className="text-gray-500 text-xs">{item.sku}</div>
+                        </td>
+                        <td className="py-3 px-4 text-gray-400 text-sm">
+                          {item.category_name || "-"}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span
+                            className={
+                              isCritical
+                                ? "text-red-400 font-medium"
+                                : isUrgent
+                                ? "text-orange-400"
+                                : "text-yellow-400"
+                            }
+                          >
+                            {item.available_qty?.toFixed(2)} {item.unit}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right text-gray-400">
+                          {item.reorder_point?.toFixed(2) || "-"} {item.unit}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <span className="text-red-400 font-medium">
+                            -{item.shortfall?.toFixed(2)} {item.unit}
+                          </span>
+                          {item.mrp_shortage > 0 && item.shortage_source === "mrp" && (
                             <div className="text-xs text-blue-400 mt-1">
                               (MRP: {item.mrp_shortage.toFixed(2)})
                             </div>
                           )}
-                        {item.mrp_shortage > 0 &&
-                          item.shortage_source === "both" && (
-                            <div className="text-xs text-yellow-400 mt-1">
-                              (MRP: {item.mrp_shortage.toFixed(2)})
+                          {item.mrp_shortage > 0 && item.shortage_source === "both" && (
+                            <div className="text-xs text-purple-400 mt-1">
+                              +MRP: {item.mrp_shortage.toFixed(2)}
                             </div>
                           )}
-                      </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex gap-2 justify-end">
-                          <button
-                            onClick={() => {
-                              setShowPOModal(true);
-                              // Pre-populate with this item
-                            }}
-                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white"
-                          >
-                            Create PO
-                          </button>
-                          <button
-                            onClick={() =>
-                              (window.location.href = `/admin?tab=items&edit=${item.id}`)
-                            }
-                            className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"
-                          >
-                            Edit Item
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => {
+                                setSelectedPO(null);
+                                setShowPOModal(true);
+                                // TODO: Pre-populate with this item
+                              }}
+                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs text-white"
+                            >
+                              Create PO
+                            </button>
+                            <button
+                              onClick={() =>
+                                (window.location.href = `/admin?tab=items&edit=${item.id}`)
+                              }
+                              className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs text-gray-300"
+                            >
+                              Edit Item
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -1425,6 +1519,33 @@ export default function AdminPurchasing() {
         />
       )}
 
+      {/* Vendor Detail Panel */}
+      {showVendorDetail && selectedVendor && (
+        <VendorDetailPanel
+          vendor={selectedVendor}
+          onClose={() => {
+            setShowVendorDetail(false);
+            setSelectedVendor(null);
+          }}
+          onEdit={(vendor) => {
+            setShowVendorDetail(false);
+            setSelectedVendor(vendor);
+            setShowVendorModal(true);
+          }}
+          onCreatePO={(vendor) => {
+            setShowVendorDetail(false);
+            // Pre-select the vendor for the new PO
+            setSelectedPO(null);
+            setShowPOModal(true);
+            // Note: POCreateModal would need to accept a preselectedVendorId prop
+          }}
+          onViewPO={async (poId) => {
+            setShowVendorDetail(false);
+            await fetchPODetails(poId);
+          }}
+        />
+      )}
+
       {/* PO Modal */}
       {showPOModal && (
         <POModal
@@ -1436,6 +1557,7 @@ export default function AdminPurchasing() {
             setSelectedPO(null);
           }}
           onSave={handleSavePO}
+          onProductsRefresh={fetchProducts}
         />
       )}
 
@@ -1549,1327 +1671,6 @@ export default function AdminPurchasing() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ============================================================================
-// Vendor Modal Component
-// ============================================================================
-
-function VendorModal({ vendor, onClose, onSave }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    name: vendor?.name || "",
-    code: vendor?.code || "",
-    contact_name: vendor?.contact_name || "",
-    email: vendor?.email || "",
-    phone: vendor?.phone || "",
-    website: vendor?.website || "",
-    address_line1: vendor?.address_line1 || "",
-    address_line2: vendor?.address_line2 || "",
-    city: vendor?.city || "",
-    state: vendor?.state || "",
-    postal_code: vendor?.postal_code || "",
-    country: vendor?.country || "USA",
-    payment_terms: vendor?.payment_terms || "",
-    account_number: vendor?.account_number || "",
-    notes: vendor?.notes || "",
-    is_active: vendor?.is_active ?? true,
-  });
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.name.trim()) {
-      toast.warning("Vendor name is required");
-      return;
-    }
-    onSave(form);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
-        <div className="fixed inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-2xl w-full mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-white">
-              {vendor ? "Edit Vendor" : "New Vendor"}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Name *
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Code (auto if empty)
-                </label>
-                <input
-                  type="text"
-                  value={form.code}
-                  onChange={(e) => setForm({ ...form, code: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  placeholder="VND-001"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Contact Name
-                </label>
-                <input
-                  type="text"
-                  value={form.contact_name}
-                  onChange={(e) =>
-                    setForm({ ...form, contact_name: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Phone
-                </label>
-                <input
-                  type="text"
-                  value={form.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Website
-                </label>
-                <input
-                  type="text"
-                  value={form.website}
-                  onChange={(e) =>
-                    setForm({ ...form, website: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-gray-800 pt-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-3">
-                Address
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    value={form.address_line1}
-                    onChange={(e) =>
-                      setForm({ ...form, address_line1: e.target.value })
-                    }
-                    placeholder="Address Line 1"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="text"
-                    value={form.address_line2}
-                    onChange={(e) =>
-                      setForm({ ...form, address_line2: e.target.value })
-                    }
-                    placeholder="Address Line 2"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={form.city}
-                    onChange={(e) => setForm({ ...form, city: e.target.value })}
-                    placeholder="City"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={form.state}
-                    onChange={(e) =>
-                      setForm({ ...form, state: e.target.value })
-                    }
-                    placeholder="State"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={form.postal_code}
-                    onChange={(e) =>
-                      setForm({ ...form, postal_code: e.target.value })
-                    }
-                    placeholder="Postal Code"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    value={form.country}
-                    onChange={(e) =>
-                      setForm({ ...form, country: e.target.value })
-                    }
-                    placeholder="Country"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-800 pt-4">
-              <h4 className="text-sm font-medium text-gray-300 mb-3">
-                Business Info
-              </h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">
-                    Payment Terms
-                  </label>
-                  <input
-                    type="text"
-                    value={form.payment_terms}
-                    onChange={(e) =>
-                      setForm({ ...form, payment_terms: e.target.value })
-                    }
-                    placeholder="Net 30, COD, etc."
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">
-                    Account Number
-                  </label>
-                  <input
-                    type="text"
-                    value={form.account_number}
-                    onChange={(e) =>
-                      setForm({ ...form, account_number: e.target.value })
-                    }
-                    placeholder="Our account with them"
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Notes</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={3}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-              />
-            </div>
-
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="is_active"
-                checked={form.is_active}
-                onChange={(e) =>
-                  setForm({ ...form, is_active: e.target.checked })
-                }
-                className="rounded bg-gray-800 border-gray-700"
-              />
-              <label htmlFor="is_active" className="text-sm text-gray-300">
-                Active
-              </label>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
-              >
-                {vendor ? "Save Changes" : "Create Vendor"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// PO Modal Component (Create/Edit)
-// ============================================================================
-
-function POModal({ po, vendors, products, onClose, onSave }) {
-  const toast = useToast();
-  const [form, setForm] = useState({
-    vendor_id: po?.vendor_id || "",
-    order_date: po?.order_date || "",
-    expected_date: po?.expected_date || "",
-    tracking_number: po?.tracking_number || "",
-    carrier: po?.carrier || "",
-    tax_amount: po?.tax_amount || "0",
-    shipping_cost: po?.shipping_cost || "0",
-    payment_method: po?.payment_method || "",
-    payment_reference: po?.payment_reference || "",
-    document_url: po?.document_url || "",
-    notes: po?.notes || "",
-    lines:
-      po?.lines?.map((l) => ({
-        product_id: l.product_id,
-        quantity_ordered: l.quantity_ordered,
-        unit_cost: l.unit_cost,
-        notes: l.notes || "",
-      })) || [],
-  });
-
-  const addLine = () => {
-    setForm({
-      ...form,
-      lines: [
-        ...form.lines,
-        { product_id: "", quantity_ordered: 1, unit_cost: 0, notes: "" },
-      ],
-    });
-  };
-
-  const removeLine = (index) => {
-    setForm({
-      ...form,
-      lines: form.lines.filter((_, i) => i !== index),
-    });
-  };
-
-  const updateLine = (index, field, value) => {
-    const newLines = [...form.lines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    setForm({ ...form, lines: newLines });
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!form.vendor_id) {
-      toast.warning("Please select a vendor");
-      return;
-    }
-    if (!po && form.lines.length === 0) {
-      toast.warning("Please add at least one line item");
-      return;
-    }
-
-    const data = {
-      vendor_id: parseInt(form.vendor_id),
-      order_date: form.order_date || null,
-      expected_date: form.expected_date || null,
-      tracking_number: form.tracking_number || null,
-      carrier: form.carrier || null,
-      tax_amount: parseFloat(form.tax_amount) || 0,
-      shipping_cost: parseFloat(form.shipping_cost) || 0,
-      payment_method: form.payment_method || null,
-      payment_reference: form.payment_reference || null,
-      document_url: form.document_url || null,
-      notes: form.notes || null,
-    };
-
-    if (!po) {
-      // New PO - include lines
-      data.lines = form.lines.map((l) => ({
-        product_id: parseInt(l.product_id),
-        quantity_ordered: parseFloat(l.quantity_ordered),
-        unit_cost: parseFloat(l.unit_cost),
-        notes: l.notes || null,
-      }));
-    }
-
-    onSave(data);
-  };
-
-  const lineTotal = form.lines.reduce(
-    (sum, l) =>
-      sum +
-      (parseFloat(l.quantity_ordered) || 0) * (parseFloat(l.unit_cost) || 0),
-    0
-  );
-  const grandTotal =
-    lineTotal +
-    (parseFloat(form.tax_amount) || 0) +
-    (parseFloat(form.shipping_cost) || 0);
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
-        <div className="fixed inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-4xl w-full mx-auto p-6 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-semibold text-white">
-              {po ? `Edit PO ${po.po_number}` : "New Purchase Order"}
-            </h3>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Header Info */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Vendor *
-                </label>
-                <select
-                  value={form.vendor_id}
-                  onChange={(e) =>
-                    setForm({ ...form, vendor_id: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  required
-                >
-                  <option value="">Select vendor...</option>
-                  {vendors
-                    .filter((v) => v.is_active)
-                    .map((v) => (
-                      <option key={v.id} value={v.id}>
-                        {v.name} ({v.code})
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Order Date
-                </label>
-                <input
-                  type="date"
-                  value={form.order_date}
-                  onChange={(e) =>
-                    setForm({ ...form, order_date: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Expected Date
-                </label>
-                <input
-                  type="date"
-                  value={form.expected_date}
-                  onChange={(e) =>
-                    setForm({ ...form, expected_date: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            {/* Line Items - only for new POs */}
-            {!po && (
-              <div className="border-t border-gray-800 pt-4">
-                <div className="flex justify-between items-center mb-3">
-                  <h4 className="text-sm font-medium text-gray-300">
-                    Line Items
-                  </h4>
-                  <button
-                    type="button"
-                    onClick={addLine}
-                    className="text-sm text-blue-400 hover:text-blue-300"
-                  >
-                    + Add Line
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {form.lines.map((line, index) => (
-                    <div
-                      key={index}
-                      className="flex gap-2 items-start bg-gray-800/50 p-3 rounded-lg"
-                    >
-                      <div className="flex-1">
-                        <select
-                          value={line.product_id}
-                          onChange={(e) =>
-                            updateLine(index, "product_id", e.target.value)
-                          }
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                          required
-                        >
-                          <option value="">Select item...</option>
-                          {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.sku} - {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="w-24">
-                        <input
-                          type="number"
-                          value={line.quantity_ordered}
-                          onChange={(e) =>
-                            updateLine(
-                              index,
-                              "quantity_ordered",
-                              e.target.value
-                            )
-                          }
-                          placeholder="Qty"
-                          min="0.01"
-                          step="0.01"
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                          required
-                        />
-                      </div>
-                      <div className="w-28">
-                        <input
-                          type="number"
-                          value={line.unit_cost}
-                          onChange={(e) =>
-                            updateLine(index, "unit_cost", e.target.value)
-                          }
-                          placeholder="Unit Cost"
-                          min="0"
-                          step="0.01"
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white"
-                          required
-                        />
-                      </div>
-                      <div className="w-24 text-right text-sm text-gray-400 py-1">
-                        $
-                        {(
-                          (parseFloat(line.quantity_ordered) || 0) *
-                          (parseFloat(line.unit_cost) || 0)
-                        ).toFixed(2)}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeLine(index)}
-                        className="text-red-400 hover:text-red-300 p-1"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  ))}
-                  {form.lines.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-4">
-                      No line items. Click "Add Line" to add items.
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Financials */}
-            <div className="grid grid-cols-4 gap-4 border-t border-gray-800 pt-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Tax Amount
-                </label>
-                <input
-                  type="number"
-                  value={form.tax_amount}
-                  onChange={(e) =>
-                    setForm({ ...form, tax_amount: e.target.value })
-                  }
-                  min="0"
-                  step="0.01"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Shipping Cost
-                </label>
-                <input
-                  type="number"
-                  value={form.shipping_cost}
-                  onChange={(e) =>
-                    setForm({ ...form, shipping_cost: e.target.value })
-                  }
-                  min="0"
-                  step="0.01"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Payment Method
-                </label>
-                <input
-                  type="text"
-                  value={form.payment_method}
-                  onChange={(e) =>
-                    setForm({ ...form, payment_method: e.target.value })
-                  }
-                  placeholder="Card, Check, etc."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Payment Ref
-                </label>
-                <input
-                  type="text"
-                  value={form.payment_reference}
-                  onChange={(e) =>
-                    setForm({ ...form, payment_reference: e.target.value })
-                  }
-                  placeholder="Last 4, Check #"
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            {/* Document & Tracking */}
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Document URL
-                </label>
-                <input
-                  type="text"
-                  value={form.document_url}
-                  onChange={(e) =>
-                    setForm({ ...form, document_url: e.target.value })
-                  }
-                  placeholder="Google Drive link, etc."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Tracking Number
-                </label>
-                <input
-                  type="text"
-                  value={form.tracking_number}
-                  onChange={(e) =>
-                    setForm({ ...form, tracking_number: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-400 mb-1">
-                  Carrier
-                </label>
-                <input
-                  type="text"
-                  value={form.carrier}
-                  onChange={(e) =>
-                    setForm({ ...form, carrier: e.target.value })
-                  }
-                  placeholder="UPS, FedEx, etc."
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                />
-              </div>
-            </div>
-
-            {/* Notes */}
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Notes</label>
-              <textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                rows={2}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-              />
-            </div>
-
-            {/* Totals */}
-            {!po && (
-              <div className="bg-gray-800/50 p-4 rounded-lg text-right">
-                <div className="text-sm text-gray-400">
-                  Subtotal: ${lineTotal.toFixed(2)}
-                </div>
-                <div className="text-lg font-semibold text-white mt-1">
-                  Total: ${grandTotal.toFixed(2)}
-                </div>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
-              >
-                {po ? "Save Changes" : "Create PO"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// PO Detail Modal Component
-// ============================================================================
-
-function PODetailModal({
-  po,
-  onClose,
-  onStatusChange,
-  onEdit,
-  onReceive,
-  onUpload,
-}) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      setUploading(true);
-      await onUpload(file);
-      setUploading(false);
-    }
-  };
-
-  const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setUploading(true);
-      await onUpload(file);
-      setUploading(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
-        <div className="fixed inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-3xl w-full mx-auto p-6 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                {po.po_number}
-              </h3>
-              <p className="text-sm text-gray-400">{po.vendor_name}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span
-                className={`px-3 py-1 rounded-full text-sm ${
-                  statusColors[po.status]
-                }`}
-              >
-                {po.status}
-              </span>
-              <button
-                onClick={onClose}
-                className="text-gray-400 hover:text-white"
-              >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Dates */}
-          <div className="grid grid-cols-4 gap-4 mb-6 text-sm">
-            <div>
-              <span className="text-gray-400">Order Date</span>
-              <p className="text-white">
-                {po.order_date
-                  ? new Date(po.order_date).toLocaleDateString()
-                  : "-"}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Expected</span>
-              <p className="text-white">
-                {po.expected_date
-                  ? new Date(po.expected_date).toLocaleDateString()
-                  : "-"}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Shipped</span>
-              <p className="text-white">
-                {po.shipped_date
-                  ? new Date(po.shipped_date).toLocaleDateString()
-                  : "-"}
-              </p>
-            </div>
-            <div>
-              <span className="text-gray-400">Received</span>
-              <p className="text-white">
-                {po.received_date
-                  ? new Date(po.received_date).toLocaleDateString()
-                  : "-"}
-              </p>
-            </div>
-          </div>
-
-          {/* Tracking */}
-          {(po.tracking_number || po.carrier) && (
-            <div className="bg-gray-800/50 p-3 rounded-lg mb-6 text-sm">
-              <span className="text-gray-400">Tracking: </span>
-              <span className="text-white">
-                {po.carrier} {po.tracking_number}
-              </span>
-            </div>
-          )}
-
-          {/* Lines */}
-          <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-300 mb-3">
-              Line Items
-            </h4>
-            <div className="bg-gray-800/30 rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-800/50">
-                  <tr>
-                    <th className="text-left py-2 px-3 text-xs text-gray-400">
-                      #
-                    </th>
-                    <th className="text-left py-2 px-3 text-xs text-gray-400">
-                      Item
-                    </th>
-                    <th className="text-right py-2 px-3 text-xs text-gray-400">
-                      Ordered
-                    </th>
-                    <th className="text-right py-2 px-3 text-xs text-gray-400">
-                      Received
-                    </th>
-                    <th className="text-right py-2 px-3 text-xs text-gray-400">
-                      Unit Cost
-                    </th>
-                    <th className="text-right py-2 px-3 text-xs text-gray-400">
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {po.lines?.map((line) => (
-                    <tr key={line.id} className="border-t border-gray-800">
-                      <td className="py-2 px-3 text-gray-400">
-                        {line.line_number}
-                      </td>
-                      <td className="py-2 px-3">
-                        <div className="text-white">{line.product_sku}</div>
-                        <div className="text-xs text-gray-400">
-                          {line.product_name}
-                        </div>
-                      </td>
-                      <td className="py-2 px-3 text-right text-white">
-                        {parseFloat(line.quantity_ordered).toFixed(2)}
-                      </td>
-                      <td className="py-2 px-3 text-right">
-                        <span
-                          className={
-                            parseFloat(line.quantity_received) >=
-                            parseFloat(line.quantity_ordered)
-                              ? "text-green-400"
-                              : "text-yellow-400"
-                          }
-                        >
-                          {parseFloat(line.quantity_received).toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3 text-right text-gray-400">
-                        ${parseFloat(line.unit_cost).toFixed(2)}
-                      </td>
-                      <td className="py-2 px-3 text-right text-white">
-                        ${parseFloat(line.line_total).toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Totals */}
-          <div className="text-right text-sm mb-6">
-            <div className="text-gray-400">
-              Subtotal: ${parseFloat(po.subtotal || 0).toFixed(2)}
-            </div>
-            <div className="text-gray-400">
-              Tax: ${parseFloat(po.tax_amount || 0).toFixed(2)}
-            </div>
-            <div className="text-gray-400">
-              Shipping: ${parseFloat(po.shipping_cost || 0).toFixed(2)}
-            </div>
-            <div className="text-lg font-semibold text-white mt-1">
-              Total: ${parseFloat(po.total_amount || 0).toFixed(2)}
-            </div>
-          </div>
-
-          {/* Document Upload / Link */}
-          <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-300 mb-3">Document</h4>
-            {po.document_url ? (
-              <div className="flex items-center gap-4">
-                <a
-                  href={po.document_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  View Document
-                </a>
-                <label className="text-gray-400 hover:text-white text-sm cursor-pointer">
-                  Replace
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            ) : (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  isDragging
-                    ? "border-blue-500 bg-blue-500/10"
-                    : "border-gray-700 hover:border-gray-600"
-                }`}
-              >
-                {uploading ? (
-                  <div className="flex items-center justify-center gap-2 text-gray-400">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                    Uploading...
-                  </div>
-                ) : (
-                  <>
-                    <svg
-                      className="w-8 h-8 mx-auto mb-2 text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                      />
-                    </svg>
-                    <p className="text-sm text-gray-400 mb-2">
-                      Drag & drop invoice/receipt here
-                    </p>
-                    <label className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">
-                      or click to browse
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                    </label>
-                    <p className="text-xs text-gray-500 mt-2">
-                      PDF, Images, Excel, CSV
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Notes */}
-          {po.notes && (
-            <div className="bg-gray-800/30 p-3 rounded-lg mb-6">
-              <span className="text-sm text-gray-400">Notes: </span>
-              <span className="text-sm text-white">{po.notes}</span>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex justify-between items-center pt-4 border-t border-gray-800">
-            <div className="flex gap-2">
-              {po.status === "draft" && (
-                <>
-                  <button
-                    onClick={onEdit}
-                    className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-white"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    onClick={() => onStatusChange(po.id, "ordered")}
-                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white"
-                  >
-                    Place Order
-                  </button>
-                </>
-              )}
-              {po.status === "ordered" && (
-                <>
-                  <button
-                    onClick={() => onStatusChange(po.id, "shipped")}
-                    className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm text-white"
-                  >
-                    Mark Shipped
-                  </button>
-                  <button
-                    onClick={onReceive}
-                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white"
-                  >
-                    Receive Items
-                  </button>
-                </>
-              )}
-              {po.status === "shipped" && (
-                <button
-                  onClick={onReceive}
-                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white"
-                >
-                  Receive Items
-                </button>
-              )}
-              {po.status === "received" && (
-                <button
-                  onClick={() => onStatusChange(po.id, "closed")}
-                  className="px-3 py-1.5 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm text-white"
-                >
-                  Close PO
-                </button>
-              )}
-              {!["received", "closed", "cancelled"].includes(po.status) && (
-                <button
-                  onClick={() => onStatusChange(po.id, "cancelled")}
-                  className="px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 rounded-lg text-sm text-red-400"
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ============================================================================
-// Receive Modal Component
-// ============================================================================
-
-function ReceiveModal({ po, onClose, onReceive }) {
-  const toast = useToast();
-  const [lines, setLines] = useState(
-    po.lines
-      ?.filter(
-        (l) => parseFloat(l.quantity_received) < parseFloat(l.quantity_ordered)
-      )
-      .map((l) => ({
-        line_id: l.id,
-        quantity_received:
-          parseFloat(l.quantity_ordered) - parseFloat(l.quantity_received),
-        remaining:
-          parseFloat(l.quantity_ordered) - parseFloat(l.quantity_received),
-        product_sku: l.product_sku,
-        product_name: l.product_name,
-        lot_number: "",
-        notes: "",
-      })) || []
-  );
-  const [notes, setNotes] = useState("");
-
-  const updateLine = (index, field, value) => {
-    const newLines = [...lines];
-    newLines[index] = { ...newLines[index], [field]: value };
-    setLines(newLines);
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    const receiveData = {
-      lines: lines
-        .filter((l) => parseFloat(l.quantity_received) > 0)
-        .map((l) => ({
-          line_id: l.line_id,
-          quantity_received: parseFloat(l.quantity_received),
-          lot_number: l.lot_number || null,
-          notes: l.notes || null,
-        })),
-      notes: notes || null,
-    };
-
-    if (receiveData.lines.length === 0) {
-      toast.warning("Please enter quantities to receive");
-      return;
-    }
-
-    onReceive(receiveData);
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
-        <div className="fixed inset-0 bg-black/70" onClick={onClose} />
-        <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-3xl w-full mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h3 className="text-lg font-semibold text-white">
-                Receive Items - {po.po_number}
-              </h3>
-              <p className="text-sm text-gray-400">Enter quantities received</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {lines.length === 0 ? (
-              <p className="text-gray-400 text-center py-8">
-                All items have been received
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {lines.map((line, index) => (
-                  <div
-                    key={line.line_id}
-                    className="bg-gray-800/50 p-4 rounded-lg"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <div className="text-white font-medium">
-                          {line.product_sku}
-                        </div>
-                        <div className="text-sm text-gray-400">
-                          {line.product_name}
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        Remaining: {line.remaining}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">
-                          Qty to Receive
-                        </label>
-                        <input
-                          type="number"
-                          value={line.quantity_received}
-                          onChange={(e) =>
-                            updateLine(
-                              index,
-                              "quantity_received",
-                              e.target.value
-                            )
-                          }
-                          min="0"
-                          max={line.remaining}
-                          step="0.01"
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">
-                          Lot Number
-                        </label>
-                        <input
-                          type="text"
-                          value={line.lot_number}
-                          onChange={(e) =>
-                            updateLine(index, "lot_number", e.target.value)
-                          }
-                          placeholder="Optional"
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs text-gray-400 mb-1">
-                          Notes
-                        </label>
-                        <input
-                          type="text"
-                          value={line.notes}
-                          onChange={(e) =>
-                            updateLine(index, "notes", e.target.value)
-                          }
-                          placeholder="Optional"
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-white"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">
-                Receipt Notes
-              </label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Optional notes for this receipt"
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-              />
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={lines.length === 0}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-white font-medium"
-              >
-                Receive Items
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
     </div>
   );
 }

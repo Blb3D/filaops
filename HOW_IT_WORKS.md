@@ -151,6 +151,8 @@ When you click "Start Production":
 
 3. **Work Assignment** - First operation (Print) becomes active
 
+**Tip:** For large orders, use **Split Order** to divide production across multiple machines. A 50-unit order can become two 25-unit child orders (PO-001-A, PO-001-B) that track independently.
+
 ### Step 4: Complete Printing
 
 When printing finishes:
@@ -175,12 +177,15 @@ Inspector checks parts and marks QC passed/failed.
 
 ### Step 6: Ship Order
 
-From the fulfillment screen:
+From the Shipping page:
 
-1. **Select orders** ready to ship
-2. **Get shipping rates** (via EasyPost integration - Pro feature)
-3. **Print label** and mark shipped
-4. **Customer notified** with tracking
+1. **View ready orders** - Orders with status "completed" appear in the shipping queue
+2. **Verify address** - Click "Edit Address" on Order Detail if needed
+3. **Create label** - Use carrier links (USPS, FedEx, UPS) to create shipping label
+4. **Enter tracking** - Add tracking number in the Ship modal
+5. **Mark shipped** - Order status updates and tracking is saved
+
+**Pro feature:** EasyPost integration for automated label creation and rate shopping.
 
 ---
 

@@ -187,6 +187,74 @@ async def update_vendor(
     return vendor
 
 
+@router.get("/{vendor_id}/metrics")
+async def get_vendor_metrics(
+    vendor_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get vendor performance metrics
+
+    Returns:
+    - Total PO count
+    - Total spend
+    - Average lead time (days from ordered to received)
+    - On-time delivery percentage
+    - Recent POs
+    """
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+
+    # Get all POs for this vendor
+    pos = db.query(PurchaseOrder).filter(
+        PurchaseOrder.vendor_id == vendor_id
+    ).order_by(desc(PurchaseOrder.created_at)).all()
+
+    total_pos = len(pos)
+    total_spend = sum(float(po.total_amount or 0) for po in pos)
+
+    # Calculate average lead time (ordered -> received)
+    lead_times = []
+    on_time_count = 0
+    received_count = 0
+
+    for po in pos:
+        if po.order_date and po.received_date:
+            days = (po.received_date - po.order_date).days
+            lead_times.append(days)
+            received_count += 1
+
+            # Check if on-time (received on or before expected)
+            if po.expected_date and po.received_date <= po.expected_date:
+                on_time_count += 1
+
+    avg_lead_time = sum(lead_times) / len(lead_times) if lead_times else None
+    on_time_pct = (on_time_count / received_count * 100) if received_count > 0 else None
+
+    # Get recent POs (last 10)
+    recent_pos = [
+        {
+            "id": po.id,
+            "po_number": po.po_number,
+            "status": po.status,
+            "order_date": po.order_date.isoformat() if po.order_date else None,
+            "total_amount": float(po.total_amount or 0),
+        }
+        for po in pos[:10]
+    ]
+
+    return {
+        "vendor_id": vendor_id,
+        "vendor_name": vendor.name,
+        "total_pos": total_pos,
+        "total_spend": round(total_spend, 2),
+        "avg_lead_time_days": round(avg_lead_time, 1) if avg_lead_time else None,
+        "on_time_delivery_pct": round(on_time_pct, 1) if on_time_pct else None,
+        "recent_pos": recent_pos,
+    }
+
+
 @router.delete("/{vendor_id}")
 async def delete_vendor(
     vendor_id: int,
