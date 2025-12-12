@@ -172,27 +172,36 @@ docker-compose up -d
 
 ---
 
-## Accessing from Other Computers
+## Accessing from Other Computers (Network/Remote Access)
+
+> **Important:** If you see "Failed to fetch" or "Connection Issue" when accessing FilaOps from another computer, follow these steps.
 
 To access FilaOps from other machines on your network:
 
 1. Find your server's IP address:
-   - Windows: `ipconfig` (look for IPv4 Address)
+   - Windows: `ipconfig` (look for IPv4 Address, e.g., `192.168.1.100`)
    - Mac/Linux: `ip addr` or `ifconfig`
 
-2. Edit your `.env` file:
-   ```
-   VITE_API_URL=http://YOUR_IP_ADDRESS:8000
-   FRONTEND_URL=http://YOUR_IP_ADDRESS:5173
+2. Create/edit your `.env` file in the FilaOps folder:
+   ```bash
+   # Example: If your server IP is 192.168.1.100
+   VITE_API_URL=http://192.168.1.100:8000
    ```
 
-3. Restart FilaOps:
+3. **Rebuild and restart** (rebuilding is required - the URL is baked into the frontend at build time):
    ```bash
    docker-compose down
+   docker-compose build --no-cache frontend
    docker-compose up -d
    ```
 
 4. Access from other computers at: `http://YOUR_IP_ADDRESS:5173`
+
+### Why This Is Needed
+
+The frontend is a static web app that needs to know where the API server is located. By default, it's configured for `localhost` which only works when accessing from the same machine. When you access from another computer, `localhost` refers to *that* computer, not your server.
+
+Setting `VITE_API_URL` tells the frontend where to find the API server on your network.
 
 ---
 

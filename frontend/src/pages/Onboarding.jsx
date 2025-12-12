@@ -564,28 +564,37 @@ export default function Onboarding() {
             <div className="space-y-6">
               <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
                 <h3 className="text-white font-medium mb-2">
-                  Load Example Data?
+                  Load BambuLab Materials & Example Data?
                 </h3>
                 <p className="text-gray-400 text-sm mb-4">
-                  We can populate your database with:
+                  We can populate your database with BambuLab-compatible materials:
                 </p>
                 <ul className="text-gray-300 text-sm space-y-2 mb-4">
                   <li>
-                    • Example items for each category (PLA, PETG, packaging,
-                    etc.)
+                    • <strong>18 material types</strong> (PLA Basic, PLA Matte, PLA Silk, PETG, ABS, ASA, TPU, PA-CF, PC)
                   </li>
                   <li>
-                    • Complete materials list (8 material types: PLA Basic, PLA
-                    Matte, PETG, ABS, ASA, TPU)
+                    • <strong>15 colors</strong> (Black, White, Gray, Red, Blue, Green, Yellow, Orange, Purple, Pink, Brown, Gold, Silver, Clear)
                   </li>
-                  <li>• 14 colors (White, Black, Red, Blue, and more)</li>
-                  <li>• 112 material+color combinations ready to use</li>
+                  <li>
+                    • <strong>24 material+color combinations</strong> ready to use for common filaments
+                  </li>
+                  <li>• Example items for each category (packaging, hardware, finished goods)</li>
                 </ul>
                 <p className="text-gray-400 text-sm">
-                  This helps you understand how categories work and gives you a
-                  head start. You can always add your own data later!
+                  This gives you a head start with ready-to-use material options. You can always add more materials and colors later!
                 </p>
               </div>
+
+              {!seedExampleData && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                  <h4 className="text-yellow-400 font-medium mb-2">⚠️ Skipping seed data?</h4>
+                  <p className="text-yellow-200/70 text-sm">
+                    Without seed data, you'll need to manually create colors when adding materials.
+                    Use the <strong>"+ Create new color for this material"</strong> link in the material form to add colors as needed.
+                  </p>
+                </div>
+              )}
 
               <div className="flex items-center gap-3">
                 <input

@@ -11,6 +11,7 @@ export default function AdminLogin() {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+  const [apiError, setApiError] = useState(null);
 
   // Check if first-run setup is needed
   useEffect(() => {
@@ -20,15 +21,25 @@ export default function AdminLogin() {
   const checkSetupStatus = async () => {
     try {
       const res = await fetch(`${API_URL}/api/v1/setup/status`);
+      if (!res.ok) {
+        throw new Error(`API returned ${res.status}`);
+      }
       const data = await res.json();
-      
+
       if (data.needs_setup) {
         // No users exist - redirect to onboarding
         navigate("/onboarding");
         return;
       }
     } catch (err) {
-      // If we can't check, just show login - setup check failure is non-critical
+      // Show connection error - this helps users diagnose VITE_API_URL issues
+      console.error("Setup check failed:", err);
+      setApiError(
+        `Cannot connect to API at ${API_URL}. ` +
+        (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+          ? `If accessing remotely, ensure VITE_API_URL is set to the server's address (e.g., http://${window.location.hostname}:8000) and rebuild the frontend.`
+          : "Please ensure the backend is running.")
+      );
     } finally {
       setCheckingSetup(false);
     }
@@ -114,6 +125,21 @@ export default function AdminLogin() {
             Sign in to access FilaOps
           </p>
         </div>
+
+        {/* API Connection Error */}
+        {apiError && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-6">
+            <div className="flex items-start gap-3">
+              <svg className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <h3 className="text-yellow-400 font-medium">Connection Issue</h3>
+                <p className="text-yellow-200/70 text-sm mt-1">{apiError}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Login Form */}
         <div className="bg-gray-900 border border-gray-800 rounded-xl p-8">

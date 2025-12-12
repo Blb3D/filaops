@@ -523,14 +523,92 @@ def seed_materials(db: Session):
         print(f"  ✅ Created material type: {mt_data['name']}")
     
     db.commit()
-    
-    print(f"\n  📊 Created {created_types} material types")
-    print(f"  💡 Tip: Import your material+color combinations via CSV using the material import endpoint")
-    print(f"  💡 Tip: Use the material CSV template to format your data correctly")
-    
-    # Return early - no colors or products created via seed
-    # Users should import their material inventory via CSV
-    return created_types, 0, 0, 0  # types, colors, links, products
+
+    # Seed basic colors so users can create materials without CSV import
+    basic_colors = [
+        {"code": "BLK", "name": "Black", "hex_code": "#000000", "display_order": 1},
+        {"code": "WHT", "name": "White", "hex_code": "#FFFFFF", "display_order": 2},
+        {"code": "GRY", "name": "Gray", "hex_code": "#808080", "display_order": 3},
+        {"code": "RED", "name": "Red", "hex_code": "#FF0000", "display_order": 4},
+        {"code": "BLU", "name": "Blue", "hex_code": "#0000FF", "display_order": 5},
+        {"code": "GRN", "name": "Green", "hex_code": "#00FF00", "display_order": 6},
+        {"code": "YLW", "name": "Yellow", "hex_code": "#FFFF00", "display_order": 7},
+        {"code": "ORG", "name": "Orange", "hex_code": "#FFA500", "display_order": 8},
+        {"code": "PRP", "name": "Purple", "hex_code": "#800080", "display_order": 9},
+        {"code": "PNK", "name": "Pink", "hex_code": "#FFC0CB", "display_order": 10},
+        {"code": "BRN", "name": "Brown", "hex_code": "#8B4513", "display_order": 11},
+        {"code": "TAN", "name": "Tan/Beige", "hex_code": "#D2B48C", "display_order": 12},
+        {"code": "GLD", "name": "Gold", "hex_code": "#FFD700", "display_order": 13},
+        {"code": "SLV", "name": "Silver", "hex_code": "#C0C0C0", "display_order": 14},
+        {"code": "CLR", "name": "Clear/Transparent", "hex_code": "#FFFFFF", "display_order": 15},
+    ]
+
+    color_objs = {}
+    created_colors = 0
+
+    for color_data in basic_colors:
+        existing = db.query(Color).filter(Color.code == color_data["code"]).first()
+        if existing:
+            color_objs[color_data["code"]] = existing
+            continue
+
+        color = Color(
+            code=color_data["code"],
+            name=color_data["name"],
+            hex_code=color_data["hex_code"],
+            display_order=color_data["display_order"],
+            active=True,
+            is_customer_visible=True,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow()
+        )
+        db.add(color)
+        db.flush()
+        color_objs[color_data["code"]] = color
+        created_colors += 1
+        print(f"  ✅ Created color: {color_data['name']}")
+
+    db.commit()
+
+    # Create MaterialColor links for common BambuLab combinations
+    # Link basic colors to PLA and PETG material types (most commonly used)
+    created_links = 0
+    common_material_codes = ["PLA_BASIC", "PLA_MATTE", "PETG_BASIC", "PETG_HF"]
+    common_color_codes = ["BLK", "WHT", "GRY", "RED", "BLU", "GRN"]
+
+    for mt_code in common_material_codes:
+        if mt_code not in material_type_objs:
+            continue
+        mt = material_type_objs[mt_code]
+
+        for color_code in common_color_codes:
+            if color_code not in color_objs:
+                continue
+            color = color_objs[color_code]
+
+            # Check if link already exists
+            existing_link = db.query(MaterialColor).filter(
+                MaterialColor.material_type_id == mt.id,
+                MaterialColor.color_id == color.id
+            ).first()
+
+            if not existing_link:
+                link = MaterialColor(
+                    material_type_id=mt.id,
+                    color_id=color.id,
+                    is_customer_visible=True,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow()
+                )
+                db.add(link)
+                created_links += 1
+
+    db.commit()
+
+    print(f"\n  📊 Created {created_types} material types, {created_colors} colors, {created_links} material-color links")
+    print(f"  💡 Tip: Import additional materials via CSV or use 'Create new color' in the material form")
+
+    return created_types, created_colors, created_links, 0  # types, colors, links, products
 
 
 def main():
