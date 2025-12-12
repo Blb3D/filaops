@@ -15,6 +15,10 @@ from app.main import app
 from app.db.base import Base
 from app.db.session import get_db
 from app.core.security import create_access_token, hash_password
+from app.core.limiter import limiter
+
+# Disable rate limiting for tests
+limiter.enabled = False
 
 
 # Create in-memory SQLite database for testing

@@ -17,10 +17,10 @@ class TestAdminAccessControl:
         assert "not authenticated" in response.json()["detail"].lower()
 
     def test_dashboard_requires_admin_role(self, client, customer_headers):
-        """Test that dashboard returns 403 for non-admin users"""
+        """Test that dashboard returns 403 for non-staff users (customers)"""
         response = client.get("/api/v1/admin/dashboard/", headers=customer_headers)
         assert response.status_code == 403
-        assert "admin access required" in response.json()["detail"].lower()
+        assert "staff access required" in response.json()["detail"].lower()
 
     def test_dashboard_allows_admin(self, client, admin_headers):
         """Test that admin can access dashboard"""

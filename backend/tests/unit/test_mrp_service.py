@@ -155,6 +155,8 @@ def create_all_tables():
         Column('routing_id', Integer, nullable=True),
         Column('sales_order_id', Integer, nullable=True),
         Column('sales_order_line_id', Integer, nullable=True),
+        Column('parent_order_id', Integer, nullable=True),  # For split orders
+        Column('split_sequence', Integer, nullable=True),   # 1, 2, 3... for child orders
         Column('quantity_ordered', Numeric(18, 4), nullable=False),
         Column('quantity_completed', Numeric(18, 4), default=0),
         Column('quantity_scrapped', Numeric(18, 4), default=0),
@@ -166,9 +168,21 @@ def create_all_tables():
         Column('scheduled_end', DateTime, nullable=True),
         Column('actual_start', DateTime, nullable=True),
         Column('actual_end', DateTime, nullable=True),
+        Column('estimated_time_minutes', Integer, nullable=True),
+        Column('actual_time_minutes', Integer, nullable=True),
+        Column('estimated_material_cost', Numeric(18, 4), nullable=True),
+        Column('estimated_labor_cost', Numeric(18, 4), nullable=True),
+        Column('estimated_total_cost', Numeric(18, 4), nullable=True),
+        Column('actual_material_cost', Numeric(18, 4), nullable=True),
+        Column('actual_labor_cost', Numeric(18, 4), nullable=True),
+        Column('actual_total_cost', Numeric(18, 4), nullable=True),
+        Column('assigned_to', String(100), nullable=True),
         Column('notes', Text, nullable=True),
         Column('created_at', DateTime, nullable=False),
+        Column('updated_at', DateTime, nullable=False),
         Column('created_by', String(100), nullable=True),
+        Column('released_at', DateTime, nullable=True),
+        Column('completed_at', DateTime, nullable=True),
     )
     
     # MRP Runs table
