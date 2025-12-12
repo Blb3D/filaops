@@ -199,8 +199,14 @@ class TestJWTTokens:
         user_id = 123
         token = create_access_token(user_id)
 
-        # Tamper with the token by changing a character
-        tampered_token = token[:-1] + ("X" if token[-1] != "X" else "Y")
+        # Tamper with the token by corrupting the signature part
+        # JWT format: header.payload.signature
+        parts = token.split('.')
+        assert len(parts) == 3, "Token should have 3 parts"
+
+        # Corrupt the signature by reversing it (guaranteed to be different)
+        corrupted_signature = parts[2][::-1]
+        tampered_token = f"{parts[0]}.{parts[1]}.{corrupted_signature}"
 
         payload = decode_token(tampered_token)
         assert payload is None
