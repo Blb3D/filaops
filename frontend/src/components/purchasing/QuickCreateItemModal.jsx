@@ -65,7 +65,6 @@ export default function QuickCreateItemModal({ onClose, onCreated, initialName =
         toast.error(error.detail || "Failed to create item");
       }
     } catch (err) {
-      console.error("Create item error:", err);
       toast.error("Failed to create item");
     } finally {
       setLoading(false);

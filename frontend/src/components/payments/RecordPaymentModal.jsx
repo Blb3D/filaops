@@ -81,7 +81,7 @@ export default function RecordPaymentModal({
         setOrders(data.items || data);
       }
     } catch (err) {
-      console.error("Failed to fetch orders:", err);
+      // Non-critical: Order list fetch failure doesn't block user - they can still search
     }
   };
 
@@ -96,7 +96,7 @@ export default function RecordPaymentModal({
         setForm({ ...form, sales_order_id: id });
       }
     } catch (err) {
-      console.error("Failed to fetch order:", err);
+      // Non-critical: Pre-selected order fetch failure - user can select manually
     }
   };
 
@@ -109,7 +109,7 @@ export default function RecordPaymentModal({
         setPaymentSummary(await res.json());
       }
     } catch (err) {
-      console.error("Failed to fetch payment summary:", err);
+      // Non-critical: Payment summary fetch failure - form still works without it
     }
   };
 

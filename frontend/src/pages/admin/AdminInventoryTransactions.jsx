@@ -71,11 +71,10 @@ export default function AdminInventoryTransactions() {
       if (res.ok) {
         const data = await res.json();
         setProducts(data.items || []);
-      } else {
-        console.error("Products fetch failed:", res.status, res.statusText);
       }
+      // Non-critical: Products fetch failure - dropdown will be empty but page still works
     } catch (err) {
-      console.error("Products fetch error:", err);
+      // Non-critical: Products fetch failure - dropdown will be empty but page still works
     }
   };
 

@@ -46,7 +46,7 @@ export default function VendorDetailPanel({
         setMetrics(data);
       }
     } catch (err) {
-      console.error("Failed to fetch vendor metrics:", err);
+      // Non-critical: Metrics fetch failure - panel still displays vendor info
     } finally {
       setLoading(false);
     }

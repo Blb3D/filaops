@@ -74,7 +74,7 @@ export default function AdminPayments() {
         setDashboard(await res.json());
       }
     } catch (err) {
-      console.error("Failed to fetch dashboard:", err);
+      // Non-critical: Dashboard stats fetch failure - payment list still works
     }
   };
 

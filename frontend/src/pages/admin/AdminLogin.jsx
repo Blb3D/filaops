@@ -33,7 +33,6 @@ export default function AdminLogin() {
       }
     } catch (err) {
       // Show connection error - this helps users diagnose VITE_API_URL issues
-      console.error("Setup check failed:", err);
       setApiError(
         `Cannot connect to API at ${API_URL}. ` +
         (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
