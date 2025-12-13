@@ -4,7 +4,6 @@ Unit of Measure (UOM) Management Endpoints
 Provides CRUD operations for units of measure and conversion utilities.
 """
 from typing import List
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -25,9 +24,7 @@ from app.schemas.uom import (
 )
 from app.services.uom_service import (
     get_uom_by_code,
-    convert_quantity,
     convert_quantity_with_factor,
-    get_conversion_factor,
     get_all_uom_classes,
     get_units_by_class,
     UOMConversionError,
