@@ -555,6 +555,20 @@ async def complete_production_order(
         created_by=current_user.email if current_user else None,
     )
 
+    # Update linked sales order status to ready_to_ship if all production is complete
+    if order.sales_order_id:
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
+        if sales_order and sales_order.status == "in_production":
+            # Check if ALL production orders for this sales order are complete
+            incomplete_production = db.query(ProductionOrder).filter(
+                ProductionOrder.sales_order_id == order.sales_order_id,
+                ProductionOrder.status.notin_(["complete", "cancelled"]),
+            ).count()
+
+            if incomplete_production == 0:
+                sales_order.status = "ready_to_ship"
+                sales_order.updated_at = datetime.utcnow()
+
     db.commit()
     db.refresh(order)
 
