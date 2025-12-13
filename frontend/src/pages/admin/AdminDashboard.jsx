@@ -203,7 +203,7 @@ export default function AdminDashboard() {
             to="/admin/quotes"
           />
           <StatCard
-            title="Active Orders"
+            title="Orders in Progress"
             value={(stats?.orders?.confirmed || 0) + (stats?.orders?.in_production || 0)}
             subtitle={`${stats?.orders?.confirmed || 0} confirmed, ${stats?.orders?.in_production || 0} in production`}
             color="primary"
@@ -251,11 +251,11 @@ export default function AdminDashboard() {
             to="/admin/bom"
           />
           <StatCard
-            title="Active Orders"
+            title="Orders Needing Materials"
             value={stats?.inventory?.active_orders || 0}
-            subtitle="Requiring materials"
+            subtitle="For MRP planning"
             color="neutral"
-            to="/admin/orders"
+            to="/admin/purchasing"
           />
         </div>
       </div>
