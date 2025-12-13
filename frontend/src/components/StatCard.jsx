@@ -1,5 +1,12 @@
 import { Link } from "react-router-dom";
 
+// Shared chevron icon for clickable cards
+const ChevronIcon = () => (
+  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+
 /**
  * Reusable StatCard component for displaying metrics across admin pages.
  *
@@ -95,9 +102,7 @@ export default function StatCard({
             </div>
             {to && (
               <div className="text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronIcon />
               </div>
             )}
           </div>
@@ -123,9 +128,7 @@ export default function StatCard({
             {icon && <div className="text-gray-500">{icon}</div>}
             {to && (
               <div className="text-gray-600">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
+                <ChevronIcon />
               </div>
             )}
           </div>

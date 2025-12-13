@@ -48,9 +48,21 @@ export default function AdminDashboard() {
     fetchDashboardData();
   }, []);
 
+  // Format revenue with smart display (show actual $ under 1k, otherwise Xk)
+  const formatRevenue = (amount) => {
+    if (amount < 1000) {
+      return `$${amount.toFixed(0)}`;
+    }
+    return `$${(amount / 1000).toFixed(1)}k`;
+  };
+
   const fetchDashboardData = async () => {
     const token = localStorage.getItem("adminToken");
-    if (!token) return;
+    if (!token) {
+      setError("Authentication required");
+      setLoading(false);
+      return;
+    }
 
     try {
       setLoading(true);
@@ -206,7 +218,7 @@ export default function AdminDashboard() {
           />
           <StatCard
             title="Revenue (30 Days)"
-            value={`$${((stats?.revenue?.last_30_days || 0) / 1000).toFixed(1)}k`}
+            value={formatRevenue(stats?.revenue?.last_30_days || 0)}
             subtitle={`${stats?.revenue?.orders_last_30_days || 0} orders`}
             color="success"
             to="/admin/payments"
