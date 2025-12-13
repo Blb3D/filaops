@@ -256,7 +256,7 @@ def format_quantity_with_unit(quantity: Decimal, unit: str) -> str:
     """
     # Convert to string with fixed-point notation (avoids scientific notation)
     # Limit precision to prevent excessively long strings
-    qty_str = format(quantity, f':.{MAX_DECIMAL_PLACES}f')
+    qty_str = format(quantity, f'.{MAX_DECIMAL_PLACES}f')
     
     # Strip trailing zeros after decimal point
     if '.' in qty_str:
