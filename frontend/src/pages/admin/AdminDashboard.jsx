@@ -3,53 +3,6 @@ import { Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import StatCard from "../../components/StatCard";
 
-// Module Card Component
-function ModuleCard({ title, description, to, icon, stats }) {
-  return (
-    <Link
-      to={to}
-      className="block bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-700 hover:bg-gray-900/80 transition-all group"
-    >
-      <div className="flex items-start gap-4">
-        <div className="p-3 bg-gray-800 rounded-lg text-gray-400 group-hover:text-blue-400 transition-colors">
-          {icon}
-        </div>
-        <div className="flex-1">
-          <h3 className="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">
-            {title}
-          </h3>
-          <p className="text-gray-500 text-sm mt-1">{description}</p>
-          {stats && (
-            <div className="flex gap-4 mt-3">
-              {stats.map((stat, i) => (
-                <div key={i} className="text-xs">
-                  <span className="text-gray-400">{stat.label}: </span>
-                  <span className="text-white font-medium">{stat.value}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="text-gray-600 group-hover:text-gray-400 transition-colors">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 // Recent Order Row
 function RecentOrderRow({ order }) {
   const statusColors = {
@@ -220,273 +173,111 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="Pending Quotes"
-          value={stats?.quotes?.pending || 0}
-          subtitle="Awaiting review"
-          color="orange"
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              />
-            </svg>
-          }
-        />
-        <StatCard
-          title="Active Orders"
-          value={stats?.orders?.in_production || 0}
-          subtitle={`${stats?.orders?.confirmed || 0} confirmed, ${
-            stats?.orders?.ready_to_ship || 0
-          } ready`}
-          color="blue"
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-              />
-            </svg>
-          }
-        />
-        <StatCard
-          title="In Production"
-          value={stats?.production?.in_progress || 0}
-          subtitle={`${stats?.production?.scheduled || 0} scheduled`}
-          color="purple"
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-              />
-            </svg>
-          }
-        />
-        <StatCard
-          title="BOMs Needing Review"
-          value={stats?.boms?.needs_review || 0}
-          subtitle={`${stats?.boms?.active || 0} active total`}
-          color="cyan"
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-              />
-            </svg>
-          }
-        />
-      </div>
-
-      {/* Additional Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard
-          title="Low Stock Items"
-          value={stats?.inventory?.low_stock_count || 0}
-          subtitle="Below reorder point"
-          color={stats?.inventory?.low_stock_count > 0 ? "red" : "green"}
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-              />
-            </svg>
-          }
-        />
-        <StatCard
-          title="Revenue (30 Days)"
-          value={`$${((stats?.revenue?.last_30_days || 0) / 1000).toFixed(1)}k`}
-          subtitle={`${stats?.revenue?.orders_last_30_days || 0} orders`}
-          color="green"
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          }
-        />
-        <StatCard
-          title="Overdue Orders"
-          value={stats?.orders?.overdue || 0}
-          subtitle="Past ship date"
-          color={stats?.orders?.overdue > 0 ? "red" : "green"}
-          icon={
-            <svg
-              className="w-8 h-8"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          }
-        />
-      </div>
-
-      {/* Quick Access Modules */}
+      {/* SALES Section */}
       <div>
-        <h2 className="text-lg font-semibold text-white mb-4">Quick Access</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ModuleCard
-            title="Quote Management"
-            description="Review and approve customer quotes"
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sales</h2>
+          <div className="flex-1 h-px bg-gray-800"></div>
+          <Link to="/admin/orders" className="text-xs text-blue-400 hover:text-blue-300">
+            View all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            title="Pending Quotes"
+            value={stats?.quotes?.pending || 0}
+            subtitle="Awaiting review"
+            color="warning"
             to="/admin/quotes"
-            stats={[
-              { label: "Pending", value: stats?.quotes?.pending || 0 },
-              { label: "This Week", value: stats?.quotes?.this_week || 0 },
-            ]}
-            icon={
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
-            }
           />
-          <ModuleCard
-            title="Order Management"
-            description="View and manage sales orders"
+          <StatCard
+            title="Active Orders"
+            value={(stats?.orders?.confirmed || 0) + (stats?.orders?.in_production || 0)}
+            subtitle={`${stats?.orders?.confirmed || 0} confirmed, ${stats?.orders?.in_production || 0} in production`}
+            color="primary"
             to="/admin/orders"
-            stats={[
-              {
-                label: "Active",
-                value:
-                  (stats?.orders?.confirmed || 0) +
-                  (stats?.orders?.in_production || 0),
-              },
-              {
-                label: "Ready to Ship",
-                value: stats?.orders?.ready_to_ship || 0,
-              },
-            ]}
-            icon={
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-                />
-              </svg>
-            }
           />
-          <ModuleCard
-            title="Bill of Materials"
-            description="Manage product BOMs and components"
+          <StatCard
+            title="Ready to Ship"
+            value={stats?.orders?.ready_to_ship || 0}
+            subtitle={`${stats?.orders?.overdue || 0} overdue`}
+            color={stats?.orders?.overdue > 0 ? "danger" : "success"}
+            to="/admin/shipping"
+          />
+          <StatCard
+            title="Revenue (30 Days)"
+            value={`$${((stats?.revenue?.last_30_days || 0) / 1000).toFixed(1)}k`}
+            subtitle={`${stats?.revenue?.orders_last_30_days || 0} orders`}
+            color="success"
+            to="/admin/payments"
+          />
+        </div>
+      </div>
+
+      {/* INVENTORY Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Inventory</h2>
+          <div className="flex-1 h-px bg-gray-800"></div>
+          <Link to="/admin/items" className="text-xs text-blue-400 hover:text-blue-300">
+            View all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            title="Low Stock Items"
+            value={stats?.inventory?.low_stock_count || 0}
+            subtitle="Below reorder point or MRP shortage"
+            color={stats?.inventory?.low_stock_count > 0 ? "danger" : "success"}
+            to="/admin/purchasing?tab=lowstock"
+          />
+          <StatCard
+            title="Active BOMs"
+            value={stats?.boms?.active || 0}
+            subtitle={`${stats?.boms?.needs_review || 0} need review`}
+            color="secondary"
             to="/admin/bom"
-            stats={[
-              { label: "Active", value: stats?.boms?.active || 0 },
-              { label: "Needs Review", value: stats?.boms?.needs_review || 0 },
-            ]}
-            icon={
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
-                />
-              </svg>
-            }
           />
-          <ModuleCard
-            title="Production"
-            description="Track print jobs and production orders"
+          <StatCard
+            title="Active Orders"
+            value={stats?.inventory?.active_orders || 0}
+            subtitle="Requiring materials"
+            color="neutral"
+            to="/admin/orders"
+          />
+        </div>
+      </div>
+
+      {/* OPERATIONS Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Operations</h2>
+          <div className="flex-1 h-px bg-gray-800"></div>
+          <Link to="/admin/production" className="text-xs text-blue-400 hover:text-blue-300">
+            View all →
+          </Link>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            title="In Production"
+            value={stats?.production?.in_progress || 0}
+            subtitle={`${stats?.production?.scheduled || 0} scheduled`}
+            color="primary"
             to="/admin/production"
-            stats={[
-              {
-                label: "In Progress",
-                value: stats?.production?.in_progress || 0,
-              },
-              { label: "Scheduled", value: stats?.production?.scheduled || 0 },
-            ]}
-            icon={
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
-                />
-              </svg>
-            }
+          />
+          <StatCard
+            title="Manufacturing"
+            value={(stats?.production?.in_progress || 0) + (stats?.production?.scheduled || 0)}
+            subtitle="Active work orders"
+            color="secondary"
+            to="/admin/manufacturing"
+          />
+          <StatCard
+            title="Ready to Ship"
+            value={stats?.orders?.ready_to_ship || 0}
+            subtitle="Awaiting shipment"
+            color="neutral"
+            to="/admin/shipping"
           />
         </div>
       </div>

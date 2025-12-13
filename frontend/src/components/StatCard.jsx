@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 /**
  * Reusable StatCard component for displaying metrics across admin pages.
  *
@@ -12,6 +14,8 @@
  * Supports two variants:
  * - "gradient" (default): Dashboard-style with gradient background and optional icon
  * - "simple": Flat card with colored value text
+ *
+ * Optional `to` prop makes the card a clickable link.
  */
 
 const colorClasses = {
@@ -66,32 +70,67 @@ export default function StatCard({
   color = "white",
   icon,
   variant = "gradient",
+  to,
 }) {
+  // Wrapper component - Link if `to` prop provided, div otherwise
+  const Wrapper = to ? Link : "div";
+  const wrapperProps = to
+    ? { to, className: "block" }
+    : {};
+
   if (variant === "simple") {
+    const baseClasses = "bg-gray-900 border border-gray-800 rounded-xl p-4";
+    const hoverClasses = to ? "hover:border-gray-700 hover:bg-gray-800/50 transition-all cursor-pointer" : "";
+
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-        <p className="text-gray-400 text-sm">{title}</p>
-        <p className={`text-2xl font-bold ${colorClasses.simple[color] || colorClasses.simple.white}`}>
-          {value}
-        </p>
-        {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
-      </div>
+      <Wrapper {...wrapperProps}>
+        <div className={`${baseClasses} ${hoverClasses}`}>
+          <div className="flex items-start justify-between">
+            <div>
+              <p className="text-gray-400 text-sm">{title}</p>
+              <p className={`text-2xl font-bold ${colorClasses.simple[color] || colorClasses.simple.white}`}>
+                {value}
+              </p>
+              {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
+            </div>
+            {to && (
+              <div className="text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            )}
+          </div>
+        </div>
+      </Wrapper>
     );
   }
 
   // Gradient variant (default)
+  const baseClasses = `bg-gradient-to-br ${colorClasses.gradient[color] || colorClasses.gradient.white} border rounded-xl p-6`;
+  const hoverClasses = to ? "hover:scale-[1.02] hover:shadow-lg transition-all cursor-pointer" : "";
+
   return (
-    <div
-      className={`bg-gradient-to-br ${colorClasses.gradient[color] || colorClasses.gradient.white} border rounded-xl p-6`}
-    >
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-gray-400 text-sm font-medium">{title}</p>
-          <p className="text-3xl font-bold text-white mt-1">{value}</p>
-          {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
+    <Wrapper {...wrapperProps}>
+      <div className={`${baseClasses} ${hoverClasses}`}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-gray-400 text-sm font-medium">{title}</p>
+            <p className="text-3xl font-bold text-white mt-1">{value}</p>
+            {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
+          </div>
+          <div className="flex items-center gap-2">
+            {icon && <div className="text-gray-500">{icon}</div>}
+            {to && (
+              <div className="text-gray-600">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            )}
+          </div>
         </div>
-        {icon && <div className="text-gray-500">{icon}</div>}
       </div>
-    </div>
+    </Wrapper>
   );
 }
