@@ -145,6 +145,22 @@ export default function Onboarding() {
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("adminToken", data.access_token); // Also store as adminToken for consistency
 
+      // Fetch and store user data so AdminLayout knows the user is an admin
+      try {
+        const meRes = await fetch(`${API_URL}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${data.access_token}`,
+          },
+        });
+        if (meRes.ok) {
+          const userData = await meRes.json();
+          localStorage.setItem("adminUser", JSON.stringify(userData));
+        }
+      } catch {
+        // If this fails, user will be treated as non-admin until re-login
+        // Not critical for onboarding flow to continue
+      }
+
       // Move to next step (example data)
       setCurrentStep(STEPS.EXAMPLE_DATA);
     } catch (err) {
