@@ -6,8 +6,8 @@ Write-Host "FilaOps Backend - Starting" -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 # Set database to FilaOps
-$env:DB_NAME = "FilaOps"
-Write-Host "[CONFIG] Database: FilaOps" -ForegroundColor Green
+# $env:DB_NAME = "FilaOps"  # Now read from .env
+Write-Host "[CONFIG] Database: Reading from .env" -ForegroundColor Green
 
 # Check if we're in the right directory
 if (-not (Test-Path "backend" -PathType Container)) {

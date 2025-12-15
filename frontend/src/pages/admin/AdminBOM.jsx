@@ -1,7 +1,130 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
+
+// Searchable Select Component
+function SearchableSelect({
+  options,
+  value,
+  onChange,
+  placeholder = "Search...",
+  displayKey = "name",
+  valueKey = "id",
+  formatOption = null,
+  className = "",
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Sort options alphabetically by display key
+  const sortedOptions = [...options].sort((a, b) =>
+    (a[displayKey] || "").localeCompare(b[displayKey] || "")
+  );
+
+  // Filter options based on search
+  const filteredOptions = sortedOptions.filter((opt) => {
+    const searchLower = search.toLowerCase();
+    const name = (opt[displayKey] || "").toLowerCase();
+    const sku = (opt.sku || "").toLowerCase();
+    return name.includes(searchLower) || sku.includes(searchLower);
+  });
+
+  // Get selected option display text
+  const selectedOption = options.find(
+    (opt) => String(opt[valueKey]) === String(value)
+  );
+  const displayText = selectedOption
+    ? formatOption
+      ? formatOption(selectedOption)
+      : `${selectedOption[displayKey]} (${selectedOption.sku})`
+    : "";
+
+  return (
+    <div ref={containerRef} className={`relative ${className}`}>
+      <div
+        onClick={() => {
+          setIsOpen(true);
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }}
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white cursor-pointer flex items-center justify-between"
+      >
+        <span className={selectedOption ? "text-white" : "text-gray-500"}>
+          {displayText || placeholder}
+        </span>
+        <svg
+          className="w-4 h-4 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 9l-7 7-7-7"
+          />
+        </svg>
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-xl max-h-64 overflow-hidden">
+          <div className="p-2 border-b border-gray-700">
+            <input
+              ref={inputRef}
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Type to search..."
+              className="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {filteredOptions.length === 0 ? (
+              <div className="px-3 py-2 text-gray-500 text-sm">
+                No results found
+              </div>
+            ) : (
+              filteredOptions.map((opt) => (
+                <div
+                  key={opt[valueKey]}
+                  onClick={() => {
+                    onChange(String(opt[valueKey]));
+                    setIsOpen(false);
+                    setSearch("");
+                  }}
+                  className={`px-3 py-2 cursor-pointer hover:bg-gray-700 text-sm ${
+                    String(opt[valueKey]) === String(value)
+                      ? "bg-blue-600/30 text-blue-300"
+                      : "text-white"
+                  }`}
+                >
+                  {formatOption
+                    ? formatOption(opt)
+                    : `${opt[displayKey]} (${opt.sku})`}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Modal Component
 function Modal({ isOpen, onClose, title, children }) {
@@ -284,6 +407,249 @@ function PurchaseRequestModal({ line, onClose, token, onSuccess }) {
   );
 }
 
+/**
+ * Work Order Request Modal - Creates a production/work order for make items
+ * Used when a component has its own BOM (sub-assembly)
+ */
+function WorkOrderRequestModal({ line, onClose, token, onSuccess }) {
+  const [quantity, setQuantity] = useState(line?.shortage || 1);
+  const [priority, setPriority] = useState(3);
+  const [dueDate, setDueDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [createdWO, setCreatedWO] = useState(null);
+
+  const handleSubmit = async () => {
+    if (quantity <= 0) {
+      setError("Quantity must be greater than 0");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`${API_URL}/api/v1/production-orders/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          product_id: line.component_id,
+          quantity_ordered: quantity,
+          priority: priority,
+          due_date: dueDate || null,
+          notes: notes || `WO for ${line.component_name} - from BOM shortage`,
+          source: "mrp_planned",
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || "Failed to create Work Order");
+      }
+
+      const wo = await res.json();
+      setCreatedWO(wo);
+      if (onSuccess) onSuccess(wo);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Success state - show created WO
+  if (createdWO) {
+    return (
+      <div className="text-center py-4">
+        <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+          <svg
+            className="w-6 h-6 text-green-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <h4 className="text-white font-medium mb-2">Work Order Created</h4>
+        <p className="text-gray-400 text-sm mb-2">
+          {createdWO.code} for {quantity} {line.component_unit || "EA"} of{" "}
+          {line.component_name}
+        </p>
+        <p className="text-gray-500 text-xs mb-4">
+          Status: {createdWO.status} • Priority: {priority}
+        </p>
+        <div className="flex gap-2 justify-center">
+          <button
+            onClick={() => (window.location.href = "/admin/manufacturing")}
+            className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            View in Manufacturing
+          </button>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {error && (
+        <div className="bg-red-500/20 border border-red-500 text-red-400 px-4 py-2 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="bg-purple-900/30 border border-purple-500/30 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <svg
+            className="w-5 h-5 text-purple-400"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+            />
+          </svg>
+          <span className="text-purple-300 font-medium">
+            Make Item (Has BOM)
+          </span>
+        </div>
+        <div className="text-sm text-gray-400 mb-1">Component</div>
+        <div className="text-white font-medium">{line.component_name}</div>
+        <div className="text-gray-500 text-xs">{line.component_sku}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div>
+          <span className="text-gray-400">Current Stock:</span>
+          <span className="text-white ml-2">
+            {(line.inventory_available || 0).toFixed(2)}{" "}
+            {line.component_unit || "EA"}
+          </span>
+        </div>
+        <div>
+          <span className="text-gray-400">Shortage:</span>
+          <span className="text-red-400 ml-2">
+            {(line.shortage || 0).toFixed(2)} {line.component_unit || "EA"}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">
+            Quantity to Make *
+          </label>
+          <input
+            type="number"
+            step="1"
+            min="1"
+            value={quantity}
+            onChange={(e) => setQuantity(parseFloat(e.target.value) || 0)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+          />
+        </div>
+        <div>
+          <label className="block text-sm text-gray-400 mb-1">Priority</label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(parseInt(e.target.value))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+          >
+            <option value={1}>1 - Urgent</option>
+            <option value={2}>2 - High</option>
+            <option value={3}>3 - Normal</option>
+            <option value={4}>4 - Low</option>
+            <option value={5}>5 - Lowest</option>
+          </select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">
+          Due Date (optional)
+        </label>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm text-gray-400 mb-1">
+          Notes (optional)
+        </label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={2}
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
+          placeholder="Additional notes for the work order..."
+        />
+      </div>
+
+      <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-3 text-sm">
+        <div className="flex items-center gap-2 text-amber-400">
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            />
+          </svg>
+          <span>
+            This will create a Work Order. Check the WO's BOM for material
+            requirements.
+          </span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <button
+          onClick={handleSubmit}
+          disabled={loading || quantity <= 0}
+          className="flex-1 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+        >
+          {loading ? "Creating..." : "Create Work Order"}
+        </button>
+        <button
+          onClick={onClose}
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // BOM Detail View
 function BOMDetailView({
   bom,
@@ -297,15 +663,18 @@ function BOMDetailView({
   const [loading, setLoading] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
   const [purchaseLine, setPurchaseLine] = useState(null);
+  const [workOrderLine, setWorkOrderLine] = useState(null);
   const [newLine, setNewLine] = useState({
     component_id: "",
     quantity: "1",
+    unit: "",
     sequence: lines.length + 1,
     scrap_factor: "0",
     notes: "",
   });
   const [showAddLine, setShowAddLine] = useState(false);
   const [products, setProducts] = useState([]);
+  const [uoms, setUoms] = useState([]);
 
   // Sub-assembly state
   const [showExploded, setShowExploded] = useState(false);
@@ -320,50 +689,20 @@ function BOMDetailView({
   const [timeOverrides, setTimeOverrides] = useState({});
   const [applyingTemplate, setApplyingTemplate] = useState(false);
   const [showProcessPath, setShowProcessPath] = useState(true);
+  const [workCenters, setWorkCenters] = useState([]);
+  const [showAddOperation, setShowAddOperation] = useState(false);
+  const [pendingOperations, setPendingOperations] = useState([]);
+  const [newOperation, setNewOperation] = useState({
+    work_center_id: "",
+    operation_name: "",
+    run_time_minutes: "0",
+    setup_time_minutes: "0",
+  });
+  const [savingRouting, setSavingRouting] = useState(false);
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCostRollup();
-    fetchRoutingTemplates();
-    fetchProductRouting();
-  }, []);
-
-  const fetchCostRollup = async () => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/v1/admin/bom/${bom.id}/cost-rollup`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setCostRollup(data);
-      }
-    } catch (err) {
-      // Cost rollup fetch failure is non-critical - cost display will just be empty
-    }
-  };
-
-  const fetchRoutingTemplates = async () => {
-    try {
-      const res = await fetch(
-        `${API_URL}/api/v1/routings?templates_only=true`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        setRoutingTemplates(data.items || data);
-      }
-    } catch (err) {
-      // Routing templates fetch failure is non-critical - templates list will just be empty
-    }
-  };
-
-  const fetchProductRouting = async () => {
-    if (!bom.product_id) return;
+  // Memoized fetchProductRouting for use in useEffect and other handlers
+  const fetchProductRouting = useCallback(async () => {
+    if (!bom.product_id || !token) return;
     try {
       const res = await fetch(
         `${API_URL}/api/v1/routings?product_id=${bom.product_id}`,
@@ -404,7 +743,101 @@ function BOMDetailView({
     } catch (err) {
       // Product routing fetch failure is non-critical - routing section will just be empty
     }
-  };
+  }, [token, bom.product_id]);
+
+  useEffect(() => {
+    // Guard against running without token
+    if (!token) return;
+
+    const fetchCostRollup = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/v1/admin/bom/${bom.id}/cost-rollup`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setCostRollup(data);
+        }
+      } catch (err) {
+        // Cost rollup fetch failure is non-critical - cost display will just be empty
+      }
+    };
+
+    const fetchRoutingTemplates = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/v1/routings?templates_only=true`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setRoutingTemplates(data.items || data);
+        }
+      } catch (err) {
+        // Routing templates fetch failure is non-critical - templates list will just be empty
+      }
+    };
+
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/v1/products?limit=500&is_raw_material=true`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setProducts(data.items || data);
+        }
+      } catch (err) {
+        toast.error("Failed to load products. Please refresh the page.");
+      }
+    };
+
+    const fetchUOMs = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/admin/uom`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUoms(data);
+        }
+      } catch (err) {
+        // UOM fetch failure is non-critical
+      }
+    };
+
+    const fetchWorkCenters = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}/api/v1/work-centers/?active_only=true`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setWorkCenters(data);
+        }
+      } catch (err) {
+        // Work centers fetch failure is non-critical
+      }
+    };
+
+    fetchProducts();
+    fetchUOMs();
+    fetchCostRollup();
+    fetchRoutingTemplates();
+    fetchProductRouting();
+    fetchWorkCenters();
+  }, [token, bom.id, bom.product_id, fetchProductRouting, toast]);
 
   const handleApplyTemplate = async () => {
     if (!selectedTemplateId || !bom.product_id) return;
@@ -559,20 +992,74 @@ function BOMDetailView({
     setExpandedSubs(newExpanded);
   };
 
-  const fetchProducts = async () => {
+  const handleAddPendingOperation = () => {
+    if (!newOperation.work_center_id) return;
+    const wc = workCenters.find(
+      (w) => String(w.id) === String(newOperation.work_center_id)
+    );
+    setPendingOperations([
+      ...pendingOperations,
+      {
+        ...newOperation,
+        sequence: pendingOperations.length + 1,
+        work_center_name: wc?.name || "",
+        work_center_code: wc?.code || "",
+      },
+    ]);
+    setNewOperation({
+      work_center_id: "",
+      operation_name: "",
+      run_time_minutes: "0",
+      setup_time_minutes: "0",
+    });
+    setShowAddOperation(false);
+  };
+
+  const handleRemovePendingOperation = (index) => {
+    const updated = pendingOperations.filter((_, i) => i !== index);
+    // Resequence
+    updated.forEach((op, i) => (op.sequence = i + 1));
+    setPendingOperations(updated);
+  };
+
+  const handleSaveRouting = async () => {
+    if (pendingOperations.length === 0) return;
+
+    setSavingRouting(true);
     try {
-      const res = await fetch(
-        `${API_URL}/api/v1/products?limit=500&is_raw_material=true`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const res = await fetch(`${API_URL}/api/v1/routings/`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          product_id: bom.product_id,
+          operations: pendingOperations.map((op) => ({
+            work_center_id: parseInt(op.work_center_id),
+            sequence: op.sequence,
+            operation_name: op.operation_name || `Step ${op.sequence}`,
+            run_time_minutes: parseFloat(op.run_time_minutes) || 0,
+            setup_time_minutes: parseFloat(op.setup_time_minutes) || 0,
+          })),
+        }),
+      });
+
       if (res.ok) {
-        const data = await res.json();
-        setProducts(data.items || data);
+        const routing = await res.json();
+        setProductRouting(routing);
+        setPendingOperations([]);
+        toast.success("Routing created successfully");
+        // Refresh to get full routing details
+        await fetchProductRouting();
+      } else {
+        const errData = await res.json();
+        toast.error(errData.detail || "Failed to create routing");
       }
     } catch (err) {
-      setError("Failed to load products. Please refresh the page.");
+      toast.error(err.message || "Failed to create routing");
+    } finally {
+      setSavingRouting(false);
     }
   };
 
@@ -590,6 +1077,7 @@ function BOMDetailView({
         body: JSON.stringify({
           component_id: parseInt(newLine.component_id),
           quantity: parseFloat(newLine.quantity),
+          unit: newLine.unit || null,
           sequence: parseInt(newLine.sequence),
           scrap_factor: parseFloat(newLine.scrap_factor),
           notes: newLine.notes || null,
@@ -602,6 +1090,7 @@ function BOMDetailView({
         setNewLine({
           component_id: "",
           quantity: "1",
+          unit: "",
           sequence: lines.length + 2,
           scrap_factor: "0",
           notes: "",
@@ -814,13 +1303,6 @@ function BOMDetailView({
       {/* Actions */}
       <div className="flex gap-2 flex-wrap">
         <button
-          onClick={handleRecalculate}
-          disabled={loading}
-          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-        >
-          Recalculate Cost
-        </button>
-        <button
           onClick={() => setShowAddLine(true)}
           disabled={loading}
           className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
@@ -926,17 +1408,35 @@ function BOMDetailView({
                 </td>
                 <td className="py-2 px-3 text-gray-300">
                   {editingLine === line.id ? (
-                    <input
-                      type="number"
-                      defaultValue={line.quantity}
-                      step="0.01"
-                      className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                      onBlur={(e) =>
-                        handleUpdateLine(line.id, {
-                          quantity: parseFloat(e.target.value),
-                        })
-                      }
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        defaultValue={line.quantity}
+                        step="0.01"
+                        className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                        onBlur={(e) =>
+                          handleUpdateLine(line.id, {
+                            quantity: parseFloat(e.target.value),
+                          })
+                        }
+                      />
+                      <select
+                        defaultValue={line.unit || ""}
+                        className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                        onChange={(e) =>
+                          handleUpdateLine(line.id, {
+                            unit: e.target.value || null,
+                          })
+                        }
+                      >
+                        <option value="">Default</option>
+                        {uoms.map((u) => (
+                          <option key={u.code} value={u.code}>
+                            {u.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   ) : (
                     <span>
                       {parseFloat(line.quantity).toFixed(2)}{" "}
@@ -987,12 +1487,22 @@ function BOMDetailView({
                           Need {line.shortage?.toFixed(2)}
                         </span>
                       </span>
-                      <button
-                        onClick={() => setPurchaseLine(line)}
-                        className="block text-xs text-blue-400 hover:text-blue-300 underline"
-                      >
-                        Create PO
-                      </button>
+                      {/* Debug: {JSON.stringify({sku: line.component_sku, has_bom: line.has_bom})} */}
+                      {line.has_bom === true ? (
+                        <button
+                          onClick={() => setWorkOrderLine(line)}
+                          className="block text-xs text-purple-400 hover:text-purple-300 underline"
+                        >
+                          Create WO
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setPurchaseLine(line)}
+                          className="block text-xs text-blue-400 hover:text-blue-300 underline"
+                        >
+                          Create PO
+                        </button>
+                      )}
                     </div>
                   )}
                 </td>
@@ -1052,34 +1562,192 @@ function BOMDetailView({
             )}
           </div>
 
-          {/* No routing yet - show template selector */}
+          {/* No routing yet - allow creating operations */}
           {!productRouting && (
             <div className="space-y-3">
-              <p className="text-sm text-gray-400">
-                No routing defined. Select a template to create one:
-              </p>
-              <div className="flex gap-2">
-                <select
-                  value={selectedTemplateId}
-                  onChange={(e) => setSelectedTemplateId(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
-                >
-                  <option value="">Select a routing template...</option>
-                  {routingTemplates.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.code} - {t.name || "Unnamed"} ({t.operation_count || 0}{" "}
-                      ops, {formatTime(t.total_run_time_minutes)})
-                    </option>
+              {/* Pending operations list */}
+              {pendingOperations.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm text-gray-400">
+                    Operations to create:
+                  </div>
+                  {pendingOperations.map((op, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-gray-800 rounded-lg px-3 py-2"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-500 font-mono text-sm w-6">
+                          {op.sequence}
+                        </span>
+                        <span className="text-white">
+                          {op.operation_name || op.work_center_name}
+                        </span>
+                        <span className="text-gray-500 text-sm">
+                          @ {op.work_center_code}
+                        </span>
+                        <span className="text-amber-400 text-sm">
+                          {op.run_time_minutes}m
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleRemovePendingOperation(idx)}
+                        className="text-red-400 hover:text-red-300 text-sm px-2"
+                      >
+                        ×
+                      </button>
+                    </div>
                   ))}
-                </select>
-                <button
-                  onClick={handleApplyTemplate}
-                  disabled={!selectedTemplateId || applyingTemplate}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 disabled:opacity-50"
-                >
-                  {applyingTemplate ? "Applying..." : "Apply Template"}
-                </button>
-              </div>
+                </div>
+              )}
+
+              {/* Add operation form */}
+              {showAddOperation ? (
+                <div className="bg-gray-800 rounded-lg p-3 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Work Center *
+                      </label>
+                      <select
+                        value={newOperation.work_center_id}
+                        onChange={(e) =>
+                          setNewOperation({
+                            ...newOperation,
+                            work_center_id: e.target.value,
+                          })
+                        }
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white text-sm"
+                      >
+                        <option value="">Select work center...</option>
+                        {workCenters.map((wc) => (
+                          <option key={wc.id} value={wc.id}>
+                            {wc.code} - {wc.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Operation Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newOperation.operation_name}
+                        onChange={(e) =>
+                          setNewOperation({
+                            ...newOperation,
+                            operation_name: e.target.value,
+                          })
+                        }
+                        placeholder="e.g., Print Part"
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Run Time (min)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newOperation.run_time_minutes}
+                        onChange={(e) =>
+                          setNewOperation({
+                            ...newOperation,
+                            run_time_minutes: e.target.value,
+                          })
+                        }
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-400 mb-1">
+                        Setup Time (min)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={newOperation.setup_time_minutes}
+                        onChange={(e) =>
+                          setNewOperation({
+                            ...newOperation,
+                            setup_time_minutes: e.target.value,
+                          })
+                        }
+                        className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleAddPendingOperation}
+                      disabled={!newOperation.work_center_id}
+                      className="px-3 py-1.5 bg-amber-600 text-white rounded text-sm hover:bg-amber-700 disabled:opacity-50"
+                    >
+                      Add Operation
+                    </button>
+                    <button
+                      onClick={() => setShowAddOperation(false)}
+                      className="px-3 py-1.5 bg-gray-700 text-white rounded text-sm hover:bg-gray-600"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowAddOperation(true)}
+                    className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-sm hover:bg-amber-700 flex items-center gap-1"
+                  >
+                    <span>+</span> Add Operation
+                  </button>
+                  {pendingOperations.length > 0 && (
+                    <button
+                      onClick={handleSaveRouting}
+                      disabled={savingRouting}
+                      className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {savingRouting ? "Saving..." : "Save Routing"}
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Template option - show only if templates exist and no pending ops */}
+              {routingTemplates.length > 0 &&
+                pendingOperations.length === 0 &&
+                !showAddOperation && (
+                  <div className="pt-2 border-t border-gray-700">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Or apply a template:
+                    </p>
+                    <div className="flex gap-2">
+                      <select
+                        value={selectedTemplateId}
+                        onChange={(e) => setSelectedTemplateId(e.target.value)}
+                        className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-white text-sm"
+                      >
+                        <option value="">Select template...</option>
+                        {routingTemplates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.code} - {t.name || "Unnamed"}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={handleApplyTemplate}
+                        disabled={!selectedTemplateId || applyingTemplate}
+                        className="px-3 py-1.5 bg-gray-700 text-white rounded-lg text-sm hover:bg-gray-600 disabled:opacity-50"
+                      >
+                        {applyingTemplate ? "..." : "Apply"}
+                      </button>
+                    </div>
+                  </div>
+                )}
             </div>
           )}
 
@@ -1244,39 +1912,110 @@ function BOMDetailView({
       {showAddLine && (
         <div className="bg-gray-800 rounded-lg p-4 space-y-4">
           <h4 className="font-medium text-white">Add Component</h4>
+          {/* Selected component info */}
+          {newLine.component_id &&
+            (() => {
+              const selected = products.find(
+                (p) => String(p.id) === String(newLine.component_id)
+              );
+              if (!selected) return null;
+              const cost =
+                selected.standard_cost ||
+                selected.average_cost ||
+                selected.selling_price ||
+                0;
+              return (
+                <div className="bg-gray-900 rounded-lg p-3 flex items-center justify-between">
+                  <div>
+                    <span className="text-white font-medium">
+                      {selected.name}
+                    </span>
+                    <span className="text-gray-500 ml-2">({selected.sku})</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-green-400 font-mono">
+                      ${parseFloat(cost).toFixed(2)}
+                    </span>
+                    <span className="text-gray-500 ml-1">
+                      / {selected.unit || "EA"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })()}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Component
               </label>
-              <select
+              <SearchableSelect
+                options={products}
                 value={newLine.component_id}
-                onChange={(e) =>
-                  setNewLine({ ...newLine, component_id: e.target.value })
-                }
-                className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white"
-              >
-                <option value="">Select component...</option>
-                {products.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} ({p.sku}) - ${parseFloat(p.cost || 0).toFixed(2)}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => {
+                  const selected = products.find(
+                    (p) => String(p.id) === String(val)
+                  );
+                  setNewLine({
+                    ...newLine,
+                    component_id: val,
+                    unit: selected?.unit || newLine.unit,
+                  });
+                }}
+                placeholder="Select component..."
+                displayKey="name"
+                valueKey="id"
+                formatOption={(p) => {
+                  const cost =
+                    p.standard_cost || p.average_cost || p.selling_price || 0;
+                  return `${p.name} (${p.sku}) - $${parseFloat(cost).toFixed(
+                    2
+                  )}/${p.unit || "EA"}`;
+                }}
+              />
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
                 Quantity
               </label>
-              <input
-                type="number"
-                step="0.01"
-                value={newLine.quantity}
+              <div className="flex">
+                <input
+                  type="number"
+                  step="0.001"
+                  value={newLine.quantity}
+                  onChange={(e) =>
+                    setNewLine({ ...newLine, quantity: e.target.value })
+                  }
+                  className="flex-1 bg-gray-900 border border-gray-700 rounded-l-lg px-3 py-2 text-white"
+                />
+                <span className="bg-gray-700 border border-l-0 border-gray-700 rounded-r-lg px-3 py-2 text-gray-300 font-mono text-sm">
+                  {newLine.unit ||
+                    (() => {
+                      const selected = products.find(
+                        (p) => String(p.id) === String(newLine.component_id)
+                      );
+                      return selected?.unit || "EA";
+                    })()}
+                </span>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-1">
+                Unit Override
+              </label>
+              <select
+                value={newLine.unit}
                 onChange={(e) =>
-                  setNewLine({ ...newLine, quantity: e.target.value })
+                  setNewLine({ ...newLine, unit: e.target.value })
                 }
                 className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white"
-              />
+              >
+                <option value="">Use component default</option>
+                {uoms.map((u) => (
+                  <option key={u.code} value={u.code}>
+                    {u.code} - {u.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm text-gray-400 mb-1">
@@ -1342,6 +2081,29 @@ function BOMDetailView({
             line={purchaseLine}
             onClose={() => setPurchaseLine(null)}
             token={token}
+            onSuccess={() => {
+              setPurchaseLine(null);
+              onUpdate && onUpdate();
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Work Order Request Modal */}
+      <Modal
+        isOpen={!!workOrderLine}
+        onClose={() => setWorkOrderLine(null)}
+        title="Create Work Order"
+      >
+        {workOrderLine && (
+          <WorkOrderRequestModal
+            line={workOrderLine}
+            onClose={() => setWorkOrderLine(null)}
+            token={token}
+            onSuccess={() => {
+              setWorkOrderLine(null);
+              onUpdate();
+            }}
           />
         )}
       </Modal>
@@ -1565,15 +2327,44 @@ function CreateBOMForm({ onClose, onCreate, token }) {
 
   useEffect(() => {
     fetchProducts();
-    // Check if user just created an item and came back
-    const bomPending = sessionStorage.getItem("bom_creation_pending");
-    if (bomPending) {
+  }, [fetchProducts]);
+
+  // Handle returning from product creation with polling retry logic
+  useEffect(() => {
+    const checkPendingCreation = async () => {
+      const bomPending = sessionStorage.getItem("bom_creation_pending");
+      if (!bomPending) return;
+
       sessionStorage.removeItem("bom_creation_pending");
-      // Refresh products list after a short delay to allow item creation to complete
-      setTimeout(() => {
-        fetchProducts();
-      }, 500);
-    }
+
+      // Implement polling with retries to handle slow networks
+      const maxRetries = 3;
+      const retryDelays = [0, 1000, 2000]; // 0ms, 1s, 2s
+
+      for (let i = 0; i < maxRetries; i++) {
+        if (i > 0) {
+          await new Promise((resolve) => setTimeout(resolve, retryDelays[i]));
+        }
+        await fetchProducts();
+        // After final retry, stop regardless of result
+        if (i === maxRetries - 1) break;
+      }
+    };
+
+    // Check on mount
+    checkPendingCreation();
+
+    // Also check when window regains focus (user returns from another tab/window)
+    const handleFocus = async () => {
+      const bomPending = sessionStorage.getItem("bom_creation_pending");
+      if (bomPending) {
+        sessionStorage.removeItem("bom_creation_pending");
+        await fetchProducts();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
   }, [fetchProducts]);
 
   const handleSubmit = async (e) => {
@@ -1636,21 +2427,14 @@ function CreateBOMForm({ onClose, onCreate, token }) {
             + Create New Item
           </Link>
         </div>
-        <select
+        <SearchableSelect
+          options={products}
           value={formData.product_id}
-          onChange={(e) =>
-            setFormData({ ...formData, product_id: e.target.value })
-          }
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-          required
-        >
-          <option value="">Select a product...</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name} ({p.sku})
-            </option>
-          ))}
-        </select>
+          onChange={(val) => setFormData({ ...formData, product_id: val })}
+          placeholder="Select a product..."
+          displayKey="name"
+          valueKey="id"
+        />
         <p className="text-xs text-gray-500 mt-1">
           Don't see the product?{" "}
           <Link

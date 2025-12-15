@@ -13,8 +13,6 @@ Future migrations will track changes from this point forward.
 """
 from typing import Sequence, Union
 
-from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'baseline_001'

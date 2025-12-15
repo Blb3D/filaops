@@ -52,7 +52,6 @@ def init_db():
     Initialize database - create all tables.
     Should be called on application startup.
     """
-    from backend.models import product, inventory, sales, purchasing, manufacturing, financial
 
     Base.metadata.create_all(bind=engine)
     print("Database initialized successfully!")
@@ -64,7 +63,7 @@ def check_connection():
     """
     try:
         with engine.connect() as connection:
-            result = connection.execute("SELECT 1")
+            connection.execute("SELECT 1")
             return True
     except Exception as e:
         print(f"Database connection failed: {e}")

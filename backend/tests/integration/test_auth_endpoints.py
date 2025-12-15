@@ -11,7 +11,6 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
-from app.db.base import Base
 from app.db.session import get_db
 
 

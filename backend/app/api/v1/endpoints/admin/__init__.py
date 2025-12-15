@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from . import (
     bom, dashboard, fulfillment, audit, accounting, traceability,
     customers, inventory_transactions, analytics, export, data_import, orders,
-    users, uom
+    users, uom, locations
 )
 
 router = APIRouter()
@@ -49,3 +49,6 @@ router.include_router(orders.router)
 
 # Units of Measure
 router.include_router(uom.router)
+
+# Inventory Locations
+router.include_router(locations.router)

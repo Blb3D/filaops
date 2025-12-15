@@ -96,12 +96,19 @@ class SalesOrder(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     confirmed_at = Column(DateTime, nullable=True)
 
+    # MRP Tracking (for Material Requirements Planning)
+    mrp_status = Column(String(50), nullable=True, index=True)
+    # Values: null (not processed), "pending", "processed", "error"
+    mrp_run_id = Column(Integer, ForeignKey("mrp_runs.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Links to the MRP run that processed this order
+
     # Relationships
     user = relationship("User", back_populates="sales_orders")
     quote = relationship("Quote", back_populates="sales_order", uselist=False)
     product = relationship("Product", foreign_keys=[product_id])
     lines = relationship("SalesOrderLine", back_populates="sales_order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="sales_order", cascade="all, delete-orphan", order_by="Payment.payment_date.desc()")
+    mrp_run = relationship("MRPRun", foreign_keys=[mrp_run_id])
 
     def __repr__(self):
         return f"<SalesOrder {self.order_number} - {self.status}>"

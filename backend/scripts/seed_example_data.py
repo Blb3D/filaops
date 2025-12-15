@@ -22,8 +22,6 @@ from app.db.session import SessionLocal
 from app.models.item_category import ItemCategory
 from app.models.product import Product
 from app.models.material import MaterialType, Color, MaterialColor
-from app.models.inventory import Inventory, InventoryLocation
-from app.services.material_service import create_material_product
 
 
 def get_or_create_category(db: Session, code: str, name: str, parent_code: Optional[str] = None, sort_order: int = 0) -> ItemCategory:
@@ -604,7 +602,7 @@ def seed_materials(db: Session):
     db.commit()
 
     print(f"\n  📊 Created {created_types} material types, {created_colors} colors, {created_links} material-color links")
-    print(f"  💡 Tip: Import additional materials via CSV or use 'Create new color' in the material form")
+    print("  💡 Tip: Import additional materials via CSV or use 'Create new color' in the material form")
 
     return created_types, created_colors, created_links, 0  # types, colors, links, products
 
@@ -627,12 +625,12 @@ def main():
         print("\n" + "=" * 60)
         print("✅ Seeding complete!")
         print("=" * 60)
-        print(f"\nSummary:")
+        print("\nSummary:")
         print(f"  📦 Example Items: {items_created} created, {items_skipped} skipped")
         print(f"  🎨 Materials: {mt_created} types, {colors_created} colors, {links_created} links")
         print(f"  📦 Material Products: {mat_products_created} SKUs created (0 on-hand)")
-        print(f"\n💡 Tip: You can now see example items in each category!")
-        print(f"💡 Tip: All material+color combinations are ready - just update inventory quantities!")
+        print("\n💡 Tip: You can now see example items in each category!")
+        print("💡 Tip: All material+color combinations are ready - just update inventory quantities!")
         print(f"💡 Tip: Material SKUs follow format: MAT-{'{MATERIAL_CODE}'}-{'{COLOR_CODE}'}")
         
     except Exception as e:

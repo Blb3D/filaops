@@ -19,6 +19,7 @@ from app.api.v1.deps import get_current_user
 from app.models.material import MaterialType, Color, MaterialColor
 from app.models.product import Product
 from app.models.inventory import Inventory, InventoryLocation
+from app.models.item_category import ItemCategory
 from app.services.material_service import (
     get_portal_material_options,
     get_available_material_types,
@@ -507,6 +508,7 @@ PLA Silk,MAT-FDM-PLA-SILK-GOLD,PLA Silk Gold,PLA_SILK,Gold,#F4A925,kg,Active,22.
 async def import_materials_csv(
     file: UploadFile = File(...),
     update_existing: bool = Query(False, description="Update existing materials if SKU exists"),
+    import_categories: bool = Query(True, description="Import categories from CSV and nest under Filament"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -546,7 +548,16 @@ async def import_materials_csv(
         text = text[1:]
     
     reader = csv.DictReader(io.StringIO(text))
-    
+
+    # Normalize column names (strip whitespace, handle encoding)
+    # We'll create a mapping from normalized names to original names
+    fieldnames = reader.fieldnames or []
+    normalized_fieldnames = {}
+    for fn in fieldnames:
+        # Strip whitespace and normalize
+        clean_name = fn.strip() if fn else ""
+        normalized_fieldnames[clean_name.lower()] = fn
+
     result = MaterialCSVImportResult(
         total_rows=0,
         created=0,
@@ -554,6 +565,21 @@ async def import_materials_csv(
         skipped=0,
         errors=[],
     )
+
+    # Helper function to get column value with case-insensitive matching
+    def get_column_value(row, possible_names):
+        """Get value from row using case-insensitive column name matching"""
+        for name in possible_names:
+            # Try exact match first
+            if name in row and row[name] and row[name].strip():
+                return row[name].strip()
+            # Try case-insensitive match
+            lower_name = name.lower()
+            if lower_name in normalized_fieldnames:
+                original_name = normalized_fieldnames[lower_name]
+                if original_name in row and row[original_name] and row[original_name].strip():
+                    return row[original_name].strip()
+        return ""
     
     # Get or create default inventory location
     default_location = db.query(InventoryLocation).filter(
@@ -574,23 +600,39 @@ async def import_materials_csv(
     # Column name variations
     SKU_COLS = ["sku", "SKU", "Sku"]
     NAME_COLS = ["name", "Name", "Product Name"]
+    CATEGORY_COLS = ["category", "Category", "CATEGORY", "Category Name"]
     MATERIAL_TYPE_COLS = ["material type", "Material Type", "material_type", "Material_Type"]
     COLOR_NAME_COLS = ["material color name", "Material Color Name", "material_color_name", "Color Name", "color name"]
     HEX_COLS = ["hex code", "HEX Code", "hex_code", "HEX", "hex"]
     PRICE_COLS = ["price", "Price", "PRICE"]
     ON_HAND_COLS = ["on hand (g)", "On Hand (g)", "on_hand_g", "On Hand", "on hand", "quantity", "Quantity"]
+
+    # Get or create "Filament" root category for material imports
+    filament_root_category = None
+    if import_categories:
+        filament_root_category = db.query(ItemCategory).filter(
+            ItemCategory.code == "FILAMENT"
+        ).first()
+
+        if not filament_root_category:
+            filament_root_category = ItemCategory(
+                code="FILAMENT",
+                name="Filament",
+                description="Filament materials for 3D printing",
+                sort_order=0,
+                is_active=True
+            )
+            db.add(filament_root_category)
+            db.flush()
     
     for row_num, row in enumerate(reader, start=2):
         result.total_rows += 1
         sku = ""  # Initialize sku at the start of each loop
-        
+
         try:
-            # Find SKU
-            for col in SKU_COLS:
-                if row.get(col, "").strip():
-                    sku = row.get(col, "").strip()
-                    break
-            
+            # Find SKU using helper
+            sku = get_column_value(row, SKU_COLS)
+
             if not sku:
                 result.errors.append({
                     "row": row_num,
@@ -599,14 +641,10 @@ async def import_materials_csv(
                 })
                 result.skipped += 1
                 continue
-            
-            # Find material type
-            material_type_code = ""
-            for col in MATERIAL_TYPE_COLS:
-                if row.get(col, "").strip():
-                    material_type_code = row.get(col, "").strip().upper()
-                    break
-            
+
+            # Find material type using helper
+            material_type_code = get_column_value(row, MATERIAL_TYPE_COLS).upper()
+
             if not material_type_code:
                 result.errors.append({
                     "row": row_num,
@@ -615,14 +653,10 @@ async def import_materials_csv(
                 })
                 result.skipped += 1
                 continue
-            
-            # Find color name
-            color_name = ""
-            for col in COLOR_NAME_COLS:
-                if row.get(col, "").strip():
-                    color_name = row.get(col, "").strip()
-                    break
-            
+
+            # Find color name using helper
+            color_name = get_column_value(row, COLOR_NAME_COLS)
+
             if not color_name:
                 result.errors.append({
                     "row": row_num,
@@ -631,36 +665,60 @@ async def import_materials_csv(
                 })
                 result.skipped += 1
                 continue
-            
-            # Find hex code
-            hex_code = ""
-            for col in HEX_COLS:
-                if row.get(col, "").strip():
-                    hex_code = row.get(col, "").strip()
-                    break
-            
-            # Find price
+
+            # Find hex code using helper
+            hex_code = get_column_value(row, HEX_COLS)
+
+            # Find price using helper
             price = None
-            for col in PRICE_COLS:
-                if row.get(col, "").strip():
-                    try:
-                        price_str = row.get(col, "").strip().replace("$", "").replace(",", "")
-                        price = Decimal(price_str)
-                        break
-                    except (ValueError, TypeError):
-                        pass
-            
+            price_str = get_column_value(row, PRICE_COLS)
+            if price_str:
+                try:
+                    price = Decimal(price_str.replace("$", "").replace(",", ""))
+                except (ValueError, TypeError):
+                    pass
+
             # Find on-hand quantity (in grams, convert to kg)
             on_hand_kg = Decimal("0.00")
-            for col in ON_HAND_COLS:
-                if row.get(col, "").strip():
-                    try:
-                        grams = Decimal(row.get(col, "").strip().replace(",", ""))
-                        on_hand_kg = grams / Decimal("1000")  # Convert grams to kg
-                        break
-                    except (ValueError, TypeError):
-                        pass
-            
+            on_hand_str = get_column_value(row, ON_HAND_COLS)
+            if on_hand_str:
+                try:
+                    grams = Decimal(on_hand_str.replace(",", ""))
+                    on_hand_kg = grams / Decimal("1000")  # Convert grams to kg
+                except (ValueError, TypeError):
+                    pass
+
+            # Find and create category (nested under Filament root)
+            category_id = None
+            if import_categories and filament_root_category:
+                category_name = get_column_value(row, CATEGORY_COLS)
+
+                if category_name:
+                    # Generate category code from name
+                    category_code = category_name.upper().replace(" ", "_").replace("-", "_")
+                    if len(category_code) > 50:
+                        category_code = category_code[:50]
+
+                    # Look for existing subcategory under Filament
+                    subcategory = db.query(ItemCategory).filter(
+                        ItemCategory.code == category_code,
+                        ItemCategory.parent_id == filament_root_category.id
+                    ).first()
+
+                    if not subcategory:
+                        subcategory = ItemCategory(
+                            code=category_code,
+                            name=category_name,
+                            parent_id=filament_root_category.id,
+                            description=f"Filament category: {category_name}",
+                            sort_order=0,
+                            is_active=True
+                        )
+                        db.add(subcategory)
+                        db.flush()
+
+                    category_id = subcategory.id
+
             # Get or create material type
             material_type = db.query(MaterialType).filter(
                 MaterialType.code == material_type_code
@@ -766,6 +824,7 @@ async def import_materials_csv(
                     standard_cost=float(price) if price else float(material_type.base_price_per_kg),
                     material_type_id=material_type.id,
                     color_id=color.id,
+                    category_id=category_id,  # From CSV Category column, nested under Filament
                     active=True,
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc)
@@ -777,6 +836,11 @@ async def import_materials_csv(
             # Update product if needed
             if price and product.standard_cost != float(price):
                 product.standard_cost = float(price)
+                product.updated_at = datetime.now(timezone.utc)
+
+            # Update category if import_categories is enabled and category was found
+            if import_categories and category_id and product.category_id != category_id:
+                product.category_id = category_id
                 product.updated_at = datetime.now(timezone.utc)
             
             # Get or create inventory record

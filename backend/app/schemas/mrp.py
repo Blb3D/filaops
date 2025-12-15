@@ -171,6 +171,8 @@ class NetRequirement(BaseModel):
     lead_time_days: int
     reorder_point: Optional[Decimal] = None
     min_order_qty: Optional[Decimal] = None
+    # MRP Make vs Buy indicator
+    has_bom: bool = False  # True = make item (Create WO), False = buy item (Create PO)
 
 
 class RequirementsSummary(BaseModel):

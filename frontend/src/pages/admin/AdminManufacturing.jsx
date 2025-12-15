@@ -31,6 +31,7 @@ export default function AdminManufacturing() {
   const [showWorkCenterModal, setShowWorkCenterModal] = useState(false);
   const [showResourceModal, setShowResourceModal] = useState(false);
   const [showRoutingModal, setShowRoutingModal] = useState(false);
+  const [showPrinterSetupModal, setShowPrinterSetupModal] = useState(false);
   const [editingWorkCenter, setEditingWorkCenter] = useState(null);
   const [editingResource, setEditingResource] = useState(null);
   const [editingRouting, setEditingRouting] = useState(null);
@@ -164,35 +165,6 @@ export default function AdminManufacturing() {
     }
   };
 
-  const handleSyncBambu = async () => {
-    if (
-      !confirm(
-        "Sync all 4 Bambu printers to FDM-POOL?\n\nThis will create/update:\n- Leonardo (P1S)\n- Michelangelo (A1)\n- Donatello (A1)\n- Raphael (A1)"
-      )
-    )
-      return;
-
-    try {
-      const res = await fetch(`${API_URL}/api/v1/work-centers/sync-bambu`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to sync");
-      }
-
-      const data = await res.json();
-      toast.success(
-        `Sync complete! Created: ${data.created.length}, Updated: ${data.updated.length}, Pool capacity: ${data.pool_capacity_hours} hrs/day`
-      );
-      fetchWorkCenters();
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
   const handleSaveResource = async (data) => {
     try {
       const url = editingResource
@@ -230,35 +202,6 @@ export default function AdminManufacturing() {
   const getStatusColor = (status) => {
     const s = RESOURCE_STATUSES.find((rs) => rs.value === status);
     return s?.color || "gray";
-  };
-
-  const handleSeedTemplates = async () => {
-    if (
-      !confirm(
-        "Seed routing templates?\n\nThis will create:\n- Standard Flow (Print → QC → Pack → Ship)\n- Assembly Flow (Print → QC → Assemble → Pack → Ship)"
-      )
-    )
-      return;
-
-    try {
-      const res = await fetch(`${API_URL}/api/v1/routings/seed-templates`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to seed templates");
-      }
-
-      const data = await res.json();
-      toast.success(
-        `Templates seeded! Created: ${data.created.length}, Skipped: ${data.skipped.length}`
-      );
-      fetchRoutings();
-    } catch (err) {
-      toast.error(err.message);
-    }
   };
 
   return (
@@ -316,7 +259,7 @@ export default function AdminManufacturing() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <button
-              onClick={handleSyncBambu}
+              onClick={() => setShowPrinterSetupModal(true)}
               className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
             >
               <svg
@@ -329,10 +272,10 @@ export default function AdminManufacturing() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              Sync Bambu Printers
+              Printer Setup
             </button>
             <button
               onClick={() => {
@@ -381,26 +324,7 @@ export default function AdminManufacturing() {
       {/* Routings Tab */}
       {activeTab === "routings" && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <button
-              onClick={handleSeedTemplates}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
-              </svg>
-              Seed Templates
-            </button>
+          <div className="flex justify-end items-center">
             <button
               onClick={() => {
                 setEditingRouting(null);
@@ -535,6 +459,20 @@ export default function AdminManufacturing() {
             setEditingResource(null);
           }}
           onSave={handleSaveResource}
+        />
+      )}
+
+      {/* Printer Setup Modal */}
+      {showPrinterSetupModal && (
+        <PrinterSetupModal
+          workCenters={workCenters}
+          onClose={() => setShowPrinterSetupModal(false)}
+          onAddPrinter={(wc) => {
+            setShowPrinterSetupModal(false);
+            setSelectedWorkCenter(wc);
+            setEditingResource(null);
+            setShowResourceModal(true);
+          }}
         />
       )}
 
@@ -1620,6 +1558,165 @@ function RoutingModal({ products, workCenters, onClose, token, onSuccess }) {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// Printer Setup Modal - for adding printers/machines to work centers
+function PrinterSetupModal({ workCenters, onClose, onAddPrinter }) {
+  const [selectedWorkCenter, setSelectedWorkCenter] = useState("");
+
+  // Filter to only show Machine Pool type work centers
+  const machineWorkCenters = workCenters.filter((wc) => wc.center_type === "machine");
+
+  const handleAddPrinter = () => {
+    const wc = workCenters.find((w) => w.id === parseInt(selectedWorkCenter));
+    if (wc) {
+      onAddPrinter(wc);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-lg">
+        <div className="p-6 border-b border-gray-800">
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <svg
+              className="w-6 h-6 text-purple-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
+              />
+            </svg>
+            Printer Setup
+          </h2>
+          <p className="text-sm text-gray-400 mt-1">
+            Add printers and machines to your work centers for scheduling
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* Enterprise upsell banner */}
+          <div className="bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-purple-500/20 rounded-lg">
+                <svg
+                  className="w-5 h-5 text-purple-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-purple-300">
+                  Automatic Printer Sync
+                </h3>
+                <p className="text-xs text-gray-400 mt-1">
+                  FilaOps Enterprise integrates directly with Bambu Cloud to
+                  auto-sync your printers, monitor status, and track jobs in
+                  real-time.
+                </p>
+                <a
+                  href="https://filaops.com/enterprise"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-purple-400 hover:text-purple-300 mt-2 inline-block"
+                >
+                  Learn more →
+                </a>
+              </div>
+            </div>
+          </div>
+
+          {/* Manual setup section */}
+          <div>
+            <h3 className="text-sm font-medium text-white mb-3">
+              Manual Setup
+            </h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Select a work center to add a printer or machine:
+            </p>
+
+            {machineWorkCenters.length === 0 ? (
+              <div className="text-center py-6 bg-gray-800/50 rounded-lg border border-gray-700">
+                <p className="text-gray-400 text-sm">
+                  No Machine Pool work centers found.
+                </p>
+                <p className="text-gray-500 text-xs mt-1">
+                  Create a work center with type "Machine Pool" first.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <select
+                  value={selectedWorkCenter}
+                  onChange={(e) => setSelectedWorkCenter(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500"
+                >
+                  <option value="">Select a work center...</option>
+                  {machineWorkCenters.map((wc) => (
+                    <option key={wc.id} value={wc.id}>
+                      {wc.code} - {wc.name}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  onClick={handleAddPrinter}
+                  disabled={!selectedWorkCenter}
+                  className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:text-gray-500 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg
+                    className="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                  Add Printer to Work Center
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Quick tip */}
+          <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+            <p className="text-xs text-gray-400">
+              <span className="text-blue-400 font-medium">Tip:</span> You can
+              also add printers by clicking on a work center card and selecting
+              "Add Resource".
+            </p>
+          </div>
+        </div>
+
+        <div className="p-6 border-t border-gray-800">
+          <button
+            onClick={onClose}
+            className="w-full px-4 py-2 text-gray-400 hover:text-white border border-gray-700 rounded-lg transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

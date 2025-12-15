@@ -135,6 +135,7 @@ async def record_payment(
     )
 
     db.add(payment)
+    db.flush()  # Flush to make payment visible in subsequent queries
 
     # Update order payment status
     update_order_payment_status(db, order)
@@ -181,6 +182,7 @@ async def record_refund(
     )
 
     db.add(payment)
+    db.flush()  # Flush to make refund visible in subsequent queries
 
     # Update order payment status
     update_order_payment_status(db, order)

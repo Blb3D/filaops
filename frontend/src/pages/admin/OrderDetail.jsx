@@ -248,6 +248,7 @@ export default function OrderDetail() {
             on_hand_quantity: parseFloat(req.on_hand_quantity || 0),
             available_quantity: available_qty,
             unit_cost: parseFloat(req.unit_cost || 0),
+            has_bom: req.has_bom || false,  // Make vs Buy indicator
           };
         });
         setMaterialRequirements(scaled);
@@ -273,6 +274,7 @@ export default function OrderDetail() {
             on_hand_quantity: 0,
             available_quantity: 0,
             unit_cost: 0,
+            has_bom: comp.has_bom || false,  // Make vs Buy indicator
           }));
           setMaterialRequirements(requirements);
         } else {
@@ -360,6 +362,36 @@ export default function OrderDetail() {
     );
   };
 
+  const handleCreateWorkOrder = async (materialReq) => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/production-orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          product_id: materialReq.product_id,
+          quantity_ordered: Math.ceil(materialReq.net_shortage),
+          sales_order_id: parseInt(orderId),
+          status: "draft",
+          notes: `Created from SO ${order.order_number} for sub-assembly`,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Failed to create work order");
+      }
+
+      toast.success(`Work order created for ${materialReq.product_name}`);
+      fetchOrder(); // Refresh to update requirements
+      fetchProductionOrders();
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -405,7 +437,10 @@ export default function OrderDetail() {
         <div className="flex gap-2">
           <button
             onClick={handleCreateProductionOrder}
-            disabled={!order.product_id || productionOrders.length > 0}
+            disabled={
+              (!order.product_id && !(order.lines?.length > 0 && order.lines[0].product_id)) ||
+              productionOrders.length > 0
+            }
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {productionOrders.length > 0 ? "WO Exists" : "Create Work Order"}
@@ -645,12 +680,21 @@ export default function OrderDetail() {
                     </td>
                     <td className="p-2 text-center">
                       {req.net_shortage > 0 && (
-                        <button
-                          onClick={() => handleCreatePurchaseOrder(req)}
-                          className="text-blue-400 hover:text-blue-300 text-sm"
-                        >
-                          Create PO
-                        </button>
+                        req.has_bom ? (
+                          <button
+                            onClick={() => handleCreateWorkOrder(req)}
+                            className="text-purple-400 hover:text-purple-300 text-sm"
+                          >
+                            Create WO
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleCreatePurchaseOrder(req)}
+                            className="text-blue-400 hover:text-blue-300 text-sm"
+                          >
+                            Create PO
+                          </button>
+                        )
                       )}
                     </td>
                   </tr>
@@ -672,8 +716,9 @@ export default function OrderDetail() {
             {hasShortages && (
               <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
                 <p className="text-red-400 text-sm">
-                  ⚠️ Material shortages detected. Create purchase orders for
-                  missing materials.
+                  ⚠️ Material shortages detected. Create{" "}
+                  <span className="text-purple-400">Work Orders</span> for sub-assemblies or{" "}
+                  <span className="text-blue-400">Purchase Orders</span> for raw materials.
                 </p>
               </div>
             )}
