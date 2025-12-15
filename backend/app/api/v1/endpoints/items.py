@@ -42,6 +42,60 @@ DEFAULT_PRICE_MARKUP = 3.5
 
 
 # ============================================================================
+# Inline UOM Conversion (fallback when database UOM table is empty)
+# ============================================================================
+
+UOM_CONVERSIONS = {
+    # Mass conversions (to KG)
+    'G': {'base': 'KG', 'factor': Decimal('0.001')},
+    'KG': {'base': 'KG', 'factor': Decimal('1')},
+    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
+    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
+    # Length conversions (to M)
+    'MM': {'base': 'M', 'factor': Decimal('0.001')},
+    'CM': {'base': 'M', 'factor': Decimal('0.01')},
+    'M': {'base': 'M', 'factor': Decimal('1')},
+    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
+    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
+    # Volume conversions (to L)
+    'ML': {'base': 'L', 'factor': Decimal('0.001')},
+    'L': {'base': 'L', 'factor': Decimal('1')},
+    # Count units (no conversion)
+    'EA': {'base': 'EA', 'factor': Decimal('1')},
+    'PK': {'base': 'PK', 'factor': Decimal('1')},
+    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
+    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
+}
+
+
+def convert_uom_inline(quantity: Decimal, from_unit: str, to_unit: str) -> Decimal:
+    """
+    Convert quantity using inline conversion factors (no database lookup).
+    Used as fallback when database UOM table is empty.
+    """
+    from_unit = (from_unit or 'EA').upper().strip()
+    to_unit = (to_unit or 'EA').upper().strip()
+    
+    if from_unit == to_unit:
+        return quantity
+    
+    from_info = UOM_CONVERSIONS.get(from_unit)
+    to_info = UOM_CONVERSIONS.get(to_unit)
+    
+    if not from_info or not to_info:
+        return quantity  # Unknown unit, return as-is
+    
+    if from_info['base'] != to_info['base']:
+        return quantity  # Incompatible bases
+    
+    # Convert: from_unit -> base -> to_unit
+    quantity_in_base = quantity * from_info['factor']
+    quantity_in_target = quantity_in_base / to_info['factor']
+    
+    return quantity_in_target
+
+
+# ============================================================================
 # Item Categories
 # ============================================================================
 
@@ -642,11 +696,13 @@ async def get_low_stock_items(
     items_dict = {}  # product_id -> item data
 
     # 1. Get items below reorder point (traditional low stock)
+    # Exclude "make" items - those need Work Orders, not Purchase Orders
     query = db.query(Product, Inventory).outerjoin(
         Inventory, Product.id == Inventory.product_id
     ).filter(
         Product.active== True,
         Product.reorder_point.isnot(None),
+        or_(Product.procurement_type != 'make', Product.procurement_type.is_(None)),
     )
 
     if not include_zero_reorder:
@@ -673,6 +729,7 @@ async def get_low_stock_items(
             "sku": product.sku,
             "name": product.name,
             "item_type": product.item_type,
+            "procurement_type": product.procurement_type or "buy",
             "unit": product.unit,
             "category_name": product.item_category.name if product.item_category else None,
             "on_hand_qty": on_hand,
@@ -777,7 +834,7 @@ async def get_low_stock_items(
                     mrp_shortage = float(net_req.net_shortage)
                     
                     if product_id in items_dict:
-                        # Update existing item
+                        # Update existing item (already verified as non-make item)
                         items_dict[product_id]["mrp_shortage"] = mrp_shortage
                         items_dict[product_id]["shortfall"] = max(
                             items_dict[product_id]["shortfall"],
@@ -786,8 +843,9 @@ async def get_low_stock_items(
                         items_dict[product_id]["shortage_source"] = "both"
                     else:
                         # Add new item (not below reorder point, but has MRP shortage)
+                        # Skip "make" items - those need Work Orders, not Purchase Orders
                         product = db.query(Product).filter(Product.id == product_id).first()
-                        if product and product.active:
+                        if product and product.active and product.procurement_type != 'make':
                             inv = db.query(
                                 func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
                                 func.coalesce(func.sum(Inventory.allocated_quantity), 0).label("allocated"),
@@ -802,6 +860,7 @@ async def get_low_stock_items(
                                 "sku": product.sku,
                                 "name": product.name,
                                 "item_type": product.item_type,
+                                "procurement_type": product.procurement_type or "buy",
                                 "unit": product.unit,
                                 "category_name": product.item_category.name if product.item_category else None,
                                 "on_hand_qty": on_hand,
@@ -1470,6 +1529,9 @@ def _recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
     For each BOM line:
       line_cost = component.standard_cost * quantity * (1 + scrap_factor/100)
 
+    Handles UOM conversion when BOM line unit differs from component unit.
+    E.g., if BOM line uses 25 G but component is priced per KG, converts 25 G to 0.025 KG.
+
     Updates bom.total_cost and returns the new value.
     """
     total = Decimal("0")
@@ -1488,7 +1550,18 @@ def _recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
                 qty = line.quantity or Decimal("0")
                 scrap = line.scrap_factor or Decimal("0")
                 effective_qty = qty * (1 + scrap / 100)
-                total += Decimal(str(component_cost)) * effective_qty
+
+                # Handle UOM conversion: BOM line unit -> component unit
+                component_unit = component.unit
+                line_unit = line.unit
+
+                if line_unit and component_unit and line_unit.upper() != component_unit.upper():
+                    # Use inline conversion (more reliable than database lookup)
+                    converted_qty = convert_uom_inline(effective_qty, line_unit, component_unit)
+                    total += Decimal(str(component_cost)) * converted_qty
+                else:
+                    # Same unit or no unit specified, direct multiply
+                    total += Decimal(str(component_cost)) * effective_qty
 
     # Update the BOM total_cost
     bom.total_cost = total

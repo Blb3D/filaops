@@ -195,6 +195,7 @@ local.settings.json
 *.model
 
 # Business data backups
+backup/
 *_backup_*.json
 *_export_*.csv
 customer_*.csv
@@ -346,3 +347,4 @@ backend/GCS_SETUP.md
 
 # Internal metrics tracking (private business data)
 docs/metrics/
+.fake

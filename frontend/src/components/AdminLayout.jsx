@@ -308,6 +308,7 @@ const navGroups = [
       { path: "/admin/items", label: "Items", icon: ItemsIcon },
       { path: "/admin/materials/import", label: "Import Materials", icon: MaterialImportIcon, adminOnly: true },
       { path: "/admin/bom", label: "Bill of Materials", icon: BOMIcon },
+      { path: "/admin/locations", label: "Locations", icon: InventoryIcon, adminOnly: true },
       { path: "/admin/inventory/transactions", label: "Transactions", icon: InventoryIcon, adminOnly: true },
     ],
   },

@@ -4,7 +4,6 @@ Unit tests for authentication utilities
 Testing password hashing, JWT token generation, and validation
 Following TDD approach - write tests first, then implement
 """
-import pytest
 from datetime import datetime, timedelta, timezone
 
 

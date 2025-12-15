@@ -11,6 +11,15 @@ const STATUS_OPTIONS = [
   { value: "suspended", label: "Suspended", color: "red" },
 ];
 
+// Format phone number as (XXX) XXX-XXXX
+const formatPhoneNumber = (value) => {
+  const digits = value.replace(/\D/g, "").slice(0, 10);
+  if (digits.length === 0) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+};
+
 export default function AdminCustomers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -522,7 +531,8 @@ function CustomerModal({ customer, onSave, onClose }) {
               <input
                 type="text"
                 value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                onChange={(e) => setForm({ ...form, phone: formatPhoneNumber(e.target.value) })}
+                placeholder="(512) 555-9067"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
               />
             </div>

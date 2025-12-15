@@ -22,7 +22,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     from sqlalchemy import inspect
-    from alembic import context
 
     # Get connection and inspector
     connection = op.get_bind()

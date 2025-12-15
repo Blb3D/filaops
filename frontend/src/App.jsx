@@ -25,6 +25,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminQuotes from "./pages/admin/AdminQuotes";
 import AdminPayments from "./pages/admin/AdminPayments";
 import AdminSettings from "./pages/admin/AdminSettings";
+import AdminLocations from "./pages/admin/AdminLocations";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
@@ -77,6 +78,7 @@ export default function App() {
             element={<AdminInventoryTransactions />}
           />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="locations" element={<AdminLocations />} />
           <Route path="settings" element={<AdminSettings />} />
         </Route>
       </Routes>

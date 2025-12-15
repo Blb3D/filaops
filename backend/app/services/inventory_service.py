@@ -539,4 +539,21 @@ def process_shipment(
         created_by=created_by,
     )
 
+    # Track consumed products for potential MRP recalculation
+    # This is called from the endpoint which handles the actual trigger,
+    # but we track here for future incremental MRP support
+    consumed_product_ids = set()
+    for txn in packaging_txns:
+        consumed_product_ids.add(txn.product_id)
+    
+    # Log consumed products for MRP tracking
+    if consumed_product_ids:
+        logger.debug(
+            f"Packaging materials consumed for SO {sales_order.id}",
+            extra={
+                "sales_order_id": sales_order.id,
+                "consumed_product_ids": list(consumed_product_ids)
+            }
+        )
+
     return packaging_txns, issue_txns

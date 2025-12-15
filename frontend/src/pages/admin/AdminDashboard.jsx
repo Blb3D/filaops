@@ -188,9 +188,15 @@ export default function AdminDashboard() {
       {/* SALES Section */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Sales</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Sales
+          </h2>
           <div className="flex-1 h-px bg-gray-800"></div>
-          <Link to="/admin/orders" className="text-xs text-blue-400 hover:text-blue-300">
+          <Link
+            to="/admin/orders"
+            className="text-xs text-blue-400 hover:text-blue-300"
+            aria-label="View all Sales"
+          >
             View all →
           </Link>
         </div>
@@ -204,8 +210,13 @@ export default function AdminDashboard() {
           />
           <StatCard
             title="Orders in Progress"
-            value={(stats?.orders?.confirmed || 0) + (stats?.orders?.in_production || 0)}
-            subtitle={`${stats?.orders?.confirmed || 0} confirmed, ${stats?.orders?.in_production || 0} in production`}
+            value={
+              (stats?.orders?.confirmed || 0) +
+              (stats?.orders?.in_production || 0)
+            }
+            subtitle={`${stats?.orders?.confirmed || 0} confirmed, ${
+              stats?.orders?.in_production || 0
+            } in production`}
             color="primary"
             to="/admin/orders"
           />
@@ -229,9 +240,15 @@ export default function AdminDashboard() {
       {/* INVENTORY Section */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Inventory</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Inventory
+          </h2>
           <div className="flex-1 h-px bg-gray-800"></div>
-          <Link to="/admin/items" className="text-xs text-blue-400 hover:text-blue-300">
+          <Link
+            to="/admin/items"
+            className="text-xs text-blue-400 hover:text-blue-300"
+            aria-label="View all Inventory"
+          >
             View all →
           </Link>
         </div>
@@ -263,9 +280,15 @@ export default function AdminDashboard() {
       {/* OPERATIONS Section */}
       <div>
         <div className="flex items-center gap-2 mb-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Operations</h2>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Operations
+          </h2>
           <div className="flex-1 h-px bg-gray-800"></div>
-          <Link to="/admin/production" className="text-xs text-blue-400 hover:text-blue-300">
+          <Link
+            to="/admin/production"
+            className="text-xs text-blue-400 hover:text-blue-300"
+            aria-label="View all Operations"
+          >
             View all →
           </Link>
         </div>
@@ -279,7 +302,10 @@ export default function AdminDashboard() {
           />
           <StatCard
             title="Manufacturing"
-            value={(stats?.production?.in_progress || 0) + (stats?.production?.scheduled || 0)}
+            value={
+              (stats?.production?.in_progress || 0) +
+              (stats?.production?.scheduled || 0)
+            }
             subtitle="Active work orders"
             color="secondary"
             to="/admin/manufacturing"
@@ -303,6 +329,7 @@ export default function AdminDashboard() {
             <Link
               to="/admin/orders"
               className="text-sm text-blue-400 hover:text-blue-300"
+              aria-label="View all Orders"
             >
               View all →
             </Link>
@@ -348,6 +375,7 @@ export default function AdminDashboard() {
             <h3 className="font-semibold text-white">BOMs Needing Review</h3>
             <Link
               to="/admin/bom"
+              aria-label="View all BOMs"
               className="text-sm text-blue-400 hover:text-blue-300"
             >
               View all →

@@ -9,6 +9,7 @@ export default function AdminMaterialImport() {
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
   const [updateExisting, setUpdateExisting] = useState(false);
+  const [importCategories, setImportCategories] = useState(true);
 
   const token = localStorage.getItem("adminToken") || localStorage.getItem("access_token");
 
@@ -89,6 +90,7 @@ export default function AdminMaterialImport() {
       if (updateExisting) {
         params.set("update_existing", "true");
       }
+      params.set("import_categories", importCategories ? "true" : "false");
 
       const url = `${API_URL}/api/v1/materials/import?${params}`;
       
@@ -256,6 +258,23 @@ export default function AdminMaterialImport() {
                   </span>
                 </label>
 
+                <label className="flex items-center space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={importCategories}
+                    onChange={(e) => setImportCategories(e.target.checked)}
+                    className="w-5 h-5 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500"
+                  />
+                  <div>
+                    <span className="text-gray-300">
+                      Import categories from CSV
+                    </span>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Creates categories nested under "Filament" (e.g., Filament → PLA Matte)
+                    </p>
+                  </div>
+                </label>
+
                 <button
                   onClick={handleImport}
                   disabled={!file || importing}
@@ -365,6 +384,7 @@ export default function AdminMaterialImport() {
             <div>
               <p className="font-medium text-white mb-1">Optional Columns:</p>
               <ul className="list-disc list-inside space-y-1 ml-4">
+                <li><code className="bg-gray-800 px-2 py-1 rounded">Category</code> - Category name (e.g., "PLA Matte", "PETG HF") - nested under Filament</li>
                 <li><code className="bg-gray-800 px-2 py-1 rounded">Name</code> - Product name (auto-generated if not provided)</li>
                 <li><code className="bg-gray-800 px-2 py-1 rounded">HEX Code</code> - Color hex code (e.g., #0C0C0C)</li>
                 <li><code className="bg-gray-800 px-2 py-1 rounded">Price</code> - Price per kg (e.g., 19.99)</li>

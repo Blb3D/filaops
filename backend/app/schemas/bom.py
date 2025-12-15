@@ -55,6 +55,8 @@ class BOMLineResponse(BOMLineBase):
     inventory_available: Optional[float] = None
     is_available: Optional[bool] = None
     shortage: Optional[float] = None
+    # Sub-assembly indicator (for MRP make vs buy)
+    has_bom: Optional[bool] = None
 
     class Config:
         from_attributes = True

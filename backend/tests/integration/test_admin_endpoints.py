@@ -3,7 +3,6 @@ Integration tests for Admin endpoints
 
 Tests BOM management, dashboard, and admin-only access control
 """
-import pytest
 from decimal import Decimal
 
 
@@ -189,7 +188,7 @@ class TestBOMDetailEndpoint:
 
         # Check line details
         lines = data["lines"]
-        material_line = next((l for l in lines if l["sequence"] == 1), None)
+        material_line = next((line for line in lines if line["sequence"] == 1), None)
         assert material_line is not None
         assert material_line["component_sku"] == "MAT-TEST-PLA"
         assert float(material_line["quantity"]) == 0.50

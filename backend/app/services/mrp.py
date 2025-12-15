@@ -19,6 +19,107 @@ from app.models import (
     Product, BOM, Inventory, ProductionOrder,
     PurchaseOrder, PurchaseOrderLine, MRPRun, PlannedOrder
 )
+from app.core.settings import get_settings
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+settings = get_settings()
+
+
+# ============================================================================
+# UOM Conversion Helpers
+# ============================================================================
+
+# Define conversion factors to base units
+# Mass: base = KG
+# Length: base = M
+# Volume: base = L
+UOM_CONVERSIONS = {
+    # Mass conversions (to KG)
+    'G': {'base': 'KG', 'factor': Decimal('0.001')},
+    'KG': {'base': 'KG', 'factor': Decimal('1')},
+    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
+    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
+    # Length conversions (to M)
+    'MM': {'base': 'M', 'factor': Decimal('0.001')},
+    'CM': {'base': 'M', 'factor': Decimal('0.01')},
+    'M': {'base': 'M', 'factor': Decimal('1')},
+    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
+    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
+    # Volume conversions (to L)
+    'ML': {'base': 'L', 'factor': Decimal('0.001')},
+    'L': {'base': 'L', 'factor': Decimal('1')},
+    # Count units (no conversion)
+    'EA': {'base': 'EA', 'factor': Decimal('1')},
+    'PK': {'base': 'PK', 'factor': Decimal('1')},
+    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
+    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
+}
+
+def convert_uom(quantity: Decimal, from_unit: str, to_unit: str) -> Decimal:
+    """
+    Convert quantity from one UOM to another.
+    
+    Args:
+        quantity: The quantity to convert
+        from_unit: Source unit (e.g., 'G')
+        to_unit: Target unit (e.g., 'KG')
+        
+    Returns:
+        Converted quantity
+    """
+    from_unit = (from_unit or 'EA').upper().strip()
+    to_unit = (to_unit or 'EA').upper().strip()
+    
+    # Same unit - no conversion needed
+    if from_unit == to_unit:
+        return quantity
+    
+    # Get conversion info
+    from_info = UOM_CONVERSIONS.get(from_unit)
+    to_info = UOM_CONVERSIONS.get(to_unit)
+    
+    # If either unit is unknown, return as-is with warning
+    if not from_info or not to_info:
+        logger.warning(
+            f"Unknown UOM conversion: {from_unit} -> {to_unit}, returning original quantity",
+            extra={"from_unit": from_unit, "to_unit": to_unit, "quantity": str(quantity)}
+        )
+        return quantity
+    
+    # Check if same base unit (e.g., both mass units)
+    if from_info['base'] != to_info['base']:
+        # DEBUG level - this is expected for incompatible unit classes (EA vs KG)
+        # The MRP correctly returns original quantity when units can't convert
+        logger.debug(
+            f"Incompatible UOM bases: {from_unit} ({from_info['base']}) -> {to_unit} ({to_info['base']})",
+            extra={"from_unit": from_unit, "to_unit": to_unit}
+        )
+        return quantity
+    
+    # Validate conversion factors to prevent division by zero
+    from_factor = from_info.get('factor')
+    to_factor = to_info.get('factor')
+    
+    if not from_factor or from_factor == 0:
+        raise ValueError(
+            f"Invalid UOM conversion factor for '{from_unit}': factor is {from_factor}. "
+            f"Cannot convert from {from_unit} to {to_unit}."
+        )
+    
+    if not to_factor or to_factor == 0:
+        raise ValueError(
+            f"Invalid UOM conversion factor for '{to_unit}': factor is {to_factor}. "
+            f"Cannot convert from {from_unit} to {to_unit}."
+        )
+    
+    # Convert: from_unit -> base -> to_unit
+    # quantity_in_base = quantity * from_factor
+    # quantity_in_target = quantity_in_base / to_factor
+    quantity_in_base = quantity * from_factor
+    quantity_in_target = quantity_in_base / to_factor
+    
+    return quantity_in_target
 
 
 # ============================================================================
@@ -57,6 +158,7 @@ class NetRequirement:
     reorder_point: Optional[Decimal] = None
     min_order_qty: Optional[Decimal] = None
     item_type: str = "component"
+    has_bom: bool = False  # Whether this component is a manufactured sub-assembly
 
 
 @dataclass
@@ -110,7 +212,7 @@ class MRPService:
         self.db.add(mrp_run)
         self.db.flush()
 
-        result = MRPResult(run_id=mrp_run.id)
+        result = MRPResult(run_id=int(mrp_run.id))
 
         try:
             # Step 1: Delete unfirmed planned orders if requested
@@ -128,11 +230,11 @@ class MRPService:
             all_requirements: Dict[int, ComponentRequirement] = {}
             for po in production_orders:
                 requirements = self.explode_bom(
-                    product_id=po.product_id,
-                    quantity=po.quantity_ordered - po.quantity_completed,
+                    product_id=int(po.product_id),
+                    quantity=Decimal(str(po.quantity_ordered - po.quantity_completed)),
                     source_demand_type="production_order",
-                    source_demand_id=po.id,
-                    due_date=po.due_date or date.today()
+                    source_demand_id=int(po.id),
+                    due_date=po.due_date if po.due_date else date.today()
                 )
                 # Aggregate by product_id
                 for req in requirements:
@@ -140,6 +242,80 @@ class MRPService:
                         all_requirements[req.product_id].gross_quantity += req.gross_quantity
                     else:
                         all_requirements[req.product_id] = req
+
+            # Step 3a: Include Sales Orders as demand (if feature enabled)
+            # This also includes shipping materials (packaging) from BOMs
+            if settings.INCLUDE_SALES_ORDERS_IN_MRP:
+                try:
+                    sales_orders = self._get_sales_orders_within_horizon(horizon_date)
+                    logger.info(
+                        f"MRP including {len(sales_orders)} sales orders as demand",
+                        extra={"sales_order_count": len(sales_orders)}
+                    )
+                    
+                    for so in sales_orders:
+                        # Handle both quote_based (single product) and line_item (multiple products) orders
+                        if so.order_type == "quote_based" and so.product_id:
+                            # Single product from quote
+                            requirements = self.explode_bom(
+                                product_id=int(so.product_id),
+                                quantity=Decimal(str(so.quantity or 1)),
+                                source_demand_type="sales_order",
+                                source_demand_id=int(so.id),
+                                due_date=so.estimated_completion_date.date() if so.estimated_completion_date else date.today()
+                            )
+                            # Aggregate by product_id
+                            for req in requirements:
+                                if req.product_id in all_requirements:
+                                    all_requirements[req.product_id].gross_quantity += req.gross_quantity
+                                else:
+                                    all_requirements[req.product_id] = req
+                        
+                        elif so.order_type == "line_item":
+                            # Multiple products from lines
+                            from app.models.sales_order import SalesOrderLine
+                            lines = self.db.query(SalesOrderLine).filter(
+                                SalesOrderLine.sales_order_id == so.id
+                            ).all()
+                            
+                            for line in lines:
+                                if line.product_id:
+                                    requirements = self.explode_bom(
+                                        product_id=int(line.product_id),
+                                        quantity=Decimal(str(line.quantity or 0)),
+                                        source_demand_type="sales_order",
+                                        source_demand_id=int(so.id),
+                                        due_date=so.estimated_completion_date.date() if so.estimated_completion_date else date.today()
+                                    )
+                                    # Aggregate by product_id
+                                    for req in requirements:
+                                        if req.product_id in all_requirements:
+                                            all_requirements[req.product_id].gross_quantity += req.gross_quantity
+                                        else:
+                                            all_requirements[req.product_id] = req
+                    
+                    # Step 3b: Add shipping material requirements
+                    # Packaging materials (consume_stage='shipping') from BOMs
+                    shipping_requirements = self._get_shipping_material_requirements(
+                        sales_orders, horizon_date
+                    )
+                    for req in shipping_requirements:
+                        if req.product_id in all_requirements:
+                            all_requirements[req.product_id].gross_quantity += req.gross_quantity
+                        else:
+                            all_requirements[req.product_id] = req
+                    
+                    # Update orders_processed to include sales orders
+                    result.orders_processed += len(sales_orders)
+                    
+                except Exception as e:
+                    # Log error but don't break MRP - graceful degradation
+                    logger.error(
+                        f"Error including Sales Orders in MRP: {str(e)}",
+                        exc_info=True,
+                        extra={"error": str(e)}
+                    )
+                    result.errors.append(f"Error processing Sales Orders: {str(e)}")
 
             result.components_analyzed = len(all_requirements)
 
@@ -153,9 +329,34 @@ class MRPService:
             shortages = [r for r in net_requirements if r.net_shortage > 0]
             result.shortages_found = len(shortages)
 
-            planned_orders = self.generate_planned_orders(
-                shortages, mrp_run.id, user_id
-            )
+            # For sub-assemblies, we need to pass parent due dates for cascading
+            # Create a mapping from product_id to requirement (for finding parent due dates)
+            requirement_by_product: Dict[int, ComponentRequirement] = {}
+            for req in all_requirements.values():
+                requirement_by_product[req.product_id] = req
+
+            # Generate planned orders with parent due date cascading if enabled
+            planned_orders = []
+            for shortage in shortages:
+                # Find the original requirement to get parent info and due date
+                original_req = requirement_by_product.get(shortage.product_id)
+                parent_due_date = None
+                
+                if (settings.MRP_ENABLE_SUB_ASSEMBLY_CASCADING and 
+                    original_req and 
+                    original_req.parent_product_id and
+                    shortage.has_bom):
+                    # This is a sub-assembly - find parent's due date
+                    parent_req = requirement_by_product.get(original_req.parent_product_id)
+                    if parent_req and parent_req.due_date:
+                        parent_due_date = parent_req.due_date
+                
+                # Generate order for this shortage
+                orders = self.generate_planned_orders(
+                    [shortage], int(mrp_run.id), user_id, parent_due_date=parent_due_date
+                )
+                planned_orders.extend(orders)
+            
             result.planned_orders_created = len(planned_orders)
 
             # Update MRP run record
@@ -233,7 +434,20 @@ class MRPService:
 
             # Calculate quantity with scrap factor
             scrap_factor = Decimal(str(line.scrap_factor or 0))
-            adjusted_qty = quantity * line.quantity * (1 + scrap_factor / 100)
+            
+            # Get BOM line quantity in BOM's unit (e.g., 50 G)
+            bom_qty = Decimal(str(line.quantity))
+            bom_unit = line.unit or 'EA'
+            
+            # Get component's base unit (e.g., KG)
+            component_unit = component.unit or 'EA'
+            
+            # Convert BOM quantity to component's base unit
+            # e.g., 50 G -> 0.05 KG
+            converted_qty = convert_uom(bom_qty, bom_unit, component_unit)
+            
+            # Apply parent quantity and scrap factor
+            adjusted_qty = quantity * converted_qty * (1 + scrap_factor / 100)
 
             req = ComponentRequirement(
                 product_id=component.id,
@@ -332,7 +546,7 @@ class MRPService:
                 lead_time_days=product.lead_time_days or 7,
                 reorder_point=product.reorder_point,
                 min_order_qty=product.min_order_qty,
-                item_type=product.item_type or "component"
+                has_bom=product.has_bom or False,
             )
             net_requirements.append(net_req)
 
@@ -342,7 +556,8 @@ class MRPService:
         self,
         shortages: List[NetRequirement],
         mrp_run_id: int,
-        user_id: Optional[int] = None
+        user_id: Optional[int] = None,
+        parent_due_date: Optional[date] = None
     ) -> List[PlannedOrder]:
         """
         Generate planned orders for material shortages.
@@ -354,6 +569,7 @@ class MRPService:
             shortages: List of NetRequirement with shortages
             mrp_run_id: ID of the MRP run
             user_id: User running MRP
+            parent_due_date: Optional due date from parent product (for sub-assembly cascading)
 
         Returns:
             List of created PlannedOrder records
@@ -370,6 +586,7 @@ class MRPService:
                 continue
 
             # Determine order type based on item type and BOM
+            # CRITICAL: Components with has_bom=True are manufactured sub-assemblies
             if product.has_bom:
                 order_type = "production"
             else:
@@ -381,13 +598,41 @@ class MRPService:
                 order_qty = shortage.min_order_qty
 
             # Calculate dates with lead time offset
-            due_date = date.today() + timedelta(days=14)  # Default 2 weeks
-            lead_time = shortage.lead_time_days or 7
-            start_date = due_date - timedelta(days=lead_time)
+            # If sub-assembly cascading is enabled and we have a parent due date,
+            # calculate backwards from parent
+            if (settings.MRP_ENABLE_SUB_ASSEMBLY_CASCADING and 
+                parent_due_date and 
+                order_type == "production"):
+                # Sub-assembly must be ready before parent production starts
+                lead_time = shortage.lead_time_days or 7
+                buffer_days = 1  # Safety buffer
+                due_date = parent_due_date - timedelta(days=lead_time + buffer_days)
+                
+                # Ensure due_date is not in the past
+                today = date.today()
+                due_date = max(due_date, today)
+                
+                # Recompute start_date based on capped due_date
+                start_date = due_date - timedelta(days=lead_time)
+                
+                # Ensure start_date is also not in the past
+                if start_date < today:
+                    start_date = today
+                    # Preserve lead time by shifting due_date forward
+                    due_date = start_date + timedelta(days=lead_time)
+            else:
+                # Standard calculation
+                due_date = date.today() + timedelta(days=14)  # Default 2 weeks
+                lead_time = shortage.lead_time_days or 7
+                start_date = due_date - timedelta(days=lead_time)
 
-            # Don't create orders with start dates in the past
-            if start_date < date.today():
-                start_date = date.today()
+                # Don't create orders with start dates in the past
+                today = date.today()
+                if start_date < today:
+                    start_date = today
+                    # Adjust due date if needed to preserve lead time
+                    if due_date < start_date + timedelta(days=lead_time):
+                        due_date = start_date + timedelta(days=lead_time)
 
             planned_order = PlannedOrder(
                 order_type=order_type,
@@ -483,6 +728,162 @@ class MRPService:
             PlannedOrder.status == "planned"
         ).delete()
         self.db.flush()
+
+    def _get_shipping_material_requirements(
+        self,
+        sales_orders: List,
+        horizon_date: date
+    ) -> List[ComponentRequirement]:
+        """
+        Calculate shipping material requirements from Sales Orders.
+        
+        This includes packaging materials (BOM lines with consume_stage='shipping')
+        that will be needed when orders ship.
+        
+        Args:
+            sales_orders: List of SalesOrder objects
+            horizon_date: Planning horizon end date
+            
+        Returns:
+            List of ComponentRequirement for shipping materials
+        """
+        requirements = []
+        
+        for so in sales_orders:
+            # Only process orders that are likely to ship within horizon
+            # Skip cancelled orders
+            if so.status == "cancelled":
+                continue
+            
+            # Get products to ship
+            products_to_ship = []
+            
+            if so.order_type == "quote_based" and so.product_id:
+                products_to_ship.append((so.product_id, Decimal(str(so.quantity or 1))))
+            elif so.order_type == "line_item":
+                from app.models.sales_order import SalesOrderLine
+                lines = self.db.query(SalesOrderLine).filter(
+                    SalesOrderLine.sales_order_id == so.id
+                ).all()
+                for line in lines:
+                    if line.product_id:
+                        products_to_ship.append((line.product_id, Decimal(str(line.quantity or 0))))
+            
+            # For each product, get shipping materials from BOM
+            for product_id, qty in products_to_ship:
+                bom = self.db.query(BOM).filter(
+                    BOM.product_id == product_id,
+                    BOM.active == True
+                ).first()
+                
+                if not bom:
+                    continue
+                
+                # Get BOM lines for shipping consumption
+                from app.models.bom import BOMLine
+                shipping_lines = self.db.query(BOMLine).filter(
+                    BOMLine.bom_id == bom.id,
+                    BOMLine.consume_stage == "shipping"
+                ).all()
+                
+                for line in shipping_lines:
+                    if line.is_cost_only:
+                        continue
+                    
+                    component = line.component
+                    if not component:
+                        continue
+                    
+                    # Calculate quantity needed with UOM conversion
+                    scrap_factor = Decimal(str(line.scrap_factor or 0))
+                    bom_qty = Decimal(str(line.quantity))
+                    bom_unit = line.unit or 'EA'
+                    component_unit = component.unit or 'EA'
+                    converted_qty = convert_uom(bom_qty, bom_unit, component_unit)
+                    adjusted_qty = qty * converted_qty * (1 + scrap_factor / 100)
+                    
+                    req = ComponentRequirement(
+                        product_id=component.id,
+                        product_sku=component.sku,
+                        product_name=component.name,
+                        bom_level=0,  # Shipping materials are direct components
+                        gross_quantity=adjusted_qty,
+                        scrap_factor=scrap_factor,
+                        parent_product_id=product_id,
+                        source_demand_type="sales_order_shipping",
+                        source_demand_id=so.id,
+                        due_date=so.estimated_completion_date.date() if so.estimated_completion_date else horizon_date
+                    )
+                    requirements.append(req)
+        
+        return requirements
+
+    def _get_sales_orders_within_horizon(
+        self,
+        horizon_date: date
+    ) -> List:
+        """
+        Get Sales Orders within planning horizon that need MRP processing.
+        
+        Only includes orders that:
+        - Are not cancelled
+        - Have a product_id (for quote_based) or have lines (for line_item)
+        - Are within the planning horizon (estimated_completion_date or created_at)
+        
+        Args:
+            horizon_date: Planning horizon end date
+            
+        Returns:
+            List of SalesOrder objects
+        """
+        from app.models.sales_order import SalesOrder
+        from sqlalchemy import or_, and_
+        
+        # Convert horizon_date to datetime for comparison with DateTime columns
+        horizon_datetime = datetime.combine(horizon_date, datetime.min.time())
+        
+        # Get orders that are not cancelled and within horizon
+        query = self.db.query(SalesOrder).filter(
+            SalesOrder.status != "cancelled"
+        )
+        
+        # Filter by date - use estimated_completion_date if available, otherwise created_at
+        # For SQL Server compatibility, cast DateTime to date for comparison
+        # Use a simpler approach that works with SQL Server
+        horizon_datetime = datetime.combine(horizon_date, datetime.min.time())
+        query = query.filter(
+            or_(
+                and_(
+                    SalesOrder.estimated_completion_date.isnot(None),
+                    SalesOrder.estimated_completion_date <= horizon_datetime
+                ),
+                and_(
+                    SalesOrder.estimated_completion_date.is_(None),
+                    SalesOrder.created_at <= horizon_datetime
+                )
+            )
+        )
+        
+        # Only include orders that have products to process
+        # Either quote_based with product_id, or line_item with lines
+        orders = query.all()
+        
+        # Filter to only include orders with processable products
+        result = []
+        for order in orders:
+            if order.order_type == "quote_based" and order.product_id:
+                result.append(order)
+            elif order.order_type == "line_item":
+                # Check if order has lines with products
+                from app.models.sales_order import SalesOrderLine
+                lines = self.db.query(SalesOrderLine).filter(
+                    SalesOrderLine.sales_order_id == order.id,
+                    SalesOrderLine.product_id.isnot(None)
+                ).count()
+                if lines > 0:
+                    result.append(order)
+        
+        return result
 
     # ========================================================================
     # Planned Order Actions

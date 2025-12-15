@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
 from app.models.user import User
@@ -18,8 +19,12 @@ from app.models.quote import Quote
 from app.models.sales_order import SalesOrder, SalesOrderLine
 from app.models.production_order import ProductionOrder
 from app.models.product import Product
-from app.models.bom import BOM
+from app.models.bom import BOM, BOMLine
+from app.models.inventory import Inventory
 from app.logging_config import get_logger
+from sqlalchemy import func
+
+logger = get_logger(__name__)
 from app.schemas.sales_order import (
     SalesOrderCreate,
     SalesOrderConvert,
@@ -37,6 +42,164 @@ from app.models.manufacturing import Routing
 from app.services.inventory_service import process_shipment
 
 router = APIRouter(prefix="/sales-orders", tags=["Sales Orders"])
+
+
+# ============================================================================
+# HELPER: Create Production Orders for Sales Order
+# ============================================================================
+
+def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by: str) -> list:
+    """
+    Create production orders for a sales order.
+
+    Returns list of created production order codes.
+    """
+    from sqlalchemy import desc as sql_desc
+
+    created_orders = []
+    year = datetime.utcnow().year
+
+    def get_next_po_code():
+        """
+        Generate next PO code with row-level locking to prevent race conditions.
+        Uses SELECT FOR UPDATE to lock the last row so concurrent requests don't
+        generate duplicate codes.
+        
+        Note: When no rows exist, with_for_update() returns None and we start at 1.
+        The unique constraint on ProductionOrder.code and IntegrityError retry logic
+        provide additional protection against duplicates.
+        """
+        # Lock the last production order to prevent concurrent access
+        # with_for_update() will lock the row if it exists, or return None if table is empty
+        last_po = (
+            db.query(ProductionOrder)
+            .filter(ProductionOrder.code.like(f"PO-{year}-%"))
+            .order_by(sql_desc(ProductionOrder.code))
+            .with_for_update(skip_locked=False)  # Wait for lock, don't skip
+            .first()
+        )
+        if last_po:
+            last_num = int(last_po.code.split("-")[2])
+            next_num = last_num + 1
+        else:
+            # No existing POs for this year - start at 1
+            # Unique constraint on code column will prevent duplicates if concurrent
+            next_num = 1
+        return f"PO-{year}-{next_num:04d}"
+
+    if order.order_type == "line_item":
+        lines = db.query(SalesOrderLine).filter(
+            SalesOrderLine.sales_order_id == order.id
+        ).order_by(SalesOrderLine.id).all()
+
+        for idx, line in enumerate(lines, start=1):
+            product = db.query(Product).filter(Product.id == line.product_id).first()
+            if not product:
+                continue
+
+            # Only create WO for products with BOMs (make items)
+            if not product.has_bom:
+                continue
+
+            bom = db.query(BOM).filter(
+                BOM.product_id == line.product_id,
+                BOM.active == True  # noqa: E712
+            ).first()
+
+            routing = db.query(Routing).filter(
+                Routing.product_id == line.product_id,
+                Routing.is_active == True  # noqa: E712
+            ).first()
+
+            # Retry logic to handle race condition if locking fails
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    po_code = get_next_po_code()
+
+                    production_order = ProductionOrder(
+                        code=po_code,
+                        product_id=line.product_id,
+                        bom_id=bom.id if bom else None,
+                        routing_id=routing.id if routing else None,
+                        sales_order_id=order.id,
+                        sales_order_line_id=line.id,
+                        quantity_ordered=line.quantity,
+                        quantity_completed=0,
+                        quantity_scrapped=0,
+                        source="sales_order",
+                        status="draft",
+                        priority=3,
+                        notes=f"Auto-generated from {order.order_number} Line {idx}",
+                        created_by=created_by,
+                    )
+                    db.add(production_order)
+                    db.flush()  # Flush to detect unique constraint violations
+                    created_orders.append(po_code)
+                    break  # Success, exit retry loop
+                except IntegrityError as e:
+                    db.rollback()
+                    if attempt < max_retries - 1:
+                        # Retry with a new code
+                        continue
+                    else:
+                        # Final attempt failed, raise error
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}"
+                        )
+
+    elif order.order_type == "quote_based" and order.product_id:
+        product = db.query(Product).filter(Product.id == order.product_id).first()
+        if product and product.has_bom:
+            bom = db.query(BOM).filter(
+                BOM.product_id == order.product_id,
+                BOM.active == True  # noqa: E712
+            ).first()
+
+            routing = db.query(Routing).filter(
+                Routing.product_id == order.product_id,
+                Routing.is_active == True  # noqa: E712
+            ).first()
+
+            # Retry logic to handle race condition if locking fails
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    po_code = get_next_po_code()
+
+                    production_order = ProductionOrder(
+                        code=po_code,
+                        product_id=order.product_id,
+                        bom_id=bom.id if bom else None,
+                        routing_id=routing.id if routing else None,
+                        sales_order_id=order.id,
+                        quantity_ordered=order.quantity or 1,
+                        quantity_completed=0,
+                        quantity_scrapped=0,
+                        source="sales_order",
+                        status="draft",
+                        priority=3,
+                        notes=f"Auto-generated from {order.order_number}",
+                        created_by=created_by,
+                    )
+                    db.add(production_order)
+                    db.flush()  # Flush to detect unique constraint violations
+                    created_orders.append(po_code)
+                    break  # Success, exit retry loop
+                except IntegrityError as e:
+                    db.rollback()
+                    if attempt < max_retries - 1:
+                        # Retry with a new code
+                        continue
+                    else:
+                        # Final attempt failed, raise error
+                        raise HTTPException(
+                            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}"
+                        )
+
+    return created_orders
 
 
 # ============================================================================
@@ -233,6 +396,22 @@ async def create_sales_order(
 
     db.commit()
     db.refresh(sales_order)
+
+    # Trigger MRP check if enabled (behind feature flag, graceful degradation)
+    try:
+        from app.services.mrp_trigger_service import trigger_mrp_check
+        from app.core.settings import get_settings
+        settings = get_settings()
+        
+        if settings.AUTO_MRP_ON_ORDER_CREATE:
+            trigger_mrp_check(db, sales_order.id)
+    except Exception as e:
+        # Log but don't break order creation - graceful degradation
+        logger = get_logger(__name__)
+        logger.warning(
+            f"MRP trigger failed for sales order {sales_order.id}: {str(e)}",
+            exc_info=True
+        )
 
     return sales_order
 
@@ -524,6 +703,202 @@ async def get_sales_order_details(
 
 
 # ============================================================================
+# ENDPOINT: Get Required Orders (MRP Cascade)
+# ============================================================================
+
+@router.get("/{order_id}/required-orders")
+async def get_required_orders_for_sales_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get full MRP cascade of WOs and POs needed to fulfill this sales order.
+
+    Recursively explodes BOMs for all line items to show:
+    - Work Orders needed for sub-assemblies (make items with BOMs)
+    - Purchase Orders needed for raw materials (buy items without BOMs)
+
+    This provides a complete view of manufacturing requirements before
+    creating production orders.
+
+    Returns:
+        - work_orders_needed: List of sub-assemblies requiring production
+        - purchase_orders_needed: List of materials requiring purchase
+        - summary by product with quantities
+    """
+    # Admin-only endpoint
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can view MRP requirements"
+        )
+
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales order not found"
+        )
+
+    work_orders_needed = []
+    purchase_orders_needed = []
+    top_level_products = []
+    visited_products = set()
+
+    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, parent_sku: str = None):
+        """Recursively explode BOM to find all requirements"""
+        if product_id in visited_products and level > 0:
+            return  # Circular reference protection (allow top-level duplicates)
+
+        if level > 0:
+            visited_products.add(product_id)
+
+        # Find active BOM for this product
+        bom = db.query(BOM).filter(
+            BOM.product_id == product_id,
+            BOM.active == True  # noqa: E712 - SQL Server compatibility
+        ).first()
+
+        if not bom:
+            return
+
+        bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
+
+        for line in bom_lines:
+            if line.is_cost_only:
+                continue
+
+            component = db.query(Product).filter(Product.id == line.component_id).first()
+            if not component:
+                continue
+
+            # Calculate required quantity with scrap
+            base_qty = Decimal(str(line.quantity or 0))
+            scrap_factor = Decimal(str(line.scrap_factor or 0)) / Decimal("100")
+            required_qty = base_qty * (Decimal("1") + scrap_factor) * quantity
+
+            # Get available inventory
+            inv_result = db.query(
+                func.sum(Inventory.available_quantity)
+            ).filter(Inventory.product_id == line.component_id).scalar()
+            available_qty = Decimal(str(inv_result or 0))
+
+            shortage_qty = max(Decimal("0"), required_qty - available_qty)
+
+            if shortage_qty <= 0:
+                continue  # No shortage, no order needed
+
+            order_info = {
+                "product_id": component.id,
+                "product_sku": component.sku,
+                "product_name": component.name,
+                "unit": line.unit or component.unit,
+                "required_qty": float(required_qty),
+                "available_qty": float(available_qty),
+                "order_qty": float(shortage_qty),
+                "bom_level": level,
+                "has_bom": component.has_bom or False,
+                "parent_sku": parent_sku
+            }
+
+            if component.has_bom:
+                work_orders_needed.append(order_info)
+                # Recursively explode this sub-assembly's BOM
+                explode_requirements(component.id, shortage_qty, level + 1, component.sku)
+            else:
+                purchase_orders_needed.append(order_info)
+
+    # Process based on order type
+    if order.order_type == "line_item":
+        # Get all lines for this order
+        lines = db.query(SalesOrderLine).filter(
+            SalesOrderLine.sales_order_id == order_id
+        ).all()
+
+        for line in lines:
+            product = db.query(Product).filter(Product.id == line.product_id).first()
+            if not product:
+                continue
+
+            qty = Decimal(str(line.quantity or 1))
+
+            # Check if this product needs a top-level WO
+            if product.has_bom:
+                # Get available inventory for the finished good
+                inv_result = db.query(
+                    func.sum(Inventory.available_quantity)
+                ).filter(Inventory.product_id == product.id).scalar()
+                available_qty = Decimal(str(inv_result or 0))
+                shortage_qty = max(Decimal("0"), qty - available_qty)
+
+                if shortage_qty > 0:
+                    top_level_products.append({
+                        "product_id": product.id,
+                        "product_sku": product.sku,
+                        "product_name": product.name,
+                        "order_qty": float(shortage_qty),
+                        "has_bom": True
+                    })
+
+            # Reset visited for each line item's explosion
+            visited_products.clear()
+            explode_requirements(product.id, qty, level=0, parent_sku=product.sku)
+
+    elif order.order_type == "quote_based" and order.product_id:
+        # Single product from quote
+        product = db.query(Product).filter(Product.id == order.product_id).first()
+        if product:
+            qty = Decimal(str(order.quantity or 1))
+
+            if product.has_bom:
+                inv_result = db.query(
+                    func.sum(Inventory.available_quantity)
+                ).filter(Inventory.product_id == product.id).scalar()
+                available_qty = Decimal(str(inv_result or 0))
+                shortage_qty = max(Decimal("0"), qty - available_qty)
+
+                if shortage_qty > 0:
+                    top_level_products.append({
+                        "product_id": product.id,
+                        "product_sku": product.sku,
+                        "product_name": product.name,
+                        "order_qty": float(shortage_qty),
+                        "has_bom": True
+                    })
+
+            explode_requirements(product.id, qty, level=0, parent_sku=product.sku)
+
+    # Aggregate duplicate materials (same product from different sub-assemblies)
+    aggregated_pos = {}
+    for po in purchase_orders_needed:
+        key = po["product_id"]
+        if key in aggregated_pos:
+            aggregated_pos[key]["order_qty"] += po["order_qty"]
+            aggregated_pos[key]["required_qty"] += po["required_qty"]
+        else:
+            aggregated_pos[key] = po.copy()
+            aggregated_pos[key]["sources"] = []
+        aggregated_pos[key]["sources"].append(po.get("parent_sku", "direct"))
+
+    return {
+        "order_id": order_id,
+        "order_number": order.order_number,
+        "order_type": order.order_type,
+        "top_level_work_orders": top_level_products,
+        "sub_assembly_work_orders": work_orders_needed,
+        "purchase_orders_needed": list(aggregated_pos.values()),
+        "summary": {
+            "top_level_wos": len(top_level_products),
+            "sub_assembly_wos": len(work_orders_needed),
+            "purchase_orders": len(aggregated_pos),
+            "total_orders_needed": len(top_level_products) + len(work_orders_needed) + len(aggregated_pos)
+        }
+    }
+
+
+# ============================================================================
 # ENDPOINT: Update Order Status (Admin)
 # ============================================================================
 
@@ -572,6 +947,34 @@ async def update_order_status(
     # Set timestamps based on status
     if update.status == "confirmed" and old_status == "pending":
         order.confirmed_at = datetime.utcnow()
+
+        # Auto-create production orders for confirmed orders
+        # Check if production orders already exist
+        existing_pos = db.query(ProductionOrder).filter(
+            ProductionOrder.sales_order_id == order_id
+        ).all()
+
+        if not existing_pos:
+            # Generate production orders for this SO
+            created_orders = _create_production_orders_for_so(order, db, current_user.email)
+            if created_orders:
+                # Update status to in_production since WOs are created
+                order.status = "in_production"
+                
+                # Trigger MRP check if enabled (behind feature flag, graceful degradation)
+                try:
+                    from app.services.mrp_trigger_service import trigger_mrp_check
+                    from app.core.settings import get_settings
+                    settings = get_settings()
+                    
+                    if settings.AUTO_MRP_ON_CONFIRMATION:
+                        trigger_mrp_check(db, order.id)
+                except Exception as e:
+                    # Log but don't break order confirmation - graceful degradation
+                    logger.warning(
+                        f"MRP trigger failed after order confirmation {order.id}: {str(e)}",
+                        exc_info=True
+                    )
 
     if update.status == "shipped":
         order.shipped_at = datetime.utcnow()
@@ -871,6 +1274,22 @@ async def ship_order(
     db.commit()
     db.refresh(order)
 
+    # Trigger MRP recalculation if enabled (behind feature flag, graceful degradation)
+    try:
+        from app.services.mrp_trigger_service import trigger_mrp_recalculation
+        from app.core.settings import get_settings
+        settings = get_settings()
+        
+        if settings.AUTO_MRP_ON_SHIPMENT:
+            trigger_mrp_recalculation(db, order.id, reason="shipment")
+    except Exception as e:
+        # Log but don't break shipping - graceful degradation
+        logger = get_logger(__name__)
+        logger.warning(
+            f"MRP recalculation trigger failed after shipping order {order.id}: {str(e)}",
+            exc_info=True
+        )
+
     return {
         "message": "Order shipped successfully",
         "tracking_number": tracking_number,
@@ -962,7 +1381,7 @@ async def generate_production_orders(
         # Get all lines for this order
         lines = db.query(SalesOrderLine).filter(
             SalesOrderLine.sales_order_id == order_id
-        ).order_by(SalesOrderLine.line_number).all()
+        ).order_by(SalesOrderLine.id).all()
 
         if not lines:
             raise HTTPException(
@@ -970,12 +1389,12 @@ async def generate_production_orders(
                 detail="Sales order has no line items"
             )
 
-        for line in lines:
+        for idx, line in enumerate(lines, start=1):
             product = db.query(Product).filter(Product.id == line.product_id).first()
             if not product:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Product ID {line.product_id} not found for line {line.line_number}"
+                    detail=f"Product ID {line.product_id} not found for line {idx}"
                 )
 
             # Find BOM for product (first active one)
@@ -1004,7 +1423,7 @@ async def generate_production_orders(
                 source="sales_order",
                 status="draft",
                 priority=3,  # Normal priority
-                notes=f"Generated from {order.order_number} Line {line.line_number}",
+                notes=f"Generated from {order.order_number} Line {idx}",
                 created_by=current_user.email,
             )
 
@@ -1090,19 +1509,18 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
             SalesOrderLine.sales_order_id == order.id
         ).order_by(SalesOrderLine.id).all()  # Order by ID since line_number doesn't exist
 
-        for idx, line in enumerate(order_lines, start=1):
+        for line in order_lines:
             product = db.query(Product).filter(Product.id == line.product_id).first()
             # Use actual database columns: total (not total_price)
-            total_price = float(line.total) if line.total else (float(line.unit_price) * float(line.quantity))
+            line_total = line.total if line.total else (line.unit_price * line.quantity)
             lines.append(SalesOrderLineResponse(
                 id=line.id,
-                line_number=idx,  # Calculate from position
                 product_id=line.product_id,
                 product_sku=product.sku if product else "",
                 product_name=product.name if product else "",
-                quantity=int(line.quantity) if line.quantity else 0,
+                quantity=line.quantity if line.quantity else Decimal("0"),
                 unit_price=line.unit_price,
-                total_price=Decimal(str(total_price)),
+                total=line_total,
                 notes=line.notes,
             ))
 

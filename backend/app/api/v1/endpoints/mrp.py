@@ -370,7 +370,8 @@ async def get_requirements(
             net_shortage=r.net_shortage,
             lead_time_days=r.lead_time_days,
             reorder_point=r.reorder_point,
-            min_order_qty=r.min_order_qty
+            min_order_qty=r.min_order_qty,
+            has_bom=r.has_bom,
         )
         for r in net_requirements
     ]

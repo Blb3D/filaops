@@ -5,9 +5,14 @@ Provides validated, type-safe configuration from environment variables.
 All settings can be overridden via environment variables or .env file.
 """
 from functools import lru_cache
+from pathlib import Path
 from typing import Optional, List
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Calculate path to .env in project root (4 levels up from this file)
+# backend/app/core/settings.py -> filaops/.env
+_ENV_FILE = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
@@ -19,7 +24,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # Ignore extra env vars
@@ -237,6 +242,35 @@ class Settings(BaseSettings):
     LICENSE_KEY: Optional[str] = Field(
         default=None,
         description="License key for Pro/Enterprise features"
+    )
+
+    # ===================
+    # MRP (Material Requirements Planning) Settings
+    # ===================
+    # All MRP features are disabled by default for safety and backward compatibility
+    INCLUDE_SALES_ORDERS_IN_MRP: bool = Field(
+        default=False,
+        description="Include Sales Orders as independent demand in MRP calculations (default: False for safety)"
+    )
+    AUTO_MRP_ON_ORDER_CREATE: bool = Field(
+        default=False,
+        description="Automatically trigger MRP check when Sales Order is created (default: False for safety)"
+    )
+    AUTO_MRP_ON_SHIPMENT: bool = Field(
+        default=False,
+        description="Automatically trigger MRP recalculation after order ships (default: False for safety)"
+    )
+    AUTO_MRP_ON_CONFIRMATION: bool = Field(
+        default=False,
+        description="Automatically trigger MRP when Sales Order is confirmed (default: False for safety)"
+    )
+    MRP_ENABLE_SUB_ASSEMBLY_CASCADING: bool = Field(
+        default=False,
+        description="Enable due date cascading for sub-assemblies (default: False until validated)"
+    )
+    MRP_VALIDATION_STRICT_MODE: bool = Field(
+        default=True,
+        description="Enable strict validation for MRP calculations (default: True)"
     )
 
     @property

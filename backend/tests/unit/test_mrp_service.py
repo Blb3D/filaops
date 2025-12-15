@@ -17,8 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.db.base import Base
-from app.services.mrp import MRPService, ComponentRequirement, NetRequirement
+from app.services.mrp import MRPService, ComponentRequirement, NetRequirement, convert_uom
 
 
 # ============================================================================
@@ -1240,3 +1239,96 @@ class TestEdgeCases:
         # Verify quantities are Decimal, not float
         for req in requirements:
             assert isinstance(req.gross_quantity, Decimal)
+
+
+# ============================================================================
+# UOM Conversion Tests
+# ============================================================================
+
+def test_convert_uom_basic_conversions():
+    """Test basic UOM conversions"""
+    # Mass conversions
+    assert convert_uom(Decimal('1000'), 'G', 'KG') == Decimal('1')
+    assert convert_uom(Decimal('1'), 'KG', 'G') == Decimal('1000')
+    
+    # Same unit
+    assert convert_uom(Decimal('100'), 'KG', 'KG') == Decimal('100')
+    
+    # Volume conversions
+    assert convert_uom(Decimal('1000'), 'ML', 'L') == Decimal('1')
+    assert convert_uom(Decimal('1'), 'L', 'ML') == Decimal('1000')
+
+
+def test_convert_uom_incompatible_bases():
+    """Test conversion between incompatible unit bases returns original quantity"""
+    # Cannot convert mass to volume
+    result = convert_uom(Decimal('100'), 'KG', 'L')
+    assert result == Decimal('100')  # Returns original quantity
+    
+    # Cannot convert count to mass
+    result = convert_uom(Decimal('5'), 'EA', 'KG')
+    assert result == Decimal('5')  # Returns original quantity
+
+
+def test_convert_uom_unknown_units():
+    """Test conversion with unknown units returns original quantity"""
+    result = convert_uom(Decimal('100'), 'UNKNOWN', 'KG')
+    assert result == Decimal('100')  # Returns original quantity
+    
+    result = convert_uom(Decimal('100'), 'KG', 'UNKNOWN')
+    assert result == Decimal('100')  # Returns original quantity
+
+
+def test_convert_uom_zero_factor_raises_error():
+    """Test that zero conversion factor raises ValueError"""
+    from app.services.mrp import UOM_CONVERSIONS
+    
+    # Temporarily add a UOM with zero factor to test the guard
+    original_conversions = UOM_CONVERSIONS.copy()
+    
+    try:
+        # Add invalid UOM with zero factor
+        UOM_CONVERSIONS['ZERO_FROM'] = {'base': 'KG', 'factor': Decimal('0')}
+        UOM_CONVERSIONS['ZERO_TO'] = {'base': 'KG', 'factor': Decimal('0')}
+        
+        # Test zero from_factor
+        with pytest.raises(ValueError) as exc_info:
+            convert_uom(Decimal('100'), 'ZERO_FROM', 'KG')
+        assert 'Invalid UOM conversion factor' in str(exc_info.value)
+        assert 'ZERO_FROM' in str(exc_info.value)
+        assert 'factor is 0' in str(exc_info.value)
+        
+        # Test zero to_factor
+        with pytest.raises(ValueError) as exc_info:
+            convert_uom(Decimal('100'), 'KG', 'ZERO_TO')
+        assert 'Invalid UOM conversion factor' in str(exc_info.value)
+        assert 'ZERO_TO' in str(exc_info.value)
+        assert 'factor is 0' in str(exc_info.value)
+        
+    finally:
+        # Restore original conversions
+        UOM_CONVERSIONS.clear()
+        UOM_CONVERSIONS.update(original_conversions)
+
+
+def test_convert_uom_none_factor_raises_error():
+    """Test that None/missing conversion factor raises ValueError"""
+    from app.services.mrp import UOM_CONVERSIONS
+    
+    # Temporarily add a UOM with missing factor to test the guard
+    original_conversions = UOM_CONVERSIONS.copy()
+    
+    try:
+        # Add invalid UOM with None factor
+        UOM_CONVERSIONS['NONE_FACTOR'] = {'base': 'KG', 'factor': None}
+        
+        # Test None factor
+        with pytest.raises(ValueError) as exc_info:
+            convert_uom(Decimal('100'), 'NONE_FACTOR', 'KG')
+        assert 'Invalid UOM conversion factor' in str(exc_info.value)
+        assert 'NONE_FACTOR' in str(exc_info.value)
+        
+    finally:
+        # Restore original conversions
+        UOM_CONVERSIONS.clear()
+        UOM_CONVERSIONS.update(original_conversions)
