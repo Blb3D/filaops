@@ -52,6 +52,11 @@ class CompanySettings(Base):
     invoice_prefix = Column(String(20), nullable=True, default="INV")
     invoice_terms = Column(String(2000), nullable=True)
 
+    # Accounting Settings
+    fiscal_year_start_month = Column(Integer, nullable=True, default=1)  # 1=January
+    accounting_method = Column(String(20), nullable=True, default="cash")  # cash or accrual
+    currency_code = Column(String(10), nullable=True, default="USD")
+
     # Timestamps
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())

@@ -3,7 +3,7 @@ Sales Order Model
 
 Represents customer orders converted from approved quotes
 """
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -48,6 +48,8 @@ class SalesOrder(Base):
     unit_price = Column(Numeric(10, 2), nullable=False)
     total_price = Column(Numeric(10, 2), nullable=False)
     tax_amount = Column(Numeric(10, 2), nullable=True, default=0.00)
+    tax_rate = Column(Numeric(5, 4), nullable=True)  # Tax rate at time of order (e.g., 0.0825)
+    is_taxable = Column(Boolean, nullable=True, default=True)  # Whether tax applies
     shipping_cost = Column(Numeric(10, 2), nullable=True, default=0.00)
     grand_total = Column(Numeric(10, 2), nullable=False)  # total + tax + shipping
 

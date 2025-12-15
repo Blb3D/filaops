@@ -16,7 +16,7 @@ from sqlalchemy.engine.reflection import Inspector
 
 # revision identifiers, used by Alembic.
 revision: str = '007_ensure_code_unique'
-down_revision: Union[str, None] = '006_add_mrp_tracking_to_sales_orders'
+down_revision: Union[str, None] = '006_mrp_tracking'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
