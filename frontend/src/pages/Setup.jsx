@@ -105,7 +105,22 @@ export default function Setup() {
 
       // Store the token - user is now logged in
       localStorage.setItem("adminToken", data.access_token);
-      
+
+      // Fetch and store user data so AdminLayout knows the user is an admin
+      try {
+        const meRes = await fetch(`${API_URL}/api/v1/auth/me`, {
+          headers: {
+            Authorization: `Bearer ${data.access_token}`,
+          },
+        });
+        if (meRes.ok) {
+          const userData = await meRes.json();
+          localStorage.setItem("adminUser", JSON.stringify(userData));
+        }
+      } catch {
+        // If this fails, user will be treated as non-admin until re-login
+      }
+
       // Redirect to dashboard
       navigate("/admin");
       

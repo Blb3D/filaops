@@ -1042,7 +1042,10 @@ function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
               className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
             >
               <option value="">-- Keep Current --</option>
-              {ITEM_TYPES.map((type) => (
+              {/* Filter out "filament" - it's a virtual type for display only.
+                  In the DB, filaments are supplies with material_type_id set.
+                  Use Material Import to create filaments. */}
+              {ITEM_TYPES.filter((type) => type.value !== "filament").map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
                 </option>

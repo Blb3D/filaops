@@ -29,7 +29,7 @@ from app.schemas.bom import (
     BOMRecalculateResponse,
     BOMCopyRequest,
 )
-from app.services.uom_service import convert_quantity, UOMConversionError
+from app.services.uom_service import convert_quantity_safe
 
 router = APIRouter(prefix="/bom", tags=["Admin - BOM Management"])
 
@@ -102,15 +102,13 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
         and comp_cost
         and comp_cost > 0
     ):
-        try:
-            # Cost is per component_unit, convert to per line.unit
-            # E.g., $20/KG -> $0.02/G (divide by 1000)
-            # We convert 1 unit of line.unit to component_unit, then multiply by cost
-            conversion_factor = convert_quantity(db, Decimal("1"), line.unit, component_unit)
-            display_cost = comp_cost * conversion_factor
-        except UOMConversionError:
-            # If conversion fails, fall back to original cost
-            pass
+        # Cost is per component_unit, convert to per line.unit
+        # E.g., $20/KG -> $0.02/G (divide by 1000)
+        # We convert 1 unit of line.unit to component_unit, then multiply by cost
+        # Use _safe variant to handle empty UOM table with inline fallbacks
+        converted_factor, success = convert_quantity_safe(db, Decimal("1"), line.unit, component_unit)
+        if success:
+            display_cost = comp_cost * converted_factor
 
     # Calculate line cost using the display cost and effective quantity (with scrap)
     line_cost = None
@@ -160,14 +158,12 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
             and component_unit
             and line.unit != component_unit
         ):
-            try:
-                # Convert effective_qty from line.unit to component.unit (inventory unit)
-                # E.g., 25 G -> 0.025 KG
-                converted_qty = convert_quantity(db, effective_qty, line.unit, component_unit)
+            # Convert effective_qty from line.unit to component.unit (inventory unit)
+            # E.g., 25 G -> 0.025 KG
+            # Use _safe variant to handle empty UOM table with inline fallbacks
+            converted_qty, success = convert_quantity_safe(db, effective_qty, line.unit, component_unit)
+            if success:
                 qty_needed_in_inventory_unit = float(converted_qty)
-            except UOMConversionError:
-                # If conversion fails, use effective_qty as-is
-                pass
         
         is_available = inventory["available"] >= qty_needed_in_inventory_unit
         shortage = max(0, qty_needed_in_inventory_unit - inventory["available"])
@@ -232,14 +228,14 @@ def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
                 line_unit = line.unit
 
                 if line_unit and component_unit and line_unit.upper() != component_unit.upper():
-                    try:
-                        # Convert effective_qty from line.unit to component.unit
-                        # E.g., 25 G -> 0.025 KG
-                        converted_qty = convert_quantity(db, effective_qty, line_unit, component_unit)
+                    # Convert effective_qty from line.unit to component.unit
+                    # E.g., 25 G -> 0.025 KG
+                    # Use _safe variant to handle empty UOM table with inline fallbacks
+                    converted_qty, success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
+                    if success:
                         total += cost * converted_qty
-                    except UOMConversionError:
-                        # If conversion fails, fall back to direct multiplication
-                        # (may be inaccurate but won't break)
+                    else:
+                        # Conversion failed (incompatible units), fall back to direct multiplication
                         total += cost * effective_qty
                 else:
                     # Same unit or no unit specified, direct multiply
@@ -744,13 +740,14 @@ async def recalculate_bom(
             unit_cost = component_cost
 
             if line_unit and component_unit and line_unit.upper() != component_unit.upper():
-                try:
-                    converted_qty = convert_quantity(db, effective_qty, line_unit, component_unit)
+                # Use _safe variant to handle empty UOM table with inline fallbacks
+                converted_qty, qty_success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
+                if qty_success:
                     line_cost = float(component_cost * converted_qty)
                     # Adjust unit cost to show per line unit
-                    conversion_factor = convert_quantity(db, Decimal("1"), line_unit, component_unit)
+                    conversion_factor, _ = convert_quantity_safe(db, Decimal("1"), line_unit, component_unit)
                     unit_cost = component_cost * conversion_factor
-                except UOMConversionError:
+                else:
                     line_cost = float(component_cost * effective_qty)
             else:
                 line_cost = float(component_cost * effective_qty)
@@ -1070,11 +1067,12 @@ def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> D
                 line_unit = line.unit
 
                 if line_unit and component_unit and line_unit.upper() != component_unit.upper():
-                    try:
-                        # Convert effective_qty from line.unit to component.unit
-                        converted_qty = convert_quantity(db, effective_qty, line_unit, component_unit)
+                    # Convert effective_qty from line.unit to component.unit
+                    # Use _safe variant to handle empty UOM table with inline fallbacks
+                    converted_qty, success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
+                    if success:
                         total += component_cost * converted_qty
-                    except UOMConversionError:
+                    else:
                         total += component_cost * effective_qty
                 else:
                     total += component_cost * effective_qty
@@ -1219,14 +1217,15 @@ async def get_cost_rollup(
                 unit_cost = component_cost
 
                 if line_unit and component_unit and line_unit.upper() != component_unit.upper():
-                    try:
-                        # Convert effective_qty from line.unit to component.unit
-                        converted_qty = convert_quantity(db, effective_qty, line_unit, component_unit)
+                    # Convert effective_qty from line.unit to component.unit
+                    # Use _safe variant to handle empty UOM table with inline fallbacks
+                    converted_qty, qty_success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
+                    if qty_success:
                         line_cost = component_cost * converted_qty
                         # Also adjust unit_cost to show cost per line unit
-                        conversion_factor = convert_quantity(db, Decimal("1"), line_unit, component_unit)
+                        conversion_factor, _ = convert_quantity_safe(db, Decimal("1"), line_unit, component_unit)
                         unit_cost = component_cost * conversion_factor
-                    except UOMConversionError:
+                    else:
                         line_cost = component_cost * effective_qty
                 else:
                     line_cost = component_cost * effective_qty
