@@ -10,7 +10,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from sqlalchemy.exc import IntegrityError
 
 from app.db.session import get_db
@@ -21,10 +21,8 @@ from app.models.production_order import ProductionOrder
 from app.models.product import Product
 from app.models.bom import BOM, BOMLine
 from app.models.inventory import Inventory
+from app.models.manufacturing import Routing
 from app.logging_config import get_logger
-from sqlalchemy import func
-
-logger = get_logger(__name__)
 from app.schemas.sales_order import (
     SalesOrderCreate,
     SalesOrderConvert,
@@ -38,8 +36,9 @@ from app.schemas.sales_order import (
     SalesOrderCancel,
 )
 from app.api.v1.endpoints.auth import get_current_user
-from app.models.manufacturing import Routing
 from app.services.inventory_service import process_shipment
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/sales-orders", tags=["Sales Orders"])
 
@@ -407,7 +406,6 @@ async def create_sales_order(
             trigger_mrp_check(db, sales_order.id)
     except Exception as e:
         # Log but don't break order creation - graceful degradation
-        logger = get_logger(__name__)
         logger.warning(
             f"MRP trigger failed for sales order {sales_order.id}: {str(e)}",
             exc_info=True
@@ -595,7 +593,6 @@ async def convert_quote_to_sales_order(
     db.add(production_order)
 
     # Log the creation
-    logger = get_logger(__name__)
     logger.info(
         "Production order created from quote",
         extra={
@@ -1284,7 +1281,6 @@ async def ship_order(
             trigger_mrp_recalculation(db, order.id, reason="shipment")
     except Exception as e:
         # Log but don't break shipping - graceful degradation
-        logger = get_logger(__name__)
         logger.warning(
             f"MRP recalculation trigger failed after shipping order {order.id}: {str(e)}",
             exc_info=True

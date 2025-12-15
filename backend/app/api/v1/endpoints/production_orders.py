@@ -13,8 +13,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_, case
 
-logger = logging.getLogger(__name__)
-
 from app.db.session import get_db
 from app.api.v1.endpoints.auth import get_current_user
 from app.models import (
@@ -42,6 +40,8 @@ from app.schemas.production_order import (
     ProductionOrderSplitRequest,
     ProductionOrderSplitResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
