@@ -942,7 +942,21 @@ export default function AdminItems() {
   );
 }
 
-// Bulk Update Modal
+/**
+ * Modal UI for applying a set of field updates to multiple selected items.
+ *
+ * Builds an update payload from the form by including only fields with explicit values:
+ * - `category_id` is included as a number when selected; the value `"0"` clears the category;
+ * - `item_type` and `procurement_type` are included when selected;
+ * - `is_active` is included as a boolean when selected.
+ * If no fields are selected the modal shows a warning and does not invoke the save callback.
+ * The form resets after a successful submit and when the modal closes.
+ *
+ * @param {Array<{id:number,name:string,is_active:boolean}>} categories - Available categories for assignment (used to populate the Category select).
+ * @param {number} selectedCount - Number of items currently selected (used for display text).
+ * @param {(updateData: {category_id?: number, item_type?: string, procurement_type?: string, is_active?: boolean}) => void} onSave - Callback invoked with the update payload when the user submits valid changes.
+ * @param {() => void} onClose - Callback to close the modal without applying changes.
+ */
 function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
   const toast = useToast();
   const [form, setForm] = useState({

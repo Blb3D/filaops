@@ -22,6 +22,17 @@ const STEPS = {
   COMPLETE: 7,
 };
 
+/**
+ * Render the multi-step onboarding wizard for initial FilaOps setup.
+ *
+ * Guides admin account creation, optional example data seeding, CSV imports
+ * for products, customers, orders, and inventory, then completes setup with a
+ * redirect to the admin dashboard. Performs setup-status checks, authenticated
+ * API calls for creation and imports, and persists authentication state to
+ * localStorage.
+ *
+ * @returns {JSX.Element} The onboarding UI component.
+ */
 export default function Onboarding() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(STEPS.ACCOUNT);
