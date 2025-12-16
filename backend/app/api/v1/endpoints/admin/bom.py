@@ -74,16 +74,33 @@ def get_component_inventory(component_id: int, db: Session) -> dict:
 
 
 def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: Decimal, db: Session = None) -> dict:
-    """Build a standardized BOM line response dict.
-
-    Args:
-        line: The BOMLine object
-        component: The component Product (may be None)
-        comp_cost: The component cost as Decimal (per component's unit)
-        db: Database session for UOM conversion
-
+    """
+    Constructs a standardized response dictionary for a BOM line.
+    
+    Parameters:
+        line (BOMLine): The BOM line record.
+        component (Optional[Product]): The component product associated with the line, or None.
+        comp_cost (Decimal): The component unit cost expressed per the component's unit.
+        db (Session, optional): Database session used for unit-of-measure conversions; may be omitted.
+    
     Returns:
-        Dict containing the standardized line response
+        dict: A dictionary with the following keys:
+            id: BOM line identifier.
+            bom_id: Parent BOM identifier.
+            component_id: Referenced component product id.
+            quantity: Nominal quantity required for the line.
+            unit: Unit of measure for the line quantity.
+            sequence: Line sequence/order within the BOM.
+            consume_stage: Manufacturing consume stage for the line.
+            is_cost_only: Whether the line is cost-only (no component issued).
+            scrap_factor: Scrap percentage applied to the line quantity.
+            notes: Optional notes for the line.
+            component_sku: Component SKU or None.
+            component_name: Component display name or None.
+            component_unit: Component's unit of measure or None.
+            component_cost: Cost per line unit (converted from component unit when possible) as a float, or None.
+            line_cost: Total cost for the line (component_cost * effective quantity) as a float, or None.
+            qty_needed: Effective quantity required after applying scrap as a float.
     """
     component_unit = component.unit if component else None
 
@@ -136,7 +153,16 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
 
 
 def build_bom_response(bom: BOM, db: Session) -> dict:
-    """Build a full BOM response with product info and lines"""
+    """
+    Builds a complete BOM response object containing BOM header data and its detailed lines.
+    
+    Parameters:
+        bom (BOM): BOM model instance to build the response for.
+        db (Session): Database session used to load related product, component, inventory and sub-BOM data.
+    
+    Returns:
+        dict: Dictionary with BOM metadata (id, product_id, product_sku, product_name, code, name, version, revision, active, total_cost, assembly_time_minutes, effective_date, notes, created_at) and "lines" — a list of line dictionaries that include component info, quantities (including effective quantity with scrap), display and line costs, inventory_on_hand, inventory_available, is_available, shortage, and has_bom (whether the component is a sub-assembly).
+    """
     lines = []
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -209,7 +235,17 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
 
 
 def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
-    """Recalculate total BOM cost from component costs, with UOM conversion"""
+    """
+    Compute the BOM's total material cost by summing each line's cost derived from the component's effective unit cost.
+    
+    For each line, the function applies the line's scrap factor to compute an effective quantity, then attempts a safe unit-of-measure conversion from the line unit to the component unit; if conversion succeeds the converted quantity is used, otherwise the original effective quantity is used. Lines whose component has no effective cost (zero or missing) are ignored.
+    
+    Parameters:
+        bom (BOM): BOM instance whose lines will be evaluated (must include associated lines).
+    
+    Returns:
+        Decimal: Total cost of the BOM as the sum of per-line costs.
+    """
     total = Decimal("0")
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -704,9 +740,25 @@ async def recalculate_bom(
     db: Session = Depends(get_db),
 ):
     """
-    Recalculate BOM total cost from current component costs.
-
-    Admin only. Useful after component prices change.
+    Recalculates a BOM's total cost from current component and sub-assembly costs and returns a summary of the previous and new totals with per-line cost details.
+    
+    Returns:
+        dict: {
+            "bom_id": int,
+            "previous_cost": Decimal,   # BOM.total_cost before recalculation
+            "new_cost": Decimal,        # recalculated BOM.total_cost (rolled-up, includes sub-assemblies)
+            "line_costs": list[dict]    # per-line entries with keys:
+                # {
+                #   "line_id": int,
+                #   "component_sku": str | None,
+                #   "quantity": float,      # original line quantity
+                #   "unit_cost": float,    # displayed cost per line unit (may reflect UOM conversion)
+                #   "line_cost": float     # total cost for the line (unit_cost * effective_quantity or fallback)
+                # }
+        }
+    
+    Raises:
+        HTTPException: 404 if the specified BOM is not found.
     """
     bom = (
         db.query(BOM)
@@ -1020,9 +1072,12 @@ def explode_bom_recursive(
 
 def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> Decimal:
     """
-    Calculate total BOM cost including all sub-assembly costs.
-
-    This recursively sums costs through the entire BOM tree.
+    Compute the total material cost for the BOM identified by `bom_id`, including costs rolled up from any sub-assembly BOMs.
+    
+    The cost is the sum of each line's effective quantity (quantity adjusted for the line's scrap factor) multiplied by the unit cost of the component or by the rolled-up cost of a sub-BOM when the component has its own active BOM. When a line unit differs from the component unit, a unit conversion is attempted via `convert_quantity_safe`; if conversion fails, the original effective quantity is used. Circular BOM references are detected and prevented from double-counting.
+    
+    Returns:
+        Decimal: The total rolled-up cost for the BOM; returns Decimal("0") when the BOM is not found or when circular references prevent further accumulation.
     """
     if visited is None:
         visited = set()
@@ -1175,9 +1230,34 @@ async def get_cost_rollup(
     db: Session = Depends(get_db),
 ):
     """
-    Get a detailed cost breakdown with sub-assembly costs rolled up.
-
-    Shows each component's contribution to total cost, including nested sub-assemblies.
+    Builds a detailed cost rollup for a BOM, including per-line contributions and nested sub-assembly costs.
+    
+    Parameters:
+        bom_id (int): ID of the BOM to analyze.
+    
+    Returns:
+        dict: Summary and breakdown of costs with the following keys:
+            - bom_id (int): The BOM id provided.
+            - product_sku (str|None): SKU of the BOM's product, if available.
+            - product_name (str|None): Name of the BOM's product, if available.
+            - stored_cost (float): The BOM's stored total_cost (0 if missing).
+            - rolled_up_cost (float): Sum of computed line costs including rolled-up sub-assemblies.
+            - cost_difference (float): rolled_up_cost minus stored_cost.
+            - has_sub_assemblies (bool): True if any line references an active sub-BOM.
+            - sub_assembly_count (int): Number of lines that are sub-assemblies.
+            - direct_cost (float): Aggregated cost of direct (non-sub-assembly) lines.
+            - sub_assembly_cost (float): Aggregated cost contributed by sub-assembly lines.
+            - breakdown (list): Per-line dictionaries with:
+                - component_id (int): Component product id.
+                - component_sku (str): Component SKU.
+                - component_name (str): Component name.
+                - quantity (float): Line quantity (before scrap).
+                - effective_quantity (float): Quantity after applying scrap factor.
+                - unit_cost (float): Cost expressed per line unit (adjusted if UOM conversion succeeded).
+                - line_cost (float): Total cost contribution for the line.
+                - cost_source (str): One of "sub_assembly", "direct", or "missing".
+                - is_sub_assembly (bool): True when the line uses an active sub-BOM.
+                - sub_bom_id (int|None): ID of the sub-BOM when applicable.
     """
     bom = db.query(BOM).options(joinedload(BOM.product), joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
     if not bom:
