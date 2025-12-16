@@ -745,8 +745,10 @@ async def recalculate_bom(
                 if qty_success:
                     line_cost = float(component_cost * converted_qty)
                     # Adjust unit cost to show per line unit
-                    conversion_factor, _ = convert_quantity_safe(db, Decimal("1"), line_unit, component_unit)
-                    unit_cost = component_cost * conversion_factor
+                    # Derive factor from converted_qty to avoid second call
+                    if effective_qty:
+                        conversion_factor = converted_qty / effective_qty
+                        unit_cost = component_cost * conversion_factor
                 else:
                     line_cost = float(component_cost * effective_qty)
             else:
@@ -1223,8 +1225,10 @@ async def get_cost_rollup(
                     if qty_success:
                         line_cost = component_cost * converted_qty
                         # Also adjust unit_cost to show cost per line unit
-                        conversion_factor, _ = convert_quantity_safe(db, Decimal("1"), line_unit, component_unit)
-                        unit_cost = component_cost * conversion_factor
+                        # Derive factor from converted_qty to avoid second call
+                        if effective_qty:
+                            conversion_factor = converted_qty / effective_qty
+                            unit_cost = component_cost * conversion_factor
                     else:
                         line_cost = component_cost * effective_qty
                 else:

@@ -1,10 +1,10 @@
 # FilaOps - Claude Code Instructions
 
-## ⚠️ CRITICAL - Development vs Production Environments
+## ⚠️ CRITICAL - Development Environment Only
 
-**NEVER use `docker-compose.yml` directly - it targets PRODUCTION with real business data!**
+**This folder is for DEVELOPMENT only. Production runs in a separate location (`C:\BLB3D_Production`).**
 
-### Always Use Development Environment
+### Always Use Development Commands
 
 ```bash
 # CORRECT - Development (safe)
@@ -13,44 +13,25 @@ docker-compose -f docker-compose.dev.yml up -d
 docker-compose -f docker-compose.dev.yml logs -f backend
 docker-compose -f docker-compose.dev.yml exec backend <command>
 
-# WRONG - This hits PRODUCTION!
+# WRONG - Never use bare docker-compose in this folder!
 docker-compose build  # ❌ NO!
 docker-compose up     # ❌ NO!
 ```
 
-### Environment Summary
+### Development Environment
 
-| Environment | Compose File | Frontend | Backend | DB Port |
-|-------------|--------------|----------|---------|---------|
-| **DEV** (use this) | `docker-compose.dev.yml` | :5174 | :8001 | :1434 |
-| **PROD** (business data) | `docker-compose.yml` | :5173 | :8000 | :1433 |
+| Service | Port | Container |
+|---------|------|-----------|
+| Frontend | http://localhost:5174 | filaops-dev-frontend |
+| Backend | http://localhost:8001 | filaops-dev-backend |
+| Database | localhost:1434 | filaops-dev-db |
+| Redis | localhost:6380 | filaops-dev-redis |
 
 ### Why This Matters
 
-- Production contains the owner's actual business data (customers, orders, inventory)
-- Development has separate Docker volumes (`filaops-dev-*`)
-- Code changes should be tested on DEV before touching PROD
-
-### Updating Production (Owner Only)
-
-After merging a release to `main`:
-
-```bash
-git checkout main
-git pull
-docker-compose build
-docker-compose up -d
-docker-compose exec backend alembic upgrade head  # if migrations exist
-```
-
-Data stays intact - only code updates, volumes are preserved.
-
-**DANGER - These commands DELETE all business data:**
-
-```bash
-docker-compose down -v    # ❌ NEVER - deletes volumes
-docker volume rm filaops-db-data  # ❌ NEVER
-```
+- Production is completely separate (different folder, different containers, different volumes)
+- Development has its own Docker volumes (`filaops-dev-*`)
+- You cannot accidentally touch production from this folder
 
 ---
 

@@ -1,0 +1,18 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://localhost:5174",
+      "localStorage": [
+        {
+          "name": "adminUser",
+          "value": "{\"id\":2,\"customer_number\":null,\"email\":\"admin@test.com\",\"first_name\":\"Test\",\"last_name\":\"Admin\",\"company_name\":null,\"phone\":null,\"status\":\"active\",\"account_type\":\"admin\",\"email_verified\":false,\"created_at\":\"2025-12-15T23:05:39.583000\",\"last_login_at\":\"2025-12-15T23:26:29.087000\",\"billing_address_line1\":null,\"billing_address_line2\":null,\"billing_city\":null,\"billing_state\":null,\"billing_zip\":null,\"billing_country\":\"USA\",\"shipping_address_line1\":null,\"shipping_address_line2\":null,\"shipping_city\":null,\"shipping_state\":null,\"shipping_zip\":null,\"shipping_country\":\"USA\"}"
+        },
+        {
+          "name": "adminToken",
+          "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIyIiwidHlwZSI6ImFjY2VzcyIsImV4cCI6MTc2NTg0Mjk4OSwiaWF0IjoxNzY1ODQxMTg5LCJqdGkiOiJmMjdlZGIxNS1iY2NmLTRhMDctYjhiYy1lZWI4NTY3ZWY3ZjkifQ.NYLueWWKofNlXq_KfOWyoLtduYQCuRD2G9HJeUjnRdY"
+        }
+      ]
+    }
+  ]
+}

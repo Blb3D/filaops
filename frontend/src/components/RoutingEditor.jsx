@@ -345,17 +345,17 @@ export default function RoutingEditor({
   if (!isOpen) return null;
 
   const totalSetup = operations.reduce(
-    (sum, op) => sum + (op.setup_time_minutes || 0),
+    (sum, op) => sum + (parseFloat(op.setup_time_minutes) || 0),
     0
   );
   const totalRun = operations.reduce(
-    (sum, op) => sum + (op.run_time_minutes || 0),
+    (sum, op) => sum + (parseFloat(op.run_time_minutes) || 0),
     0
   );
   const totalCost = operations.reduce((sum, op) => {
     const setupCost =
-      ((op.setup_time_minutes || 0) / 60) * (op.labor_rate || 0);
-    const runCost = ((op.run_time_minutes || 0) / 60) * (op.labor_rate || 0);
+      ((parseFloat(op.setup_time_minutes) || 0) / 60) * (parseFloat(op.labor_rate) || 0);
+    const runCost = ((parseFloat(op.run_time_minutes) || 0) / 60) * (parseFloat(op.labor_rate) || 0);
     return sum + setupCost + runCost;
   }, 0);
 
@@ -569,10 +569,10 @@ export default function RoutingEditor({
                           <td className="border border-gray-700 p-2 text-right text-white">
                             $
                             {(
-                              (((op.setup_time_minutes || 0) +
-                                (op.run_time_minutes || 0)) /
+                              (((parseFloat(op.setup_time_minutes) || 0) +
+                                (parseFloat(op.run_time_minutes) || 0)) /
                                 60) *
-                              (op.labor_rate || 0)
+                              (parseFloat(op.labor_rate) || 0)
                             ).toFixed(2)}
                           </td>
                           <td className="border border-gray-700 p-2 text-center">

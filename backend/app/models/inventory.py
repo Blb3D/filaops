@@ -97,6 +97,7 @@ class InventoryTransaction(Base):
 
     # Relationships
     location = relationship("InventoryLocation")
+    product = relationship("Product")
 
     def __repr__(self):
         return f"<InventoryTransaction {self.transaction_type}: {self.quantity}>"

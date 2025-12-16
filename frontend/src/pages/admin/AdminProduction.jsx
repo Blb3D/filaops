@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router-dom";
 import ProductionSchedulingModal from "../../components/ProductionSchedulingModal";
 import ProductionScheduler from "../../components/ProductionScheduler";
 import SplitOrderModal from "../../components/SplitOrderModal";
+import ScrapOrderModal from "../../components/ScrapOrderModal";
+import CompleteOrderModal from "../../components/CompleteOrderModal";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
@@ -38,6 +40,14 @@ export default function AdminProduction() {
   const [showSplitModal, setShowSplitModal] = useState(false);
   const [selectedOrderForSplit, setSelectedOrderForSplit] = useState(null);
 
+  // Scrap modal state
+  const [showScrapModal, setShowScrapModal] = useState(false);
+  const [selectedOrderForScrap, setSelectedOrderForScrap] = useState(null);
+
+  // Complete modal state
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [selectedOrderForComplete, setSelectedOrderForComplete] = useState(null);
+
   // View mode: kanban or scheduler
   const [viewMode, setViewMode] = useState("kanban"); // kanban or scheduler
 
@@ -62,6 +72,7 @@ export default function AdminProduction() {
       if (!res.ok) throw new Error("Failed to fetch production orders");
 
       const data = await res.json();
+      console.log("Production orders loaded:", data);
       setProductionOrders(data.items || data || []);
     } catch (err) {
       setError(err.message);
@@ -205,6 +216,7 @@ export default function AdminProduction() {
     released: filteredOrders.filter((o) => o.status === "released"),
     in_progress: filteredOrders.filter((o) => o.status === "in_progress"),
     complete: filteredOrders.filter((o) => o.status === "complete"),
+    scrapped: filteredOrders.filter((o) => o.status === "scrapped"),
   };
 
   return (
@@ -282,6 +294,7 @@ export default function AdminProduction() {
               <option value="released">Released</option>
               <option value="in_progress">In Progress</option>
               <option value="complete">Complete</option>
+              <option value="scrapped">Scrapped</option>
               <option value="on_hold">On Hold</option>
               <option value="split">Split (Parent)</option>
               <option value="cancelled">Cancelled</option>
@@ -289,7 +302,7 @@ export default function AdminProduction() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-5 gap-4">
+          <div className="grid grid-cols-6 gap-4">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-gray-400 text-sm">Draft</p>
               <p className="text-2xl font-bold text-gray-400">
@@ -317,6 +330,20 @@ export default function AdminProduction() {
                     return (
                       o.completed_at &&
                       new Date(o.completed_at).toDateString() === today
+                    );
+                  }).length
+                }
+              </p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+              <p className="text-gray-400 text-sm">Scrapped Today</p>
+              <p className="text-2xl font-bold text-red-400">
+                {
+                  groupedOrders.scrapped.filter((o) => {
+                    const today = new Date().toDateString();
+                    return (
+                      o.scrapped_at &&
+                      new Date(o.scrapped_at).toDateString() === today
                     );
                   }).length
                 }
@@ -442,21 +469,33 @@ export default function AdminProduction() {
                           Start Now
                         </button>
                       </div>
-                      {order.quantity_ordered > 1 && (
+                      <div className="flex gap-2 mt-2">
+                        {order.quantity_ordered > 1 && (
+                          <button
+                            onClick={() => {
+                              setSelectedOrderForSplit(order);
+                              setShowSplitModal(true);
+                            }}
+                            className="flex-1 py-1.5 bg-gray-700/50 text-gray-300 rounded text-sm hover:bg-gray-700 flex items-center justify-center gap-1"
+                            title="Split order across multiple machines"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            </svg>
+                            Split
+                          </button>
+                        )}
                         <button
                           onClick={() => {
-                            setSelectedOrderForSplit(order);
-                            setShowSplitModal(true);
+                            setSelectedOrderForScrap(order);
+                            setShowScrapModal(true);
                           }}
-                          className="w-full mt-2 py-1.5 bg-gray-700/50 text-gray-300 rounded text-sm hover:bg-gray-700 flex items-center justify-center gap-1"
-                          title="Split order across multiple machines"
+                          className={`${order.quantity_ordered > 1 ? 'flex-1' : 'w-full'} py-1.5 bg-red-600/10 text-red-400/80 rounded text-sm hover:bg-red-600/20`}
+                          title="Mark as scrap if setup failed"
                         >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-                          </svg>
-                          Split Order
+                          Scrap
                         </button>
-                      )}
+                      </div>
                     </div>
                   ))}
                   {groupedOrders.released.length === 0 && (
@@ -501,12 +540,27 @@ export default function AdminProduction() {
                           ></div>
                         </div>
                       )}
-                      <button
-                        onClick={() => handleStatusUpdate(order.id, "complete")}
-                        className="w-full py-1.5 bg-green-600/20 text-green-400 rounded text-sm hover:bg-green-600/30"
-                      >
-                        Mark Complete
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setSelectedOrderForComplete(order);
+                            setShowCompleteModal(true);
+                          }}
+                          className="flex-1 py-1.5 bg-green-600/20 text-green-400 rounded text-sm hover:bg-green-600/30"
+                        >
+                          Complete
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedOrderForScrap(order);
+                            setShowScrapModal(true);
+                          }}
+                          className="flex-1 py-1.5 bg-red-600/20 text-red-400 rounded text-sm hover:bg-red-600/30"
+                          title="Print failed - scrap and optionally remake"
+                        >
+                          Scrap
+                        </button>
+                      </div>
                     </div>
                   ))}
                   {groupedOrders.in_progress.length === 0 && (
@@ -590,6 +644,38 @@ export default function AdminProduction() {
             fetchProductionOrders();
             setShowSplitModal(false);
             setSelectedOrderForSplit(null);
+          }}
+        />
+      )}
+
+      {/* Scrap Order Modal */}
+      {showScrapModal && selectedOrderForScrap && (
+        <ScrapOrderModal
+          productionOrder={selectedOrderForScrap}
+          onClose={() => {
+            setShowScrapModal(false);
+            setSelectedOrderForScrap(null);
+          }}
+          onScrap={() => {
+            fetchProductionOrders();
+            setShowScrapModal(false);
+            setSelectedOrderForScrap(null);
+          }}
+        />
+      )}
+
+      {/* Complete Order Modal */}
+      {showCompleteModal && selectedOrderForComplete && (
+        <CompleteOrderModal
+          productionOrder={selectedOrderForComplete}
+          onClose={() => {
+            setShowCompleteModal(false);
+            setSelectedOrderForComplete(null);
+          }}
+          onComplete={() => {
+            fetchProductionOrders();
+            setShowCompleteModal(false);
+            setSelectedOrderForComplete(null);
           }}
         />
       )}

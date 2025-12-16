@@ -20,6 +20,7 @@ from app.models.traceability import (
 )
 from app.models.company_settings import CompanySettings
 from app.models.uom import UnitOfMeasure
+from app.models.scrap_reason import ScrapReason
 # from app.models.license import License  # Disabled until ready for production
 
 __all__ = [
@@ -75,6 +76,8 @@ __all__ = [
     "CompanySettings",
     # Units of Measure
     "UnitOfMeasure",
+    # Scrap Reasons
+    "ScrapReason",
     # License (disabled until ready)
     # "License",
 ]

@@ -85,6 +85,11 @@ class ProductionOrder(Base):
     # Notes
     notes = Column(Text, nullable=True)
 
+    # Scrap/Remake tracking
+    scrap_reason = Column(String(100), nullable=True)  # adhesion, layer_shift, stringing, warping, nozzle_clog, other
+    scrapped_at = Column(DateTime, nullable=True)
+    remake_of_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True)  # Links remake to original failed WO
+
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -102,6 +107,8 @@ class ProductionOrder(Base):
                               cascade="all, delete-orphan", order_by="ProductionOrderOperation.sequence")
     # Parent/Child split relationships
     parent_order = relationship("ProductionOrder", remote_side=[id], backref="child_orders", foreign_keys=[parent_order_id])
+    # Scrap/Remake relationships
+    original_order = relationship("ProductionOrder", remote_side=[id], backref="remakes", foreign_keys=[remake_of_id])
 
     def __repr__(self):
         return f"<ProductionOrder {self.code}: {self.quantity_ordered} x {self.product.sku if self.product else 'N/A'}>"
@@ -122,6 +129,16 @@ class ProductionOrder(Base):
     def is_complete(self):
         """True if all quantity is completed"""
         return self.quantity_remaining <= 0
+
+    @property
+    def is_scrapped(self):
+        """True if this WO was scrapped"""
+        return self.status == 'scrapped' or self.scrapped_at is not None
+
+    @property
+    def is_remake(self):
+        """True if this WO is a remake of a failed WO"""
+        return self.remake_of_id is not None
 
 
 class ProductionOrderOperation(Base):

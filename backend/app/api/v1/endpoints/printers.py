@@ -439,7 +439,6 @@ async def probe_printer_ip(
     For BambuLab: Tries MQTT port 8883 and HTTP endpoints
     """
     import socket
-    import asyncio
 
     result = {
         "ip_address": ip_address,

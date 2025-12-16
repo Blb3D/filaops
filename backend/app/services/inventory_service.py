@@ -21,6 +21,29 @@ from app.services.uom_service import convert_quantity_safe, format_conversion_no
 logger = get_logger(__name__)
 
 
+def get_effective_cost(product: "Product") -> "Optional[Decimal]":
+    """
+    Get the effective cost for a product, using fallback logic.
+
+    Priority order:
+    1. cost (legacy field, if set)
+    2. standard_cost (preferred for manufactured items)
+    3. average_cost (for purchased items with history)
+    4. last_cost (most recent purchase price)
+
+    Returns None if no cost is available.
+    """
+    if product.cost is not None:
+        return Decimal(str(product.cost))
+    if product.standard_cost is not None:
+        return Decimal(str(product.standard_cost))
+    if product.average_cost is not None:
+        return Decimal(str(product.average_cost))
+    if product.last_cost is not None:
+        return Decimal(str(product.last_cost))
+    return None
+
+
 def convert_and_generate_notes(
     db: Session,
     bom_qty: Decimal,
@@ -165,7 +188,7 @@ def create_inventory_transaction(
     # Update inventory based on transaction type
     if transaction_type == "receipt":
         inventory.on_hand_quantity = Decimal(str(inventory.on_hand_quantity)) + quantity
-    elif transaction_type in ["issue", "consumption", "shipment"]:
+    elif transaction_type in ["issue", "consumption", "shipment", "scrap"]:
         inventory.on_hand_quantity = Decimal(str(inventory.on_hand_quantity)) - quantity
 
     inventory.updated_at = datetime.utcnow()
@@ -255,7 +278,7 @@ def consume_production_materials(
             reference_type="production_order",
             reference_id=production_order.id,
             notes=notes,
-            cost_per_unit=component.cost,
+            cost_per_unit=get_effective_cost(component),
             created_by=created_by,
         )
         transactions.append(txn)
@@ -303,7 +326,7 @@ def receive_finished_goods(
         reference_type="production_order",
         reference_id=production_order.id,
         notes=f"Completed production PO#{production_order.code}",
-        cost_per_unit=product.cost,
+        cost_per_unit=get_effective_cost(product),
         created_by=created_by,
     )
 
@@ -437,7 +460,7 @@ def consume_shipping_materials(
                 reference_type="sales_order",
                 reference_id=sales_order.id,
                 notes=notes,
-                cost_per_unit=component.cost,
+                cost_per_unit=get_effective_cost(component),
                 created_by=created_by,
             )
             transactions.append(txn)
@@ -493,7 +516,7 @@ def issue_shipped_goods(
             reference_type="sales_order",
             reference_id=sales_order.id,
             notes=f"Shipped for SO#{sales_order.order_number}: {product.name}",
-            cost_per_unit=product.cost,
+            cost_per_unit=get_effective_cost(product),
             created_by=created_by,
         )
         transactions.append(txn)

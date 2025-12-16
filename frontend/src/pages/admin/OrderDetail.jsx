@@ -24,6 +24,28 @@ export default function OrderDetail() {
   const [capacityRequirements, setCapacityRequirements] = useState([]);
   const [productionOrders, setProductionOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Check if WOs exist for the main order line products (not sub-assemblies)
+  const getMainProductWOs = () => {
+    if (!order?.lines || order.lines.length === 0) return [];
+    const lineProductIds = order.lines.map((line) => line.product_id);
+    return productionOrders.filter((po) =>
+      lineProductIds.includes(po.product_id) && po.sales_order_line_id
+    );
+  };
+
+  const hasMainProductWO = () => {
+    if (!order?.lines || order.lines.length === 0) {
+      // Old style order with single product_id
+      return productionOrders.some((po) => po.product_id === order?.product_id);
+    }
+    // Check if all line items have WOs
+    const lineProductIds = order.lines.map((line) => line.product_id);
+    const woProductIds = productionOrders
+      .filter((po) => po.sales_order_line_id)
+      .map((po) => po.product_id);
+    return lineProductIds.every((pid) => woProductIds.includes(pid));
+  };
   const [error, setError] = useState(null);
   const [exploding, setExploding] = useState(false);
   const [paymentSummary, setPaymentSummary] = useState(null);
@@ -33,6 +55,14 @@ export default function OrderDetail() {
   const [editingAddress, setEditingAddress] = useState(false);
   const [addressForm, setAddressForm] = useState({});
   const [savingAddress, setSavingAddress] = useState(false);
+
+  // Cancel/Delete modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Refresh state
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (orderId) {
@@ -168,6 +198,23 @@ export default function OrderDetail() {
     fetchPaymentData();
     fetchOrder(); // Refresh order to get updated payment_status
     toast.success(isRefund ? "Refund recorded" : "Payment recorded");
+  };
+
+  // Refresh all data
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchOrder(),
+        fetchProductionOrders(),
+        fetchPaymentData(),
+      ]);
+      toast.success("Data refreshed");
+    } catch (err) {
+      toast.error("Failed to refresh");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleEditAddress = () => {
@@ -392,6 +439,70 @@ export default function OrderDetail() {
     }
   };
 
+  // Check if order can be cancelled
+  const canCancelOrder = () => {
+    return order && ["pending", "confirmed", "on_hold"].includes(order.status);
+  };
+
+  // Check if order can be deleted
+  const canDeleteOrder = () => {
+    return order && ["cancelled", "pending"].includes(order.status);
+  };
+
+  // Handle cancel order
+  const handleCancelOrder = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/sales-orders/${orderId}/cancel`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ cancellation_reason: cancellationReason }),
+        }
+      );
+
+      if (res.ok) {
+        toast.success(`Order ${order.order_number} cancelled`);
+        setShowCancelModal(false);
+        setCancellationReason("");
+        fetchOrder();
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData.detail || "Failed to cancel order");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to cancel order");
+    }
+  };
+
+  // Handle delete order
+  const handleDeleteOrder = async () => {
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/sales-orders/${orderId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (res.ok || res.status === 204) {
+        toast.success(`Order ${order.order_number} deleted`);
+        navigate("/admin/orders");
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData.detail || "Failed to delete order");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to delete order");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -436,14 +547,22 @@ export default function OrderDetail() {
         </div>
         <div className="flex gap-2">
           <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50"
+            title="Refresh order data"
+          >
+            {refreshing ? "Refreshing..." : "↻ Refresh"}
+          </button>
+          <button
             onClick={handleCreateProductionOrder}
             disabled={
               (!order.product_id && !(order.lines?.length > 0 && order.lines[0].product_id)) ||
-              productionOrders.length > 0
+              hasMainProductWO()
             }
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
-            {productionOrders.length > 0 ? "WO Exists" : "Create Work Order"}
+            {hasMainProductWO() ? "WO Exists" : "Create Work Order"}
           </button>
           {order.status !== "shipped" && order.status !== "delivered" && (
             <button
@@ -465,6 +584,22 @@ export default function OrderDetail() {
               }
             >
               Ship Order
+            </button>
+          )}
+          {canCancelOrder() && (
+            <button
+              onClick={() => setShowCancelModal(true)}
+              className="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-lg"
+            >
+              Cancel Order
+            </button>
+          )}
+          {canDeleteOrder() && (
+            <button
+              onClick={() => setShowDeleteConfirm(true)}
+              className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg"
+            >
+              Delete Order
             </button>
           )}
         </div>
@@ -932,6 +1067,92 @@ export default function OrderDetail() {
           }}
           onSuccess={handlePaymentRecorded}
         />
+      )}
+
+      {/* Cancel Order Modal */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
+            <div
+              className="fixed inset-0 bg-black/70"
+              onClick={() => {
+                setShowCancelModal(false);
+                setCancellationReason("");
+              }}
+            />
+            <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-md w-full mx-auto p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Cancel Order {order.order_number}?
+              </h3>
+              <p className="text-gray-400 mb-4">
+                This will cancel the order. The order can still be deleted after cancellation.
+              </p>
+              <div className="mb-4">
+                <label className="block text-sm text-gray-400 mb-2">
+                  Cancellation Reason (optional)
+                </label>
+                <textarea
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                  rows={3}
+                  placeholder="Enter reason for cancellation..."
+                />
+              </div>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowCancelModal(false);
+                    setCancellationReason("");
+                  }}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={handleCancelOrder}
+                  className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-500"
+                >
+                  Cancel Order
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Order Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20">
+            <div
+              className="fixed inset-0 bg-black/70"
+              onClick={() => setShowDeleteConfirm(false)}
+            />
+            <div className="relative bg-gray-900 border border-gray-700 rounded-xl shadow-xl max-w-md w-full mx-auto p-6">
+              <h3 className="text-lg font-semibold text-white mb-4">
+                Delete Order {order.order_number}?
+              </h3>
+              <p className="text-gray-400 mb-4">
+                This action cannot be undone. All order data, including line items and payment records, will be permanently deleted.
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
+                >
+                  Keep Order
+                </button>
+                <button
+                  onClick={handleDeleteOrder}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-500"
+                >
+                  Delete Permanently
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -2,6 +2,45 @@
 
 All notable changes to FilaOps will be documented in this file.
 
+## [1.5.0] - 2025-12-16
+
+### Added
+
+- **Scrap Order Workflow**: Comprehensive print failure tracking and recovery system
+  - New scrap modal with quantity selection for partial or full scrap
+  - Configurable scrap reasons with admin management page (`/admin/scrap-reasons`)
+  - 14 pre-seeded scrap reasons common to 3D printing (adhesion failure, layer shift, spaghetti, warping, etc.)
+  - Automatic remake order creation for scrapped prints
+  - Material cost tracking for scrapped units (proper UOM conversion from g→kg)
+  - Order stays in-progress for partial scraps, allowing work to continue on remaining units
+- **MTS Overrun Support**: Record more completed parts than ordered quantity
+  - Complete Order modal with quantity input field
+  - Extra units automatically added to inventory as Make-to-Stock
+  - Blue "MTS Overrun" indicator showing how many extra units produced
+- **Scrap Reasons Admin Page**: Full CRUD management for failure codes
+  - Add/edit/delete scrap reasons
+  - Code, name, and description fields
+  - Sequence ordering and active/inactive toggle
+  - Used by scrap modal dropdown
+
+### Changed
+
+- **Production Order Completion**: Now uses dedicated modal with quantity input instead of single-click status change
+- **Scrap Modal**: Shows order details (ordered, completed, remaining quantities) with partial scrap support
+
+### Fixed
+
+- **Route Ordering**: Fixed scrap-reasons endpoint being matched by `/{order_id}` route (moved static routes before path parameters)
+- **UOM Conversion in Scrap**: Fixed material cost calculation for scrap transactions (was showing raw grams cost instead of converting to kilograms)
+
+### Technical
+
+- New migrations: `010_merge_heads.py`, `011_add_scrap_reasons.py`
+- New model: `ScrapReason` with code, name, description, active, sequence fields
+- New components: `ScrapOrderModal.jsx`, `CompleteOrderModal.jsx`, `AdminScrapReasons.jsx`
+- Updated `production_orders.py` with scrap reasons CRUD and partial scrap logic
+- Added `quantity_scrapped` parameter to scrap endpoint with validation
+
 ## [1.4.0] - 2025-12-15
 
 ### Added
@@ -173,7 +212,7 @@ All notable changes to FilaOps will be documented in this file.
 ### Changed
 - **Repository Organization**: Reorganized documentation structure for better collaboration
   - Moved 75+ markdown files into organized `docs/` subdirectories (architecture, planning, history, development, sessions)
-  - Organized scripts by purpose (github/, database/, tools/)
+  - Organized scripts by purpose (GitHub/, database/, tools/)
   - Cleaned root directory to only essential user-facing documentation
   - Added documentation index and organization guide
 

@@ -141,6 +141,13 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
   const [laborCost, setLaborCost] = useState(0); // Cost from routing operations
   const [targetMargin, setTargetMargin] = useState(40); // Default 40% margin
 
+  // Tax settings from company settings
+  const [taxSettings, setTaxSettings] = useState({
+    tax_enabled: false,
+    tax_rate: 0,
+    tax_name: "Sales Tax",
+  });
+
   // Load initial data
   useEffect(() => {
     if (isOpen) {
@@ -199,6 +206,7 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
       fetchWorkCenters();
       fetchRoutingTemplates();
       fetchMaterialTypesAndColors();
+      fetchTaxSettings();
     }
   }, [isOpen]);
 
@@ -395,6 +403,24 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
       }
     } catch (err) {
       // Material types fetch failure is non-critical - material type selector will be empty
+    }
+  };
+
+  const fetchTaxSettings = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/v1/settings/company`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTaxSettings({
+          tax_enabled: data.tax_enabled || false,
+          tax_rate: parseFloat(data.tax_rate) || 0,
+          tax_name: data.tax_name || "Sales Tax",
+        });
+      }
+    } catch (err) {
+      // Tax settings fetch failure is non-critical - tax will be calculated on backend
     }
   };
 
@@ -2568,12 +2594,39 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
                     <tr>
                       <td
                         colSpan={3}
+                        className="py-3 px-4 text-right text-gray-400"
+                      >
+                        Subtotal
+                      </td>
+                      <td className="py-3 px-4 text-right text-white font-medium">
+                        ${orderTotal.toFixed(2)}
+                      </td>
+                    </tr>
+                    {taxSettings.tax_enabled && taxSettings.tax_rate > 0 && (
+                      <tr>
+                        <td
+                          colSpan={3}
+                          className="py-3 px-4 text-right text-gray-400"
+                        >
+                          {taxSettings.tax_name} ({(taxSettings.tax_rate * 100).toFixed(2)}%)
+                        </td>
+                        <td className="py-3 px-4 text-right text-white font-medium">
+                          ${(orderTotal * taxSettings.tax_rate).toFixed(2)}
+                        </td>
+                      </tr>
+                    )}
+                    <tr className="border-t border-gray-700">
+                      <td
+                        colSpan={3}
                         className="py-3 px-4 text-right text-white font-medium"
                       >
-                        Order Total
+                        Grand Total
                       </td>
                       <td className="py-3 px-4 text-right text-green-400 font-bold text-lg">
-                        ${orderTotal.toFixed(2)}
+                        ${(taxSettings.tax_enabled && taxSettings.tax_rate > 0
+                          ? orderTotal * (1 + taxSettings.tax_rate)
+                          : orderTotal
+                        ).toFixed(2)}
                       </td>
                     </tr>
                   </tfoot>

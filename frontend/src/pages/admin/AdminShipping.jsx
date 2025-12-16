@@ -418,7 +418,25 @@ export default function AdminShipping() {
                   </p>
                 </div>
 
-                {/* Production Status Warning */}
+                {/* Production Status Warnings */}
+                {productionStatus[selectedOrder.id] &&
+                  !productionStatus[selectedOrder.id].hasProductionOrders && (
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4">
+                      <p className="text-red-400 text-sm font-medium mb-1">
+                        ⚠ No Production Order
+                      </p>
+                      <p className="text-red-300 text-xs mb-2">
+                        Shipping without a work order means material costs (COGS) will not be tracked.
+                        This will result in 100% profit margin in accounting reports.
+                      </p>
+                      <button
+                        onClick={() => navigate(`/admin/orders/${selectedOrder.id}`)}
+                        className="text-xs text-blue-400 hover:text-blue-300 underline"
+                      >
+                        Create Work Order First →
+                      </button>
+                    </div>
+                  )}
                 {productionStatus[selectedOrder.id] &&
                   productionStatus[selectedOrder.id].hasProductionOrders &&
                   !productionStatus[selectedOrder.id].allComplete && (
@@ -430,8 +448,7 @@ export default function AdminShipping() {
                         {Math.round(
                           productionStatus[selectedOrder.id].completionPercent
                         )}
-                        % complete. Consider waiting for production to finish
-                        before shipping.
+                        % complete. Material costs will be incomplete until work order is marked complete.
                       </p>
                     </div>
                   )}

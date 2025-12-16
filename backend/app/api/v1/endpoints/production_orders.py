@@ -22,6 +22,7 @@ from app.models import (
     Product,
     BOM,
     SalesOrder,
+    ScrapReason,
 )
 from app.models.bom import BOMLine
 from app.models.inventory import Inventory
@@ -39,6 +40,9 @@ from app.schemas.production_order import (
     ProductionScheduleSummary,
     ProductionOrderSplitRequest,
     ProductionOrderSplitResponse,
+    ScrapReasonDetail,
+    ScrapReasonUpdate,
+    ScrapReasonsResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -191,7 +195,7 @@ def copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: 
             operation_code=rop.operation_code,
             operation_name=rop.operation_name,
             planned_setup_minutes=rop.setup_time_minutes or 0,
-            planned_run_minutes=(rop.run_time_minutes or 0) * float(order.quantity_ordered),
+            planned_run_minutes=float(rop.run_time_minutes or 0) * float(order.quantity_ordered),
             status="pending",
         )
         db.add(op)
@@ -317,14 +321,14 @@ async def create_production_order(
     # Find default BOM if not specified
     bom_id = request.bom_id
     if not bom_id:
-        default_bom = db.query(BOM).filter(BOM.product_id == request.product_id, BOM.active.is_(True)).first()
+        default_bom = db.query(BOM).filter(BOM.product_id == request.product_id, BOM.active == True).first()  # noqa: E712 - SQL Server requires == True
         if default_bom:
             bom_id = default_bom.id
 
     # Find default routing if not specified
     routing_id = request.routing_id
     if not routing_id:
-        default_routing = db.query(Routing).filter(Routing.product_id == request.product_id, Routing.is_active.is_(True)).first()
+        default_routing = db.query(Routing).filter(Routing.product_id == request.product_id, Routing.is_active == True).first()  # noqa: E712 - SQL Server requires == True
         if default_routing:
             routing_id = default_routing.id
 
@@ -359,6 +363,150 @@ async def create_production_order(
 
     return build_production_order_response(order, db)
 
+
+# ============================================================================
+# Scrap Reasons Management
+# ============================================================================
+# NOTE: These routes MUST be defined BEFORE /{order_id} routes to avoid
+# FastAPI treating "scrap-reasons" as an order_id path parameter
+
+@router.get("/scrap-reasons", response_model=ScrapReasonsResponse)
+async def get_scrap_reasons(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScrapReasonsResponse:
+    """Get list of active scrap reasons from database"""
+    reasons = db.query(ScrapReason).filter(
+        ScrapReason.active == True  # noqa: E712 - SQL Server requires == True
+    ).order_by(ScrapReason.sequence, ScrapReason.name).all()
+
+    return ScrapReasonsResponse(
+        reasons=[r.code for r in reasons],
+        details=[
+            ScrapReasonDetail(
+                id=r.id,
+                code=r.code,
+                name=r.name,
+                description=r.description,
+                sequence=r.sequence,
+            )
+            for r in reasons
+        ],
+        descriptions={r.code: r.description or r.name for r in reasons}
+    )
+
+
+@router.get("/scrap-reasons/all")
+async def list_all_scrap_reasons(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all scrap reasons including inactive (for admin management)"""
+    reasons = db.query(ScrapReason).order_by(ScrapReason.sequence, ScrapReason.name).all()
+
+    return [
+        {
+            "id": r.id,
+            "code": r.code,
+            "name": r.name,
+            "description": r.description,
+            "active": r.active,
+            "sequence": r.sequence,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in reasons
+    ]
+
+
+@router.post("/scrap-reasons")
+async def create_scrap_reason(
+    code: str = Query(..., min_length=1, max_length=50),
+    name: str = Query(..., min_length=1, max_length=100),
+    description: Optional[str] = Query(None),
+    sequence: int = Query(0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Create a new scrap reason"""
+    # Check for duplicate code
+    existing = db.query(ScrapReason).filter(ScrapReason.code == code).first()
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Scrap reason with code '{code}' already exists")
+
+    reason = ScrapReason(
+        code=code.lower().replace(" ", "_"),
+        name=name,
+        description=description,
+        sequence=sequence,
+        active=True,
+    )
+    db.add(reason)
+    db.commit()
+    db.refresh(reason)
+
+    return {
+        "id": reason.id,
+        "code": reason.code,
+        "name": reason.name,
+        "description": reason.description,
+        "active": reason.active,
+        "sequence": reason.sequence,
+    }
+
+
+@router.put("/scrap-reasons/{reason_id}", response_model=ScrapReasonDetail)
+async def update_scrap_reason(
+    reason_id: int,
+    update_data: ScrapReasonUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> ScrapReasonDetail:
+    """Update an existing scrap reason"""
+    reason = db.query(ScrapReason).filter(ScrapReason.id == reason_id).first()
+    if not reason:
+        raise HTTPException(status_code=404, detail="Scrap reason not found")
+
+    # Apply only non-None fields from the update model
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(reason, field, value)
+
+    reason.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(reason)
+
+    return ScrapReasonDetail(
+        id=reason.id,
+        code=reason.code,
+        name=reason.name,
+        description=reason.description,
+        sequence=reason.sequence,
+    )
+
+
+@router.delete("/scrap-reasons/{reason_id}")
+async def delete_scrap_reason(
+    reason_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete a scrap reason (soft delete by marking inactive)"""
+    reason = db.query(ScrapReason).filter(ScrapReason.id == reason_id).first()
+    if not reason:
+        raise HTTPException(status_code=404, detail="Scrap reason not found")
+
+    # Soft delete - just mark inactive
+    reason.active = False
+    reason.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {"message": f"Scrap reason '{reason.code}' has been deactivated"}
+
+
+# ============================================================================
+# Order-specific endpoints (/{order_id} routes)
+# ============================================================================
 
 @router.get("/{order_id}", response_model=ProductionOrderResponse)
 async def get_production_order(
@@ -519,7 +667,7 @@ async def get_required_orders(
         # Find active BOM for this product
         bom = db.query(BOM).filter(
             BOM.product_id == product_id,
-            BOM.active.is_(True)
+            BOM.active == True  # noqa: E712 - SQL Server requires == True
         ).first()
 
         if not bom:
@@ -1239,7 +1387,7 @@ async def get_queue_by_work_center(
     current_user: User = Depends(get_current_user),
 ):
     """Get operations queued at each work center"""
-    work_centers = db.query(WorkCenter).filter(WorkCenter.active.is_(True)).all()
+    work_centers = db.query(WorkCenter).filter(WorkCenter.active == True).all()  # noqa: E712 - SQL Server requires == True
 
     result = []
     for wc in work_centers:
@@ -1303,3 +1451,314 @@ async def get_queue_by_work_center(
         ))
 
     return result
+
+
+@router.post("/{order_id}/scrap", response_model=ProductionOrderResponse)
+async def scrap_production_order(
+    order_id: int,
+    scrap_reason: str = Query(..., description="Reason for scrapping"),
+    quantity_scrapped: Optional[Decimal] = Query(None, description="Quantity to scrap (defaults to full order qty)"),
+    notes: Optional[str] = Query(None, description="Additional notes about the failure"),
+    create_remake: bool = Query(True, description="Automatically create a remake order"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Scrap a production order due to print failure.
+
+    This will:
+    1. Mark the WO as scrapped with the reason
+    2. Create a scrap inventory transaction (material consumed but no output)
+    3. Optionally create a remake WO linked to the original
+
+    The scrapped WO's material costs will roll up to the SO's total COGS.
+
+    If quantity_scrapped is less than quantity_ordered, the order stays in progress
+    and you can continue producing the remaining quantity.
+    """
+    from app.services.inventory_service import (
+        get_or_create_default_location,
+        create_inventory_transaction,
+        get_effective_cost,
+    )
+
+    order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    # Validate scrap reason against database
+    valid_reason = db.query(ScrapReason).filter(
+        ScrapReason.code == scrap_reason,
+        ScrapReason.active == True  # noqa: E712 - SQL Server requires == True
+    ).first()
+    if not valid_reason:
+        # Get list of valid codes for error message
+        valid_codes = db.query(ScrapReason.code).filter(
+            ScrapReason.active == True  # noqa: E712 - SQL Server requires == True
+        ).all()
+        valid_list = ", ".join([c[0] for c in valid_codes])
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid scrap reason '{scrap_reason}'. Must be one of: {valid_list}"
+        )
+
+    # Can only scrap orders that are in progress or released
+    if order.status not in ("released", "in_progress"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot scrap order in '{order.status}' status. Order must be 'released' or 'in_progress'."
+        )
+
+    # Default to full order quantity if not specified
+    qty_to_scrap = quantity_scrapped if quantity_scrapped is not None else order.quantity_ordered
+
+    # Validate scrap quantity
+    remaining_qty = Decimal(str(order.quantity_ordered)) - Decimal(str(order.quantity_completed or 0)) - Decimal(str(order.quantity_scrapped or 0))
+    if qty_to_scrap > remaining_qty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot scrap {qty_to_scrap} units. Only {remaining_qty} units remaining (ordered: {order.quantity_ordered}, completed: {order.quantity_completed or 0}, already scrapped: {order.quantity_scrapped or 0})"
+        )
+
+    if qty_to_scrap <= 0:
+        raise HTTPException(status_code=400, detail="Quantity to scrap must be greater than 0")
+
+    # Update scrapped quantity
+    order.quantity_scrapped = Decimal(str(order.quantity_scrapped or 0)) + qty_to_scrap
+
+    # Determine if order is fully scrapped or partially scrapped
+    total_accounted = Decimal(str(order.quantity_completed or 0)) + order.quantity_scrapped
+    is_full_scrap = total_accounted >= order.quantity_ordered
+
+    if is_full_scrap:
+        # Full scrap - mark order as scrapped
+        order.status = "scrapped"
+        order.scrapped_at = datetime.utcnow()
+    # else: order stays in_progress so remaining can be completed
+
+    order.scrap_reason = scrap_reason
+
+    scrap_note = f"Scrapped {qty_to_scrap} units: {scrap_reason}"
+    if notes:
+        scrap_note += f" - {notes}"
+    order.notes = (order.notes or "") + f"\n[{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}] {scrap_note}"
+    order.updated_at = datetime.utcnow()
+
+    # Create scrap inventory transactions for consumed materials
+    # (Material was consumed but no finished goods produced)
+    if order.bom_id:
+        from app.services.inventory_service import convert_and_generate_notes
+
+        location = get_or_create_default_location(db)
+        bom = db.query(BOM).filter(BOM.id == order.bom_id).first()
+
+        if bom:
+            bom_lines = db.query(BOMLine).filter(
+                BOMLine.bom_id == bom.id,
+                BOMLine.consume_stage == "production"
+            ).all()
+
+            for line in bom_lines:
+                if line.is_cost_only:
+                    continue
+
+                component = db.query(Product).filter(Product.id == line.component_id).first()
+                if not component:
+                    continue
+
+                # Calculate consumed quantity based on scrapped qty
+                base_qty = Decimal(str(line.quantity or 0))
+                scrap_factor = Decimal(str(line.scrap_factor or 0)) / Decimal("100")
+                qty_with_scrap = base_qty * (Decimal("1") + scrap_factor)
+                bom_qty = qty_with_scrap * qty_to_scrap
+
+                # UOM Conversion: Convert BOM line unit to component's inventory unit
+                # e.g., BOM says 63.8 G per unit, but component is stored in KG
+                line_unit = (line.unit or component.unit or "EA").upper()
+                component_unit = (component.unit or "EA").upper()
+
+                total_qty, notes = convert_and_generate_notes(
+                    db=db,
+                    bom_qty=bom_qty,
+                    line_unit=line_unit,
+                    component_unit=component_unit,
+                    component_name=component.name,
+                    component_sku=component.sku,
+                    reference_prefix="Scrap from failed WO#",
+                    reference_code=f"{order.code} ({scrap_reason})",
+                )
+
+                # Create scrap transaction - material consumed with no output
+                create_inventory_transaction(
+                    db=db,
+                    product_id=line.component_id,
+                    location_id=location.id,
+                    transaction_type="scrap",
+                    quantity=total_qty,
+                    reference_type="production_order",
+                    reference_id=order.id,
+                    notes=notes,
+                    cost_per_unit=get_effective_cost(component),
+                    created_by=current_user.email if current_user else None,
+                )
+
+    remake_order = None
+    # Only create remake if scrapping the full order and create_remake is True
+    if create_remake and is_full_scrap:
+        # Create a remake work order linked to the original
+        remake_code = generate_production_order_code(db)
+
+        remake_order = ProductionOrder(
+            code=remake_code,
+            product_id=order.product_id,
+            bom_id=order.bom_id,
+            routing_id=order.routing_id,
+            sales_order_id=order.sales_order_id,
+            sales_order_line_id=order.sales_order_line_id,
+            remake_of_id=order.id,  # Link to original failed order
+            quantity_ordered=order.quantity_ordered,
+            quantity_completed=Decimal("0"),
+            quantity_scrapped=Decimal("0"),
+            source="remake",
+            status="draft",
+            priority=max(1, (order.priority or 3) - 1),  # Bump priority
+            due_date=order.due_date,
+            assigned_to=order.assigned_to,
+            notes=f"Remake of scrapped order {order.code} (reason: {scrap_reason})",
+            created_by=current_user.email if current_user else None,
+        )
+        db.add(remake_order)
+        db.flush()
+
+        # Copy routing operations to remake order
+        if order.routing_id:
+            copy_routing_to_operations(db, remake_order, order.routing_id)
+
+    db.commit()
+    db.refresh(order)
+
+    response = build_production_order_response(order, db)
+
+    # Add remake info to response
+    if remake_order:
+        db.refresh(remake_order)
+        response_dict = response.model_dump()
+        response_dict["remake_order_id"] = remake_order.id
+        response_dict["remake_order_code"] = remake_order.code
+        # Return as dict since we added extra fields
+        return response_dict
+
+    return response
+
+
+@router.get("/{order_id}/cost-breakdown")
+async def get_order_cost_breakdown(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get detailed cost breakdown for a production order including all remake costs.
+
+    For orders that have been remade, this shows:
+    - Original order material costs (scrapped)
+    - Each remake attempt's costs
+    - Total true cost of producing the item
+    """
+    from app.models.inventory import InventoryTransaction
+
+    order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    def get_order_costs(wo: ProductionOrder):
+        """Get material costs from inventory transactions for a WO"""
+        # Get consumption and scrap transactions for this order
+        transactions = db.query(InventoryTransaction).filter(
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.reference_id == wo.id,
+            InventoryTransaction.transaction_type.in_(["consumption", "scrap"])
+        ).all()
+
+        material_cost = Decimal("0")
+        for txn in transactions:
+            qty = abs(Decimal(str(txn.quantity or 0)))
+            cost = Decimal(str(txn.cost_per_unit or 0))
+            material_cost += qty * cost
+
+        return {
+            "order_id": wo.id,
+            "order_code": wo.code,
+            "status": wo.status,
+            "is_scrapped": wo.status == "scrapped",
+            "scrap_reason": wo.scrap_reason,
+            "scrapped_at": wo.scrapped_at.isoformat() if wo.scrapped_at else None,
+            "quantity_ordered": float(wo.quantity_ordered or 0),
+            "quantity_completed": float(wo.quantity_completed or 0),
+            "quantity_scrapped": float(wo.quantity_scrapped or 0),
+            "material_cost": float(material_cost),
+            "is_remake": wo.remake_of_id is not None,
+            "remake_of_id": wo.remake_of_id,
+        }
+
+    # Get the root order (original, not a remake)
+    root_order = order
+    while root_order.remake_of_id:
+        parent = db.query(ProductionOrder).filter(ProductionOrder.id == root_order.remake_of_id).first()
+        if parent:
+            root_order = parent
+        else:
+            break
+
+    # Get all orders in the chain (original + all remakes)
+    order_chain = [root_order]
+
+    # Find all remakes recursively
+    def find_remakes(parent_id: int):
+        remakes = db.query(ProductionOrder).filter(ProductionOrder.remake_of_id == parent_id).all()
+        for remake in remakes:
+            order_chain.append(remake)
+            find_remakes(remake.id)
+
+    find_remakes(root_order.id)
+
+    # Calculate costs for each order
+    breakdown = []
+    total_material_cost = Decimal("0")
+    total_scrapped_cost = Decimal("0")
+    completed_cost = Decimal("0")
+
+    for wo in order_chain:
+        costs = get_order_costs(wo)
+        breakdown.append(costs)
+        total_material_cost += Decimal(str(costs["material_cost"]))
+
+        if wo.status == "scrapped":
+            total_scrapped_cost += Decimal(str(costs["material_cost"]))
+        elif wo.status == "complete":
+            completed_cost += Decimal(str(costs["material_cost"]))
+
+    # Count attempts
+    scrapped_count = sum(1 for wo in order_chain if wo.status == "scrapped")
+    completed_count = sum(1 for wo in order_chain if wo.status == "complete")
+
+    return {
+        "root_order_id": root_order.id,
+        "root_order_code": root_order.code,
+        "product_id": root_order.product_id,
+        "product_sku": root_order.product.sku if root_order.product else None,
+        "product_name": root_order.product.name if root_order.product else None,
+        "sales_order_id": root_order.sales_order_id,
+        "total_attempts": len(order_chain),
+        "scrapped_attempts": scrapped_count,
+        "successful_attempts": completed_count,
+        "pending_attempts": len(order_chain) - scrapped_count - completed_count,
+        "first_pass_yield": completed_count == 1 and scrapped_count == 0,
+        "costs": {
+            "total_material_cost": float(total_material_cost),
+            "scrapped_material_cost": float(total_scrapped_cost),
+            "successful_material_cost": float(completed_cost),
+            "scrap_percentage": float(total_scrapped_cost / total_material_cost * 100) if total_material_cost > 0 else 0,
+        },
+        "order_breakdown": breakdown,
+    }

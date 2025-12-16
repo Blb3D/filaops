@@ -466,6 +466,14 @@ export default function AdminItems() {
           </div>
           <div className="flex gap-2">
             <button
+              onClick={fetchItems}
+              disabled={loading}
+              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50"
+              title="Refresh items"
+            >
+              {loading ? "Loading..." : "↻ Refresh"}
+            </button>
+            <button
               onClick={handleRecostAll}
               disabled={recosting}
               className="px-4 py-2 bg-gray-800 border border-gray-700 text-gray-300 rounded-lg hover:bg-gray-700 hover:text-white disabled:opacity-50"

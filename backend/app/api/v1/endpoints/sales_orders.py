@@ -22,6 +22,7 @@ from app.models.product import Product
 from app.models.bom import BOM, BOMLine
 from app.models.inventory import Inventory
 from app.models.manufacturing import Routing
+from app.models.company_settings import CompanySettings
 from app.logging_config import get_logger
 from app.schemas.sales_order import (
     SalesOrderCreate,
@@ -309,9 +310,23 @@ async def create_sales_order(
 
     order_number = f"SO-{year}-{next_num:03d}"
 
-    # Calculate totals
+    # ========================================================================
+    # CALCULATE TAX: Get tax settings from company_settings
+    # ========================================================================
     shipping_cost = request.shipping_cost or Decimal("0")
-    tax_amount = Decimal("0")  # TODO: Calculate tax if needed
+    tax_amount = Decimal("0")
+    tax_rate = None
+    is_taxable = True  # Default to taxable
+
+    # Fetch company tax settings
+    company_settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
+    if company_settings and company_settings.tax_enabled and company_settings.tax_rate:
+        tax_rate = Decimal(str(company_settings.tax_rate))
+        # Calculate tax on the product total (not shipping typically)
+        tax_amount = (total_price * tax_rate).quantize(Decimal("0.01"))
+    else:
+        is_taxable = False
+
     grand_total = total_price + shipping_cost + tax_amount
 
     # Build product name summary from lines
@@ -360,6 +375,8 @@ async def create_sales_order(
         unit_price=total_price / total_quantity if total_quantity > 0 else Decimal("0"),
         total_price=total_price,
         tax_amount=tax_amount,
+        tax_rate=tax_rate,
+        is_taxable=is_taxable,
         shipping_cost=shipping_cost,
         grand_total=grand_total,
         status="pending",
@@ -1156,7 +1173,7 @@ async def cancel_sales_order(
 
     Requirements:
     - Order must be cancellable (pending, confirmed, or on_hold)
-    - User must own the order
+    - User must own the order OR be an admin
 
     Returns:
         Cancelled sales order
@@ -1169,8 +1186,9 @@ async def cancel_sales_order(
             detail="Sales order not found"
         )
 
-    # Verify ownership
-    if order.user_id != current_user.id:
+    # Verify ownership or admin
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if order.user_id != current_user.id and not is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to cancel this order"
@@ -1192,6 +1210,72 @@ async def cancel_sales_order(
     db.refresh(order)
 
     return order
+
+
+# ============================================================================
+# ENDPOINT: Delete Sales Order (Admin Only)
+# ============================================================================
+
+@router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_sales_order(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Delete a sales order (admin only)
+
+    Requirements:
+    - Only admins can delete orders
+    - Order must be cancelled or pending (not in production/shipped)
+    - Associated production orders will be checked
+
+    Returns:
+        204 No Content on success
+    """
+    # Admin-only endpoint
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only administrators can delete sales orders"
+        )
+
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales order not found"
+        )
+
+    # Check if order can be deleted (only cancelled or pending orders)
+    deletable_statuses = ["cancelled", "pending"]
+    if order.status not in deletable_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot delete order with status '{order.status}'. Only cancelled or pending orders can be deleted."
+        )
+
+    # Check for associated production orders
+    existing_pos = db.query(ProductionOrder).filter(
+        ProductionOrder.sales_order_id == order_id
+    ).all()
+
+    if existing_pos:
+        # Only block deletion if POs are not cancelled/draft
+        active_pos = [po for po in existing_pos if po.status not in ["cancelled", "draft"]]
+        if active_pos:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot delete order with active production orders. Cancel or delete the production orders first: {', '.join([po.code for po in active_pos])}"
+            )
+
+    # Delete the order (cascade will handle lines and payments)
+    db.delete(order)
+    db.commit()
+
+    return None
 
 
 # ============================================================================
@@ -1343,10 +1427,18 @@ async def generate_production_orders(
             detail="Cannot generate production orders for cancelled sales order"
         )
 
-    # Check if production orders already exist for this sales order
-    existing_pos = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == order_id
-    ).all()
+    # Check if production orders already exist for the specific line item products
+    # (not just any PO linked to the sales order - those could be sub-assemblies)
+    if order.order_type == "line_item":
+        line_product_ids = [line.product_id for line in order.lines if line.product_id]
+        existing_pos = db.query(ProductionOrder).filter(
+            ProductionOrder.sales_order_id == order_id,
+            ProductionOrder.product_id.in_(line_product_ids)
+        ).all()
+    else:
+        existing_pos = db.query(ProductionOrder).filter(
+            ProductionOrder.sales_order_id == order_id
+        ).all()
 
     if existing_pos:
         return {

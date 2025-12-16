@@ -98,6 +98,12 @@ cypress/downloads/
 # Backup files
 *.bak
 
+# Strategic/Internal Documentation
+docs/PROJECT_REVIEW_2024.md
+docs/MEDICAL_DEVICE_COMPLIANCE_GAP_ANALYSIS.md
+docs/TECHNICAL_REVIEW_2024.md
+docs/BLB3D ERP System - Deep Technical Review.md
+
 # Data migration - entire folder (contains business data, invoices, PDFs)
 data_migration/
 
@@ -167,9 +173,15 @@ docs/sop/
 *.ps1
 !start-backend.ps1
 
-# Temp HTML (but NOT frontend/index.html which is required for Vite)
-*.html
-!frontend/index.html
+# Temp/generated HTML files (specific paths only)
+frontend/dist/**/*.html
+backend/htmlcov/**/*.html
+playwright-report/**/*.html
+test-results/**/*.html
+frontend/playwright-report/**/*.html
+frontend/test-results/**/*.html
+*.temp.html
+*.tmp.html
 
 # ===========================================
 # SECURITY - Prevent accidental secret commits
@@ -313,7 +325,6 @@ TESTING_STRATEGY.md
 
 # Session and handoff docs (internal context)
 SESSION_HANDOFF.md
-*_HANDOFF*.md
 AI_CONTEXT.md
 # Note: CLAUDE.md is tracked - contains dev/prod environment safeguards
 

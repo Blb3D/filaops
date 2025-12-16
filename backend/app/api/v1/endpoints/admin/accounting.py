@@ -287,11 +287,12 @@ async def get_order_cost_breakdown(
 
     po_ids = [po.id for po in production_orders]
 
-    # Get all consumption transactions
+    # Get all consumption and scrap transactions
+    # Scrap transactions from failed WOs also count as COGS (materials consumed with no output)
     consumptions = db.query(InventoryTransaction).filter(
         InventoryTransaction.reference_type == 'production_order',
         InventoryTransaction.reference_id.in_(po_ids),
-        InventoryTransaction.transaction_type == 'consumption'
+        InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
     ).all()
 
     # Packaging consumptions
@@ -389,7 +390,7 @@ async def get_cogs_summary(
 
     # Get shipped orders in period
     shipped_orders = db.query(SalesOrder).filter(
-        SalesOrder.status == 'shipped',
+        SalesOrder.status.in_(['shipped', 'completed']),
         SalesOrder.shipped_at >= cutoff
     ).all()
 
@@ -415,7 +416,8 @@ async def get_cogs_summary(
             sales_to_po_map[po.sales_order_id].append(po.id)
             all_po_ids.append(po.id)
     
-    # Get all consumption transactions in one query
+    # Get all consumption and scrap transactions in one query
+    # Scrap = materials consumed in failed WOs (remake costs roll into COGS)
     po_consumptions = {}
     if all_po_ids:
         consumptions = db.query(InventoryTransaction).options(
@@ -423,7 +425,7 @@ async def get_cogs_summary(
         ).filter(
             InventoryTransaction.reference_type == 'production_order',
             InventoryTransaction.reference_id.in_(all_po_ids),
-            InventoryTransaction.transaction_type == 'consumption'
+            InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
         ).all()
         
         for txn in consumptions:
@@ -528,7 +530,7 @@ async def get_accounting_dashboard(
     # Revenue MTD (recognized at shipment per GAAP)
     mtd_orders = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= month_start,
-        SalesOrder.status == "shipped"
+        SalesOrder.status.in_(["shipped", "completed"])
     ).all()
 
     # Revenue excludes tax (tax is a liability, not revenue)
@@ -539,7 +541,7 @@ async def get_accounting_dashboard(
     # Revenue YTD
     ytd_orders = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= fiscal_year_start,
-        SalesOrder.status == "shipped"
+        SalesOrder.status.in_(["shipped", "completed"])
     ).all()
 
     # Revenue excludes tax (tax is a liability, not revenue)
@@ -590,7 +592,7 @@ async def get_accounting_dashboard(
     # COGS this month (from shipped orders)
     shipped_mtd = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= month_start,
-        SalesOrder.status == "shipped"
+        SalesOrder.status.in_(["shipped", "completed"])
     ).all()
 
     mtd_cogs = Decimal("0")
@@ -612,19 +614,19 @@ async def get_accounting_dashboard(
             sales_to_po_map[po.sales_order_id].append(po.id)
             all_po_ids.append(po.id)
     
-    # Query all material costs in one batch
+    # Query all material costs in one batch (including scrap from failed WOs)
     po_material_costs = {}
     if all_po_ids:
         material_costs_result = db.query(
             InventoryTransaction.reference_id,
             func.coalesce(
-                func.sum(func.abs(InventoryTransaction.quantity) * func.coalesce(InventoryTransaction.cost_per_unit, 0)), 
+                func.sum(func.abs(InventoryTransaction.quantity) * func.coalesce(InventoryTransaction.cost_per_unit, 0)),
                 0
             ).label('material_cost')
         ).filter(
             InventoryTransaction.reference_type == 'production_order',
             InventoryTransaction.reference_id.in_(all_po_ids),
-            InventoryTransaction.transaction_type == 'consumption'
+            InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
         ).group_by(InventoryTransaction.reference_id).all()
         
         po_material_costs = {row.reference_id: row.material_cost for row in material_costs_result}
@@ -698,11 +700,15 @@ async def get_sales_journal(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
+    # Extend end_date to end of day to include all transactions on that date
+    # (Frontend sends dates as midnight UTC, but we want to include the whole day)
+    end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
     # Use shipped_at for accrual basis revenue recognition per GAAP
     query = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= start_date,
-        SalesOrder.shipped_at <= end_date,
-        SalesOrder.status == "shipped"
+        SalesOrder.shipped_at <= end_date_eod,
+        SalesOrder.status.in_(["shipped", "completed"])
     )
 
     if status:
@@ -791,11 +797,14 @@ async def export_sales_journal_csv(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
+    # Extend end_date to end of day to include all transactions on that date
+    end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
     # Use shipped_at for accrual accounting (revenue recognized at shipment)
     orders = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= start_date,
-        SalesOrder.shipped_at <= end_date,
-        SalesOrder.status == "shipped"
+        SalesOrder.shipped_at <= end_date_eod,
+        SalesOrder.status.in_(["shipped", "completed"])
     ).order_by(SalesOrder.shipped_at).all()
 
     output = io.StringIO()
@@ -920,7 +929,7 @@ async def get_tax_summary(
     # Tax liability is recognized when revenue is recognized (at shipment)
     orders = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= period_start,
-        SalesOrder.status == "shipped"
+        SalesOrder.status.in_(["shipped", "completed"])
     ).all()
 
     # Calculate totals
@@ -1030,7 +1039,7 @@ async def export_tax_summary_csv(
     # Use shipped_at for accrual accounting (tax liability at revenue recognition)
     orders = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= period_start,
-        SalesOrder.status == "shipped"
+        SalesOrder.status.in_(["shipped", "completed"])
     ).order_by(SalesOrder.shipped_at).all()
 
     output = io.StringIO()
@@ -1095,11 +1104,14 @@ async def get_payments_journal(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
+    # Extend end_date to end of day to include all transactions on that date
+    end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
     query = db.query(Payment).options(
         joinedload(Payment.sales_order)
     ).filter(
         Payment.payment_date >= start_date,
-        Payment.payment_date <= end_date,
+        Payment.payment_date <= end_date_eod,
         Payment.status == "completed"
     )
 
@@ -1165,11 +1177,14 @@ async def export_payments_journal_csv(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
+    # Extend end_date to end of day to include all transactions on that date
+    end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+
     payments = db.query(Payment).options(
         joinedload(Payment.sales_order)
     ).filter(
         Payment.payment_date >= start_date,
-        Payment.payment_date <= end_date,
+        Payment.payment_date <= end_date_eod,
         Payment.status == "completed"
     ).order_by(Payment.payment_date).all()
 

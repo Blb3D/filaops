@@ -668,7 +668,7 @@ function BOMDetailView({
     component_id: "",
     quantity: "1",
     unit: "",
-    sequence: lines.length + 1,
+    sequence: "",
     scrap_factor: "0",
     notes: "",
   });
@@ -1078,7 +1078,7 @@ function BOMDetailView({
           component_id: parseInt(newLine.component_id),
           quantity: parseFloat(newLine.quantity),
           unit: newLine.unit || null,
-          sequence: parseInt(newLine.sequence),
+          sequence: parseInt(newLine.sequence, 10) || lines.length + 1,
           scrap_factor: parseFloat(newLine.scrap_factor),
           notes: newLine.notes || null,
         }),
@@ -1091,7 +1091,7 @@ function BOMDetailView({
           component_id: "",
           quantity: "1",
           unit: "",
-          sequence: lines.length + 2,
+          sequence: "",
           scrap_factor: "0",
           notes: "",
         });
@@ -1360,18 +1360,12 @@ function BOMDetailView({
               <th className="text-left py-2 px-3 text-gray-400">Qty Needed</th>
               <th className="text-left py-2 px-3 text-gray-400">Unit Cost</th>
               <th className="text-left py-2 px-3 text-gray-400">Line Cost</th>
-              <th className="text-left py-2 px-3 text-gray-400">Inventory</th>
               <th className="text-right py-2 px-3 text-gray-400">Actions</th>
             </tr>
           </thead>
           <tbody>
             {lines.map((line) => (
-              <tr
-                key={line.id}
-                className={`border-b border-gray-800 ${
-                  !line.is_available ? "bg-red-500/5" : ""
-                }`}
-              >
+              <tr key={line.id} className="border-b border-gray-800">
                 <td className="py-2 px-3 text-gray-500">{line.sequence}</td>
                 <td className="py-2 px-3">
                   <div className="flex items-center gap-2">
@@ -1451,61 +1445,6 @@ function BOMDetailView({
                 <td className="py-2 px-3 text-green-400 font-medium">
                   ${parseFloat(line.line_cost || 0).toFixed(2)}
                 </td>
-                <td className="py-2 px-3">
-                  {line.is_available ? (
-                    <span className="inline-flex items-center gap-1 text-green-400">
-                      <svg
-                        className="w-4 h-4"
-                        fill="currentColor"
-                        viewBox="0 0 20 20"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                          clipRule="evenodd"
-                        />
-                      </svg>
-                      <span className="text-xs">
-                        In Stock ({line.inventory_available?.toFixed(1)})
-                      </span>
-                    </span>
-                  ) : (
-                    <div className="space-y-1">
-                      <span className="inline-flex items-center gap-1 text-red-400">
-                        <svg
-                          className="w-4 h-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span className="text-xs">
-                          Need {line.shortage?.toFixed(2)}
-                        </span>
-                      </span>
-                      {/* Debug: {JSON.stringify({sku: line.component_sku, has_bom: line.has_bom})} */}
-                      {line.has_bom === true ? (
-                        <button
-                          onClick={() => setWorkOrderLine(line)}
-                          className="block text-xs text-purple-400 hover:text-purple-300 underline"
-                        >
-                          Create WO
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setPurchaseLine(line)}
-                          className="block text-xs text-blue-400 hover:text-blue-300 underline"
-                        >
-                          Create PO
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </td>
                 <td className="py-2 px-3 text-right">
                   <button
                     onClick={() =>
@@ -1526,7 +1465,7 @@ function BOMDetailView({
             ))}
             {lines.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-500">
+                <td colSpan={6} className="py-8 text-center text-gray-500">
                   No components added yet
                 </td>
               </tr>
@@ -2102,7 +2041,7 @@ function BOMDetailView({
             token={token}
             onSuccess={() => {
               setWorkOrderLine(null);
-              onUpdate();
+              onUpdate && onUpdate();
             }}
           />
         )}
@@ -2561,11 +2500,6 @@ function CreateProductionOrderModal({
     setError(null);
 
     try {
-      // Generate a production order code (PO-YYYY-NNN format)
-      const year = new Date().getFullYear();
-      const timestamp = Date.now().toString().slice(-4);
-      const poCode = `PO-${year}-${timestamp}`;
-
       // Determine actual quantity to produce
       const produceQty =
         createBackorder && !canFulfillAll ? maxProducible : quantity;
@@ -2579,12 +2513,9 @@ function CreateProductionOrderModal({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            code: poCode,
             product_id: bom.product_id,
-            product_sku: bom.product_sku || `PROD-${bom.product_id}`,
-            product_name: bom.product_name || `Product #${bom.product_id}`,
-            quantity: produceQty,
-            priority: "normal",
+            quantity_ordered: produceQty,
+            priority: 3, // normal priority (1=highest, 5=lowest)
             notes:
               createBackorder && backorderQty > 0
                 ? `${
@@ -2881,32 +2812,7 @@ export default function AdminBOM() {
   // Store quote context for production order creation
   const [quoteContext, setQuoteContext] = useState(null);
 
-  useEffect(() => {
-    fetchBOMs();
-  }, [filters]);
-
-  // Auto-open BOM for a specific product if passed in URL
-  useEffect(() => {
-    if (productId && boms.length > 0) {
-      const matchingBOM = boms.find(
-        (b) => b.product_id === parseInt(productId)
-      );
-      if (matchingBOM) {
-        // Store quote context before clearing params
-        if (quotedQuantity || quoteId) {
-          setQuoteContext({
-            quantity: parseInt(quotedQuantity) || 1,
-            quoteId: quoteId ? parseInt(quoteId) : null,
-          });
-        }
-        handleViewBOM(matchingBOM.id);
-        // Clear the params after opening
-        setSearchParams({});
-      }
-    }
-  }, [productId, boms]);
-
-  const fetchBOMs = async () => {
+  const fetchBOMs = useCallback(async () => {
     if (!token) return;
 
     setLoading(true);
@@ -2929,7 +2835,44 @@ export default function AdminBOM() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, filters]);
+
+  useEffect(() => {
+    fetchBOMs();
+  }, [fetchBOMs]);
+
+  // Track whether URL-driven auto-open has been performed
+  const autoOpenedRef = useRef(false);
+
+  // Reset auto-open tracking when URL params change
+  useEffect(() => {
+    autoOpenedRef.current = false;
+  }, [productId, quotedQuantity, quoteId]);
+
+  // Auto-open BOM for a specific product if passed in URL
+  useEffect(() => {
+    if (productId && boms.length > 0 && !autoOpenedRef.current) {
+      const matchingBOM = boms.find(
+        (b) => b.product_id === parseInt(productId)
+      );
+      if (matchingBOM) {
+        // Store quote context before clearing params
+        if (quotedQuantity || quoteId) {
+          setQuoteContext({
+            quantity: parseInt(quotedQuantity) || 1,
+            quoteId: quoteId ? parseInt(quoteId) : null,
+          });
+        }
+        handleViewBOM(matchingBOM.id);
+        // Clear the params after opening
+        setSearchParams({});
+        // Mark that auto-open has been performed
+        autoOpenedRef.current = true;
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, boms, quotedQuantity, quoteId]);
+  // Note: handleViewBOM and setSearchParams intentionally excluded to prevent loops
 
   const handleViewBOM = async (bomId) => {
     try {

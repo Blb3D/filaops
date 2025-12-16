@@ -361,6 +361,7 @@ const navGroups = [
       { path: "/admin/accounting", label: "Accounting", icon: AccountingIcon, adminOnly: true },
       { path: "/admin/orders/import", label: "Import Orders", icon: MaterialImportIcon, adminOnly: true },
       { path: "/admin/users", label: "Team Members", icon: CustomersIcon, adminOnly: true },
+      { path: "/admin/scrap-reasons", label: "Scrap Reasons", icon: SettingsIcon, adminOnly: true },
       { path: "/admin/analytics", label: "Analytics", icon: AnalyticsIcon, adminOnly: true },
       { path: "/admin/settings", label: "Settings", icon: SettingsIcon, adminOnly: true },
     ],

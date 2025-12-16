@@ -363,3 +363,40 @@ class ProductionOrderSplitResponse(BaseModel):
     parent_status: str
     child_orders: List[ProductionOrderListResponse]
     message: str
+
+
+# ============================================================================
+# Scrap Reason Schemas
+# ============================================================================
+
+class ScrapReasonDetail(BaseModel):
+    """Detailed scrap reason information"""
+    id: int
+    code: str
+    name: str
+    description: Optional[str] = None
+    sequence: int
+
+    class Config:
+        from_attributes = True
+
+
+class ScrapReasonUpdate(BaseModel):
+    """Update schema for scrap reasons"""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    active: Optional[bool] = None
+    sequence: Optional[int] = Field(None, ge=0)
+
+    class Config:
+        from_attributes = True
+
+
+class ScrapReasonsResponse(BaseModel):
+    """Response for scrap reasons endpoint"""
+    reasons: List[str] = Field(..., description="List of scrap reason codes")
+    details: List[ScrapReasonDetail] = Field(..., description="Detailed scrap reason information")
+    descriptions: dict[str, str] = Field(..., description="Map of code to description")
+
+    class Config:
+        from_attributes = True

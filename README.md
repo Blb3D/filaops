@@ -51,6 +51,7 @@ That's it. Database, API, and UI are all pre-configured.
 | **Inventory** | Stock levels, FIFO tracking, low stock alerts |
 | **Sales Orders** | Order management with status tracking |
 | **Production Orders** | Manufacturing workflow from order to ship |
+| **Scrap & Remake** | Track print failures with configurable reasons, partial scrap, auto-remake orders |
 | **MRP** | Material requirements planning with shortage detection |
 | **Traceability** | Serial numbers, lot tracking, forward/backward recall queries |
 | **Multi-User** | Team access with user accounts |

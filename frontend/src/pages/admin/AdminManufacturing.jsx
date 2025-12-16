@@ -454,6 +454,7 @@ export default function AdminManufacturing() {
         <ResourceModal
           resource={editingResource}
           workCenter={selectedWorkCenter}
+          token={token}
           onClose={() => {
             setShowResourceModal(false);
             setEditingResource(null);
@@ -561,6 +562,52 @@ function WorkCenterCard({
       }
     }
   }, [expanded]);
+
+  const [addingAll, setAddingAll] = useState(false);
+
+  const handleAddAllPrinters = async (printersToAdd) => {
+    setAddingAll(true);
+    let successCount = 0;
+
+    for (const printer of printersToAdd) {
+      try {
+        const resourceData = {
+          code: printer.code || "",
+          name: printer.name || "",
+          machine_type: printer.model || "",
+          serial_number: printer.serial_number || "",
+          bambu_device_id: printer.device_id || "",
+          bambu_ip_address: printer.ip_address || "",
+          status: printer.status === "idle" ? "available" : "available",
+          is_active: printer.is_active ?? true,
+          printer_id: printer.id,
+        };
+
+        const res = await fetch(
+          `${API_URL}/api/v1/work-centers/${workCenter.id}/resources`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(resourceData),
+          }
+        );
+
+        if (res.ok) {
+          successCount++;
+        }
+      } catch (err) {
+        // Continue with next printer
+      }
+    }
+
+    // Refresh resources list
+    setResources([]);
+    await fetchResources();
+    setAddingAll(false);
+  };
 
   const typeColor = getTypeColor(workCenter.center_type);
 
@@ -703,69 +750,95 @@ function WorkCenterCard({
           )}
 
           {/* Printers Section - only for machine type work centers */}
-          {workCenter.center_type === "machine" && (
-            <div className="mt-4 pt-4 border-t border-gray-800">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="text-sm font-medium text-gray-400">
-                  🖨️ Printers Assigned
-                </h4>
-                <a
-                  href="/admin/printers"
-                  className="text-sm text-blue-400 hover:text-blue-300"
-                >
-                  Manage Printers →
-                </a>
-              </div>
+          {workCenter.center_type === "machine" && (() => {
+            // Filter out printers that are already added as resources (by code)
+            const resourceCodes = resources.map((r) => r.code);
+            const unaddedPrinters = printers.filter((p) => !resourceCodes.includes(p.code));
 
-              {printers.length === 0 ? (
-                <div className="text-gray-500 text-sm">
-                  No printers assigned to this pool. Assign printers from the Printers page.
-                </div>
-              ) : (
-                <div className="grid gap-2">
-                  {printers.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex items-center justify-between p-3 bg-gray-900 rounded border border-gray-800"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`w-2 h-2 rounded-full ${
-                            p.status === "idle" ? "bg-green-500" :
-                            p.status === "printing" ? "bg-blue-500" :
-                            p.status === "error" ? "bg-red-500" :
-                            "bg-gray-500"
-                          }`}
-                        />
-                        <span className="font-mono text-sm text-gray-300">
-                          {p.code}
-                        </span>
-                        <span className="text-white">{p.name}</span>
-                        <span className="text-xs text-gray-500">
-                          ({p.model})
-                        </span>
-                        {p.ip_address && (
-                          <span className="text-xs text-purple-400">
-                            {p.ip_address}
-                          </span>
-                        )}
-                      </div>
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs ${
-                          p.status === "idle" ? "bg-green-900/30 text-green-400" :
-                          p.status === "printing" ? "bg-blue-900/30 text-blue-400" :
-                          p.status === "error" ? "bg-red-900/30 text-red-400" :
-                          "bg-gray-700 text-gray-400"
-                        }`}
-                      >
-                        {p.status || "offline"}
+            return (
+              <div className="mt-4 pt-4 border-t border-gray-800">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-sm font-medium text-gray-400">
+                    🖨️ Available Printers
+                    {unaddedPrinters.length > 0 && (
+                      <span className="ml-2 text-xs text-yellow-500">
+                        ({unaddedPrinters.length} not added)
                       </span>
-                    </div>
-                  ))}
+                    )}
+                  </h4>
+                  <div className="flex items-center gap-3">
+                    {unaddedPrinters.length > 0 && (
+                      <button
+                        onClick={() => handleAddAllPrinters(unaddedPrinters)}
+                        disabled={addingAll}
+                        className="text-sm px-3 py-1 bg-green-600 hover:bg-green-700 disabled:bg-green-800 disabled:cursor-wait text-white rounded"
+                      >
+                        {addingAll ? "Adding..." : `Add All (${unaddedPrinters.length})`}
+                      </button>
+                    )}
+                    <a
+                      href="/admin/printers"
+                      className="text-sm text-blue-400 hover:text-blue-300"
+                    >
+                      Manage Printers →
+                    </a>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
+
+                {printers.length === 0 ? (
+                  <div className="text-gray-500 text-sm">
+                    No printers assigned to this pool. Assign printers from the Printers page.
+                  </div>
+                ) : unaddedPrinters.length === 0 ? (
+                  <div className="text-green-500 text-sm">
+                    ✓ All assigned printers have been added as resources.
+                  </div>
+                ) : (
+                  <div className="grid gap-2">
+                    {unaddedPrinters.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between p-3 bg-gray-900 rounded border border-gray-800"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`w-2 h-2 rounded-full ${
+                              p.status === "idle" ? "bg-green-500" :
+                              p.status === "printing" ? "bg-blue-500" :
+                              p.status === "error" ? "bg-red-500" :
+                              "bg-gray-500"
+                            }`}
+                          />
+                          <span className="font-mono text-sm text-gray-300">
+                            {p.code}
+                          </span>
+                          <span className="text-white">{p.name}</span>
+                          <span className="text-xs text-gray-500">
+                            ({p.model})
+                          </span>
+                          {p.ip_address && (
+                            <span className="text-xs text-purple-400">
+                              {p.ip_address}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs ${
+                            p.status === "idle" ? "bg-green-900/30 text-green-400" :
+                            p.status === "printing" ? "bg-blue-900/30 text-blue-400" :
+                            p.status === "error" ? "bg-red-900/30 text-red-400" :
+                            "bg-gray-700 text-gray-400"
+                          }`}
+                        >
+                          {p.status || "offline"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
     </div>
@@ -1216,7 +1289,7 @@ function WorkCenterModal({ workCenter, onClose, onSave }) {
 }
 
 // Resource Modal
-function ResourceModal({ resource, workCenter, onClose, onSave }) {
+function ResourceModal({ resource, workCenter, onClose, onSave, token }) {
   const [form, setForm] = useState({
     code: resource?.code || "",
     name: resource?.name || "",
@@ -1227,7 +1300,76 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
     capacity_hours_per_day: resource?.capacity_hours_per_day || "",
     status: resource?.status || "available",
     is_active: resource?.is_active ?? true,
+    printer_id: resource?.printer_id || null,
   });
+  const [printers, setPrinters] = useState([]);
+  const [existingResources, setExistingResources] = useState([]);
+  const [loadingPrinters, setLoadingPrinters] = useState(false);
+
+  // Fetch printers and existing resources for this work center
+  useEffect(() => {
+    if (!resource && workCenter?.center_type === "machine") {
+      setLoadingPrinters(true);
+
+      // Fetch both printers and existing resources
+      Promise.all([
+        fetch(`${API_URL}/api/v1/work-centers/${workCenter.id}/printers?active_only=true`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((res) => res.ok ? res.json() : []),
+        fetch(`${API_URL}/api/v1/work-centers/${workCenter.id}/resources?active_only=false`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then((res) => res.ok ? res.json() : []),
+      ])
+        .then(([printersData, resourcesData]) => {
+          setPrinters(printersData);
+          setExistingResources(resourcesData);
+        })
+        .catch(() => {
+          setPrinters([]);
+          setExistingResources([]);
+        })
+        .finally(() => setLoadingPrinters(false));
+    }
+  }, [workCenter, resource, token]);
+
+  // Filter out printers that are already added as resources
+  const availablePrinters = printers.filter(
+    (p) => !existingResources.some((r) => r.code === p.code)
+  );
+
+  const handlePrinterSelect = (printerId) => {
+    if (!printerId) {
+      // Clear form if "Manual Entry" selected
+      setForm({
+        code: "",
+        name: "",
+        machine_type: "",
+        serial_number: "",
+        bambu_device_id: "",
+        bambu_ip_address: "",
+        capacity_hours_per_day: "",
+        status: "available",
+        is_active: true,
+        printer_id: null,
+      });
+      return;
+    }
+    const printer = printers.find((p) => p.id === parseInt(printerId));
+    if (printer) {
+      setForm({
+        code: printer.code || "",
+        name: printer.name || "",
+        machine_type: printer.model || "",
+        serial_number: printer.serial_number || "",
+        bambu_device_id: printer.device_id || "",
+        bambu_ip_address: printer.ip_address || "",
+        capacity_hours_per_day: "",
+        status: printer.status === "idle" ? "available" : printer.status === "printing" ? "busy" : "available",
+        is_active: printer.is_active ?? true,
+        printer_id: printer.id,
+      });
+    }
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -1239,7 +1381,7 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-lg">
+      <div className="bg-gray-900 rounded-lg border border-gray-700 w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="p-6 border-b border-gray-800">
           <h2 className="text-xl font-bold text-white">
             {resource ? "Edit Resource" : "New Resource"}
@@ -1250,6 +1392,42 @@ function ResourceModal({ resource, workCenter, onClose, onSave }) {
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {/* Printer Selection Dropdown - only show for new resources on machine-type work centers */}
+          {!resource && workCenter?.center_type === "machine" && availablePrinters.length > 0 && (
+            <div className="pb-4 border-b border-gray-800">
+              <label className="block text-sm text-gray-400 mb-1">
+                Quick Add from Assigned Printer
+              </label>
+              <select
+                onChange={(e) => handlePrinterSelect(e.target.value)}
+                className="w-full bg-gray-800 border border-green-600 rounded px-3 py-2 text-white"
+                defaultValue=""
+              >
+                <option value="">-- Select a printer or enter manually --</option>
+                {availablePrinters.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.code} - {p.name} ({p.model || "Unknown model"})
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                Select a printer to auto-fill the form, or leave blank for manual entry
+              </p>
+            </div>
+          )}
+
+          {!resource && workCenter?.center_type === "machine" && printers.length > 0 && availablePrinters.length === 0 && !loadingPrinters && (
+            <div className="p-3 bg-green-900/30 border border-green-700 rounded text-green-400 text-sm">
+              ✓ All assigned printers have been added as resources. Enter details manually below if needed.
+            </div>
+          )}
+
+          {!resource && workCenter?.center_type === "machine" && printers.length === 0 && !loadingPrinters && (
+            <div className="p-3 bg-yellow-900/30 border border-yellow-700 rounded text-yellow-400 text-sm">
+              No printers assigned to this work center. Assign printers from the Printers page first, or enter details manually below.
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-gray-400 mb-1">Code *</label>

@@ -1,4 +1,4 @@
-# FilaOps ERP - Docker Compose
+# FilaOps ERP - Docker Compose (PRODUCTION)
 # One-command deployment for 3D print farm operators
 #
 # Usage:
@@ -7,6 +7,8 @@
 #   3. Open: http://localhost:5173
 #
 # First-time setup creates admin user automatically
+
+name: filaops-prod
 
 services:
   # ===================

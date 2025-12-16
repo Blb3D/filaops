@@ -34,12 +34,12 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 def create_tables(engine):
     """Create all tables for testing using SQLAlchemy metadata"""
     # Import all models to ensure they're registered with Base
-    from app.models.user import User, RefreshToken  # noqa: F401
-    from app.models.product import Product  # noqa: F401
-    from app.models.bom import BOM, BOMLine  # noqa: F401
-    from app.models.quote import Quote  # noqa: F401
-    from app.models.sales_order import SalesOrder  # noqa: F401
-    from app.models.production_order import ProductionOrder  # noqa: F401
+    # This imports all models via the models __init__.py
+    from app.models import (  # noqa: F401
+        User, RefreshToken, Product, BOM, BOMLine, Quote, SalesOrder,
+        SalesOrderLine, ProductionOrder, Inventory, InventoryTransaction,
+        ScrapReason, UnitOfMeasure, CompanySettings
+    )
 
     # Create all tables at once - handles foreign keys and self-references properly
     Base.metadata.create_all(bind=engine)
