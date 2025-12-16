@@ -57,6 +57,12 @@ class ProductionOrder(Base):
     # Status: draft, released, in_progress, complete, cancelled, on_hold
     status = Column(String(50), default='draft', nullable=False, index=True)
 
+    # QC Status: not_required, pending, passed, failed
+    qc_status = Column(String(50), default='not_required', nullable=False)
+    qc_notes = Column(Text, nullable=True)
+    qc_inspected_by = Column(String(100), nullable=True)
+    qc_inspected_at = Column(DateTime, nullable=True)
+
     # Priority: 1 (highest) to 5 (lowest)
     priority = Column(Integer, default=3, nullable=False)
 

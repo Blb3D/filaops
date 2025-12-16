@@ -45,6 +45,8 @@ from app.schemas.production_order import (
     ScrapReasonDetail,
     ScrapReasonUpdate,
     ScrapReasonsResponse,
+    QCInspectionRequest,
+    QCInspectionResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -877,6 +879,7 @@ async def complete_production_order(
         order.quantity_scrapped = quantity_scrapped
 
     order.status = "complete"
+    order.qc_status = "pending"  # Trigger QC workflow
     order.actual_end = datetime.utcnow()
     order.completed_at = datetime.utcnow()
     order.updated_at = datetime.utcnow()
@@ -941,28 +944,8 @@ async def complete_production_order(
             detail=str(e)
         )
 
-    # Update linked sales order status to ready_to_ship if all production is complete
-    if order.sales_order_id:
-        sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
-        if sales_order and sales_order.status == "in_production":
-            # Count completed and total production orders for this sales order
-            complete_count = db.query(ProductionOrder).filter(
-                ProductionOrder.sales_order_id == order.sales_order_id,
-                ProductionOrder.status == "complete",
-            ).count()
-
-            total_count = db.query(ProductionOrder).filter(
-                ProductionOrder.sales_order_id == order.sales_order_id,
-            ).count()
-
-            # Only mark ready_to_ship if ALL production orders completed successfully
-            if complete_count == total_count and total_count > 0:
-                sales_order.status = "ready_to_ship"
-                sales_order.updated_at = datetime.utcnow()
-                logger.info(
-                    f"Sales order {sales_order.order_number} auto-transitioned to ready_to_ship "
-                    f"({complete_count}/{total_count} production orders complete)"
-                )
+    # NOTE: Sales order advancement to ready_to_ship now happens after QC inspection passes
+    # See POST /{order_id}/qc endpoint
 
     db.commit()
     db.refresh(order)
@@ -1020,6 +1003,113 @@ async def hold_production_order(
     db.refresh(order)
 
     return build_production_order_response(order, db)
+
+
+# ============================================================================
+# QC Inspection
+# ============================================================================
+
+@router.post("/{order_id}/qc", response_model=QCInspectionResponse)
+async def perform_qc_inspection(
+    order_id: int,
+    request: QCInspectionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> QCInspectionResponse:
+    """
+    Perform QC inspection on a completed production order.
+
+    Requirements:
+    - Order must be in 'complete' status
+    - Order must have qc_status = 'pending'
+
+    If QC passes:
+    - Updates qc_status to 'passed'
+    - If all production orders for a sales order have passed QC, advances sales order to ready_to_ship
+
+    If QC fails:
+    - Updates qc_status to 'failed'
+    - Does not auto-scrap (user can manually scrap and remake)
+    """
+    order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    # Validate order can be inspected
+    if order.status != "complete":
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot perform QC on order in '{order.status}' status. Order must be 'complete'."
+        )
+
+    if order.qc_status not in ("pending", "failed"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order QC status is '{order.qc_status}'. Can only inspect orders with 'pending' or 'failed' QC status."
+        )
+
+    # Validate result is passed or failed (not 'pending' or 'not_required')
+    if request.result.value not in ("passed", "failed"):
+        raise HTTPException(
+            status_code=400,
+            detail="QC result must be 'passed' or 'failed'"
+        )
+
+    # Update QC fields
+    order.qc_status = request.result.value
+    order.qc_notes = request.notes
+    order.qc_inspected_by = current_user.email if current_user else None
+    order.qc_inspected_at = datetime.utcnow()
+    order.updated_at = datetime.utcnow()
+
+    sales_order_updated = False
+    sales_order_status = None
+
+    # If QC passed, check if sales order can advance to ready_to_ship
+    if request.result.value == "passed" and order.sales_order_id:
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
+        if sales_order and sales_order.status == "in_production":
+            # Count production orders that have completed AND passed QC
+            passed_count = db.query(ProductionOrder).filter(
+                ProductionOrder.sales_order_id == order.sales_order_id,
+                ProductionOrder.status == "complete",
+                ProductionOrder.qc_status == "passed",
+            ).count()
+
+            total_count = db.query(ProductionOrder).filter(
+                ProductionOrder.sales_order_id == order.sales_order_id,
+            ).count()
+
+            # Only advance if ALL production orders have passed QC
+            if passed_count == total_count and total_count > 0:
+                sales_order.status = "ready_to_ship"
+                sales_order.updated_at = datetime.utcnow()
+                sales_order_updated = True
+                sales_order_status = "ready_to_ship"
+                logger.info(
+                    f"Sales order {sales_order.order_number} advanced to ready_to_ship "
+                    f"after QC passed ({passed_count}/{total_count} orders passed QC)"
+                )
+
+    db.commit()
+    db.refresh(order)
+
+    result_msg = "passed" if request.result.value == "passed" else "failed"
+    message = f"QC inspection {result_msg} for {order.code}"
+    if sales_order_updated:
+        message += ". Sales order advanced to ready_to_ship."
+
+    return QCInspectionResponse(
+        production_order_id=order.id,
+        production_order_code=order.code,
+        qc_status=order.qc_status,
+        qc_notes=order.qc_notes,
+        qc_inspected_by=order.qc_inspected_by,
+        qc_inspected_at=order.qc_inspected_at,
+        sales_order_updated=sales_order_updated,
+        sales_order_status=sales_order_status,
+        message=message,
+    )
 
 
 # ============================================================================

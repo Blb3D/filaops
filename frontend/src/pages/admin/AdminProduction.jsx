@@ -5,6 +5,7 @@ import ProductionScheduler from "../../components/ProductionScheduler";
 import SplitOrderModal from "../../components/SplitOrderModal";
 import ScrapOrderModal from "../../components/ScrapOrderModal";
 import CompleteOrderModal from "../../components/CompleteOrderModal";
+import QCInspectionModal from "../../components/QCInspectionModal";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
@@ -48,6 +49,10 @@ export default function AdminProduction() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [selectedOrderForComplete, setSelectedOrderForComplete] =
     useState(null);
+
+  // QC Inspection modal state
+  const [showQCModal, setShowQCModal] = useState(false);
+  const [selectedOrderForQC, setSelectedOrderForQC] = useState(null);
 
   // View mode: kanban or scheduler
   const [viewMode, setViewMode] = useState("kanban"); // kanban or scheduler
@@ -598,15 +603,41 @@ export default function AdminProduction() {
                   {groupedOrders.complete.slice(0, 10).map((order) => (
                     <div
                       key={order.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-4 opacity-75"
+                      className={`bg-gray-800 border rounded-lg p-4 ${
+                        order.qc_status === "pending"
+                          ? "border-yellow-500/50"
+                          : order.qc_status === "passed"
+                          ? "border-green-500/30 opacity-75"
+                          : order.qc_status === "failed"
+                          ? "border-red-500/50"
+                          : "border-gray-700 opacity-75"
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-2">
                         <span className="text-white font-medium">
                           {order.code}
                         </span>
-                        <span className="text-xs text-gray-500">
-                          {order.quantity_completed}/{order.quantity_ordered}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          {/* QC Status Badge */}
+                          {order.qc_status === "pending" && (
+                            <span className="px-1.5 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded">
+                              QC Pending
+                            </span>
+                          )}
+                          {order.qc_status === "passed" && (
+                            <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
+                              QC Passed
+                            </span>
+                          )}
+                          {order.qc_status === "failed" && (
+                            <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
+                              QC Failed
+                            </span>
+                          )}
+                          <span className="text-xs text-gray-500">
+                            {order.quantity_completed}/{order.quantity_ordered}
+                          </span>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-400">
                         {order.product_name || "N/A"}
@@ -615,6 +646,18 @@ export default function AdminProduction() {
                         <p className="text-xs text-gray-500 mt-2">
                           {new Date(order.completed_at).toLocaleDateString()}
                         </p>
+                      )}
+                      {/* QC Action Button */}
+                      {(order.qc_status === "pending" || order.qc_status === "failed") && (
+                        <button
+                          onClick={() => {
+                            setSelectedOrderForQC(order);
+                            setShowQCModal(true);
+                          }}
+                          className="w-full mt-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded text-sm hover:bg-yellow-600/30"
+                        >
+                          {order.qc_status === "pending" ? "Perform QC Inspection" : "Re-inspect"}
+                        </button>
                       )}
                     </div>
                   ))}
@@ -690,6 +733,22 @@ export default function AdminProduction() {
             fetchProductionOrders();
             setShowCompleteModal(false);
             setSelectedOrderForComplete(null);
+          }}
+        />
+      )}
+
+      {/* QC Inspection Modal */}
+      {showQCModal && selectedOrderForQC && (
+        <QCInspectionModal
+          productionOrder={selectedOrderForQC}
+          onClose={() => {
+            setShowQCModal(false);
+            setSelectedOrderForQC(null);
+          }}
+          onComplete={() => {
+            fetchProductionOrders();
+            setShowQCModal(false);
+            setSelectedOrderForQC(null);
           }}
         />
       )}

@@ -40,6 +40,14 @@ class OperationStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+class QCStatus(str, Enum):
+    """Quality Control status"""
+    NOT_REQUIRED = "not_required"
+    PENDING = "pending"
+    PASSED = "passed"
+    FAILED = "failed"
+
+
 # ============================================================================
 # Production Order Operation Schemas
 # ============================================================================
@@ -186,6 +194,9 @@ class ProductionOrderListResponse(BaseModel):
     priority: int
     source: str
 
+    # QC Status
+    qc_status: str = "not_required"
+
     due_date: Optional[date] = None
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
@@ -231,6 +242,12 @@ class ProductionOrderResponse(BaseModel):
     source: str
     status: str
     priority: int
+
+    # QC Status
+    qc_status: str = "not_required"
+    qc_notes: Optional[str] = None
+    qc_inspected_by: Optional[str] = None
+    qc_inspected_at: Optional[datetime] = None
 
     # Scheduling
     due_date: Optional[date] = None
@@ -472,3 +489,41 @@ class ScrapReasonsResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ============================================================================
+# QC Inspection Schemas
+# ============================================================================
+
+class QCInspectionRequest(BaseModel):
+    """Request to perform QC inspection on a production order"""
+    result: QCStatus = Field(
+        ...,
+        description="QC result: 'passed' or 'failed'"
+    )
+    notes: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Inspector notes about the QC inspection"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "result": "passed",
+                "notes": "All units inspected. Surface finish acceptable."
+            }
+        }
+
+
+class QCInspectionResponse(BaseModel):
+    """Response from QC inspection"""
+    production_order_id: int
+    production_order_code: str
+    qc_status: str
+    qc_notes: Optional[str] = None
+    qc_inspected_by: Optional[str] = None
+    qc_inspected_at: Optional[datetime] = None
+    sales_order_updated: bool = False
+    sales_order_status: Optional[str] = None
+    message: str
