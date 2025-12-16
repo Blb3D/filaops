@@ -330,25 +330,54 @@ const navGroups = [
     items: [
       { path: "/admin/orders", label: "Orders", icon: OrdersIcon },
       { path: "/admin/quotes", label: "Quotes", icon: QuotesIcon },
-      { path: "/admin/payments", label: "Payments", icon: PaymentsIcon, adminOnly: true },
-      { path: "/admin/customers", label: "Customers", icon: CustomersIcon, adminOnly: true },
+      {
+        path: "/admin/payments",
+        label: "Payments",
+        icon: PaymentsIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/customers",
+        label: "Customers",
+        icon: CustomersIcon,
+        adminOnly: true,
+      },
     ],
   },
   {
     label: "INVENTORY",
     items: [
       { path: "/admin/items", label: "Items", icon: ItemsIcon },
-      { path: "/admin/materials/import", label: "Import Materials", icon: MaterialImportIcon, adminOnly: true },
+      {
+        path: "/admin/materials/import",
+        label: "Import Materials",
+        icon: MaterialImportIcon,
+        adminOnly: true,
+      },
       { path: "/admin/bom", label: "Bill of Materials", icon: BOMIcon },
-      { path: "/admin/locations", label: "Locations", icon: InventoryIcon, adminOnly: true },
-      { path: "/admin/inventory/transactions", label: "Transactions", icon: InventoryIcon, adminOnly: true },
+      {
+        path: "/admin/locations",
+        label: "Locations",
+        icon: InventoryIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/inventory/transactions",
+        label: "Transactions",
+        icon: InventoryIcon,
+        adminOnly: true,
+      },
     ],
   },
   {
     label: "OPERATIONS",
     items: [
       { path: "/admin/production", label: "Production", icon: ProductionIcon },
-      { path: "/admin/manufacturing", label: "Manufacturing", icon: ManufacturingIcon },
+      {
+        path: "/admin/manufacturing",
+        label: "Manufacturing",
+        icon: ManufacturingIcon,
+      },
       { path: "/admin/printers", label: "Printers", icon: PrintersIcon },
       { path: "/admin/purchasing", label: "Purchasing", icon: PurchasingIcon },
       { path: "/admin/shipping", label: "Shipping", icon: ShippingIcon },
@@ -358,12 +387,42 @@ const navGroups = [
     label: "ADMIN",
     adminOnly: true,
     items: [
-      { path: "/admin/accounting", label: "Accounting", icon: AccountingIcon, adminOnly: true },
-      { path: "/admin/orders/import", label: "Import Orders", icon: MaterialImportIcon, adminOnly: true },
-      { path: "/admin/users", label: "Team Members", icon: CustomersIcon, adminOnly: true },
-      { path: "/admin/scrap-reasons", label: "Scrap Reasons", icon: SettingsIcon, adminOnly: true },
-      { path: "/admin/analytics", label: "Analytics", icon: AnalyticsIcon, adminOnly: true },
-      { path: "/admin/settings", label: "Settings", icon: SettingsIcon, adminOnly: true },
+      {
+        path: "/admin/accounting",
+        label: "Accounting",
+        icon: AccountingIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/orders/import",
+        label: "Import Orders",
+        icon: MaterialImportIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/users",
+        label: "Team Members",
+        icon: CustomersIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/scrap-reasons",
+        label: "Scrap Reasons",
+        icon: SettingsIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/analytics",
+        label: "Analytics",
+        icon: AnalyticsIcon,
+        adminOnly: true,
+      },
+      {
+        path: "/admin/settings",
+        label: "Settings",
+        icon: SettingsIcon,
+        adminOnly: true,
+      },
     ],
   },
 ];
@@ -374,7 +433,15 @@ export default function AdminLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [user] = useState(() => {
     const userData = localStorage.getItem("adminUser");
-    return userData ? JSON.parse(userData) : null;
+    if (!userData) return null;
+
+    try {
+      return JSON.parse(userData);
+    } catch (error) {
+      console.error("Failed to parse adminUser from localStorage:", error);
+      localStorage.removeItem("adminUser");
+      return null;
+    }
   });
 
   // Filter nav items based on user role

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ItemForm from "../../components/ItemForm";
 import MaterialForm from "../../components/MaterialForm";
 import BOMEditor from "../../components/BOMEditor";
@@ -65,7 +65,7 @@ export default function AdminItems() {
 
   useEffect(() => {
     fetchItems();
-  }, [selectedCategory, filters.itemType, filters.activeOnly, pagination.page, pagination.pageSize]);
+  }, [fetchItems]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
@@ -99,13 +99,16 @@ export default function AdminItems() {
     }
   };
 
-  const fetchItems = async () => {
+  const fetchItems = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     try {
       const params = new URLSearchParams();
       params.set("limit", pagination.pageSize.toString());
-      params.set("offset", ((pagination.page - 1) * pagination.pageSize).toString());
+      params.set(
+        "offset",
+        ((pagination.page - 1) * pagination.pageSize).toString()
+      );
       params.set("active_only", filters.activeOnly.toString());
       if (selectedCategory)
         params.set("category_id", selectedCategory.toString());
@@ -124,7 +127,15 @@ export default function AdminItems() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [
+    token,
+    pagination.pageSize,
+    pagination.page,
+    filters.activeOnly,
+    filters.itemType,
+    filters.search,
+    selectedCategory,
+  ]);
 
   // Server-side search is now used, so filteredItems is just items
   const filteredItems = items;
@@ -161,14 +172,21 @@ export default function AdminItems() {
 
   // Delete category handler
   const handleDeleteCategory = async (category) => {
-    if (!confirm(`Delete category "${category.name}"? Items in this category will become uncategorized.`)) {
+    if (
+      !confirm(
+        `Delete category "${category.name}"? Items in this category will become uncategorized.`
+      )
+    ) {
       return;
     }
     try {
-      const res = await fetch(`${API_URL}/api/v1/items/categories/${category.id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${API_URL}/api/v1/items/categories/${category.id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.detail || "Failed to delete category");
@@ -220,7 +238,7 @@ export default function AdminItems() {
           </button>
 
           {/* Edit/Delete buttons - show on hover */}
-          <div className="hidden group-hover:flex items-center gap-1 pr-2">
+          <div className="flex items-center gap-1 pr-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:opacity-100 transition-opacity">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -229,9 +247,20 @@ export default function AdminItems() {
               }}
               className="p-1 text-gray-500 hover:text-blue-400"
               title="Edit category"
+              aria-label={`Edit category ${node.name}`}
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                />
               </svg>
             </button>
             <button
@@ -241,9 +270,20 @@ export default function AdminItems() {
               }}
               className="p-1 text-gray-500 hover:text-red-400"
               title="Delete category"
+              aria-label={`Delete category ${node.name}`}
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                />
               </svg>
             </button>
           </div>
@@ -577,12 +617,42 @@ export default function AdminItems() {
 
         {/* Stats */}
         <div className="grid grid-cols-6 gap-4">
-          <StatCard variant="simple" title="Total Items" value={stats.total} color="neutral" />
-          <StatCard variant="simple" title="Finished Goods" value={stats.finishedGoods} color="primary" />
-          <StatCard variant="simple" title="Components" value={stats.components} color="secondary" />
-          <StatCard variant="simple" title="Filaments" value={stats.filaments} color="primary" />
-          <StatCard variant="simple" title="Supplies" value={stats.supplies} color="warning" />
-          <StatCard variant="simple" title="Needs Reorder" value={stats.needsReorder} color="danger" />
+          <StatCard
+            variant="simple"
+            title="Total Items"
+            value={stats.total}
+            color="neutral"
+          />
+          <StatCard
+            variant="simple"
+            title="Finished Goods"
+            value={stats.finishedGoods}
+            color="primary"
+          />
+          <StatCard
+            variant="simple"
+            title="Components"
+            value={stats.components}
+            color="secondary"
+          />
+          <StatCard
+            variant="simple"
+            title="Filaments"
+            value={stats.filaments}
+            color="primary"
+          />
+          <StatCard
+            variant="simple"
+            title="Supplies"
+            value={stats.supplies}
+            color="warning"
+          />
+          <StatCard
+            variant="simple"
+            title="Needs Reorder"
+            value={stats.needsReorder}
+            color="danger"
+          />
         </div>
 
         {/* Error */}
@@ -734,14 +804,16 @@ export default function AdminItems() {
                       </span>
                     </td>
                     <td className="py-3 px-4 text-right text-yellow-400">
-                      {item.allocated_qty != null && parseFloat(item.allocated_qty) > 0
+                      {item.allocated_qty != null &&
+                      parseFloat(item.allocated_qty) > 0
                         ? parseFloat(item.allocated_qty).toFixed(0)
                         : "-"}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <span
                         className={
-                          item.available_qty != null && parseFloat(item.available_qty) <= 0
+                          item.available_qty != null &&
+                          parseFloat(item.available_qty) <= 0
                             ? "text-red-400"
                             : item.needs_reorder
                             ? "text-yellow-400"
@@ -819,39 +891,62 @@ export default function AdminItems() {
 
             {/* Pagination Controls */}
             <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700">
-            <div className="text-sm text-gray-400">
-              Showing {((pagination.page - 1) * pagination.pageSize) + 1} - {Math.min(pagination.page * pagination.pageSize, pagination.total)} of {pagination.total} items
+              <div className="text-sm text-gray-400">
+                {(() => {
+                  const start =
+                    pagination.total === 0
+                      ? 0
+                      : (pagination.page - 1) * pagination.pageSize + 1;
+                  const end =
+                    pagination.total === 0
+                      ? 0
+                      : Math.min(
+                          pagination.page * pagination.pageSize,
+                          pagination.total
+                        );
+                  return `Showing ${start} - ${end} of ${pagination.total} items`;
+                })()}
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={pagination.pageSize}
+                  onChange={(e) =>
+                    setPagination((prev) => ({
+                      ...prev,
+                      pageSize: parseInt(e.target.value),
+                      page: 1,
+                    }))
+                  }
+                  className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
+                >
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                  <option value={200}>200 per page</option>
+                </select>
+                <button
+                  onClick={() =>
+                    setPagination((prev) => ({ ...prev, page: prev.page - 1 }))
+                  }
+                  disabled={!canGoPrev}
+                  className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                >
+                  Previous
+                </button>
+                <span className="text-sm text-gray-400">
+                  Page {pagination.page} of {totalPages || 1}
+                </span>
+                <button
+                  onClick={() =>
+                    setPagination((prev) => ({ ...prev, page: prev.page + 1 }))
+                  }
+                  disabled={!canGoNext}
+                  className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <select
-                value={pagination.pageSize}
-                onChange={(e) => setPagination((prev) => ({ ...prev, pageSize: parseInt(e.target.value), page: 1 }))}
-                className="bg-gray-700 border border-gray-600 rounded px-2 py-1 text-sm"
-              >
-                <option value={25}>25 per page</option>
-                <option value={50}>50 per page</option>
-                <option value={100}>100 per page</option>
-                <option value={200}>200 per page</option>
-              </select>
-              <button
-                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
-                disabled={!canGoPrev}
-                className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
-              >
-                Previous
-              </button>
-              <span className="text-sm text-gray-400">
-                Page {pagination.page} of {totalPages || 1}
-              </span>
-              <button
-                onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
-                disabled={!canGoNext}
-                className="px-3 py-1 bg-gray-700 border border-gray-600 rounded text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-600"
-              >
-                Next
-              </button>
-            </div>
-          </div>
           </div>
         )}
       </div>
@@ -879,10 +974,14 @@ export default function AdminItems() {
         }}
         onSuccess={(newItem) => {
           setShowMaterialModal(false);
-          toast.success(`Material created: ${newItem?.sku || 'Success'}`);
+          toast.success(`Material created: ${newItem?.sku || "Success"}`);
           // Search for the new item so user can see it
           if (newItem?.sku) {
-            setFilters((prev) => ({ ...prev, search: newItem.sku, itemType: "all" }));
+            setFilters((prev) => ({
+              ...prev,
+              search: newItem.sku,
+              itemType: "all",
+            }));
             setSelectedCategory(null);
           } else {
             fetchItems();
@@ -1053,11 +1152,13 @@ function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
               {/* Filter out "filament" - it's a virtual type for display only.
                   In the DB, filaments are supplies with material_type_id set.
                   Use Material Import to create filaments. */}
-              {ITEM_TYPES.filter((type) => type.value !== "filament").map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
+              {ITEM_TYPES.filter((type) => type.value !== "filament").map(
+                (type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                )
+              )}
             </select>
           </div>
 

@@ -183,6 +183,14 @@ class Settings(BaseSettings):
         default="admin@example.com",
         description="Admin email for approvals"
     )
+    BUSINESS_EMAIL: str = Field(
+        default="info@yourcompany.com",
+        description="Business support/contact email address"
+    )
+    BUSINESS_NAME: str = Field(
+        default="Your Company Name",
+        description="Business name for emails and branding"
+    )
 
     # ===================
     # Ship From Address (Business Address)

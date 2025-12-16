@@ -2841,6 +2841,25 @@ export default function AdminBOM() {
     fetchBOMs();
   }, [fetchBOMs]);
 
+  // Define handleViewBOM before useEffect that uses it
+  const handleViewBOM = useCallback(
+    async (bomId) => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/admin/bom/${bomId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) throw new Error("Failed to fetch BOM details");
+
+        const data = await res.json();
+        setSelectedBOM(data);
+      } catch (err) {
+        setError(`Failed to load BOM: ${err.message || "Unknown error"}`);
+      }
+    },
+    [token]
+  );
+
   // Track whether URL-driven auto-open has been performed
   const autoOpenedRef = useRef(false);
 
@@ -2870,24 +2889,14 @@ export default function AdminBOM() {
         autoOpenedRef.current = true;
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productId, boms, quotedQuantity, quoteId]);
-  // Note: handleViewBOM and setSearchParams intentionally excluded to prevent loops
-
-  const handleViewBOM = async (bomId) => {
-    try {
-      const res = await fetch(`${API_URL}/api/v1/admin/bom/${bomId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) throw new Error("Failed to fetch BOM details");
-
-      const data = await res.json();
-      setSelectedBOM(data);
-    } catch (err) {
-      setError(`Failed to load BOM: ${err.message || "Unknown error"}`);
-    }
-  };
+  }, [
+    productId,
+    boms,
+    quotedQuantity,
+    quoteId,
+    handleViewBOM,
+    setSearchParams,
+  ]);
 
   const handleDeleteBOM = async (bomId) => {
     if (!confirm("Are you sure you want to delete this BOM?")) return;

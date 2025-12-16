@@ -29,8 +29,8 @@ export default function OrderDetail() {
   const getMainProductWOs = () => {
     if (!order?.lines || order.lines.length === 0) return [];
     const lineProductIds = order.lines.map((line) => line.product_id);
-    return productionOrders.filter((po) =>
-      lineProductIds.includes(po.product_id) && po.sales_order_line_id
+    return productionOrders.filter(
+      (po) => lineProductIds.includes(po.product_id) && po.sales_order_line_id
     );
   };
 
@@ -79,12 +79,12 @@ export default function OrderDetail() {
       setLoading(false);
       return;
     }
-    
+
     setLoading(true);
     setError(null);
-    
+
     const url = `${API_URL}/api/v1/sales-orders/${orderId}`;
-    
+
     try {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -143,6 +143,8 @@ export default function OrderDetail() {
       } else {
         setError(err.message || "Failed to fetch order");
       }
+      // Re-throw to allow handleRefresh to catch and show toast
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -232,14 +234,17 @@ export default function OrderDetail() {
   const handleSaveAddress = async () => {
     setSavingAddress(true);
     try {
-      const res = await fetch(`${API_URL}/api/v1/sales-orders/${orderId}/address`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(addressForm),
-      });
+      const res = await fetch(
+        `${API_URL}/api/v1/sales-orders/${orderId}/address`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(addressForm),
+        }
+      );
 
       if (!res.ok) {
         const err = await res.json();
@@ -277,15 +282,15 @@ export default function OrderDetail() {
           const available_qty = parseFloat(req.available_quantity || 0);
           const incoming_qty = parseFloat(req.incoming_quantity || 0) || 0;
           const safety_stock = parseFloat(req.safety_stock || 0) || 0;
-          
+
           // Recalculate net_shortage for scaled quantity
           const available_supply = available_qty + incoming_qty;
           let net_shortage = gross_qty - available_supply + safety_stock;
-          
+
           if (net_shortage < 0) {
             net_shortage = 0;
           }
-          
+
           return {
             product_id: req.product_id,
             product_sku: req.product_sku || "",
@@ -295,7 +300,7 @@ export default function OrderDetail() {
             on_hand_quantity: parseFloat(req.on_hand_quantity || 0),
             available_quantity: available_qty,
             unit_cost: parseFloat(req.unit_cost || 0),
-            has_bom: req.has_bom || false,  // Make vs Buy indicator
+            has_bom: req.has_bom || false, // Make vs Buy indicator
           };
         });
         setMaterialRequirements(scaled);
@@ -321,7 +326,7 @@ export default function OrderDetail() {
             on_hand_quantity: 0,
             available_quantity: 0,
             unit_cost: 0,
-            has_bom: comp.has_bom || false,  // Make vs Buy indicator
+            has_bom: comp.has_bom || false, // Make vs Buy indicator
           }));
           setMaterialRequirements(requirements);
         } else {
@@ -481,15 +486,12 @@ export default function OrderDetail() {
   // Handle delete order
   const handleDeleteOrder = async () => {
     try {
-      const res = await fetch(
-        `${API_URL}/api/v1/sales-orders/${orderId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const res = await fetch(`${API_URL}/api/v1/sales-orders/${orderId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (res.ok || res.status === 204) {
         toast.success(`Order ${order.order_number} deleted`);
@@ -557,7 +559,8 @@ export default function OrderDetail() {
           <button
             onClick={handleCreateProductionOrder}
             disabled={
-              (!order.product_id && !(order.lines?.length > 0 && order.lines[0].product_id)) ||
+              (!order.product_id &&
+                !(order.lines?.length > 0 && order.lines[0].product_id)) ||
               hasMainProductWO()
             }
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
@@ -650,21 +653,35 @@ export default function OrderDetail() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="block text-sm text-gray-400 mb-1">Address Line 1</label>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Address Line 1
+                </label>
                 <input
                   type="text"
                   value={addressForm.shipping_address_line1}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_address_line1: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_address_line1: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                   placeholder="Street address"
                 />
               </div>
               <div className="col-span-2">
-                <label className="block text-sm text-gray-400 mb-1">Address Line 2</label>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Address Line 2
+                </label>
                 <input
                   type="text"
                   value={addressForm.shipping_address_line2}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_address_line2: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_address_line2: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                   placeholder="Apt, suite, etc."
                 />
@@ -674,34 +691,60 @@ export default function OrderDetail() {
                 <input
                   type="text"
                   value={addressForm.shipping_city}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_city: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_city: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">State</label>
+                <label className="block text-sm text-gray-400 mb-1">
+                  State
+                </label>
                 <input
                   type="text"
                   value={addressForm.shipping_state}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_state: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_state: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">ZIP Code</label>
+                <label className="block text-sm text-gray-400 mb-1">
+                  ZIP Code
+                </label>
                 <input
                   type="text"
                   value={addressForm.shipping_zip}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_zip: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_zip: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Country</label>
+                <label className="block text-sm text-gray-400 mb-1">
+                  Country
+                </label>
                 <input
                   type="text"
                   value={addressForm.shipping_country}
-                  onChange={(e) => setAddressForm({ ...addressForm, shipping_country: e.target.value })}
+                  onChange={(e) =>
+                    setAddressForm({
+                      ...addressForm,
+                      shipping_country: e.target.value,
+                    })
+                  }
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
                 />
               </div>
@@ -727,16 +770,31 @@ export default function OrderDetail() {
             {order.shipping_address_line1 ? (
               <div className="text-white">
                 <div>{order.shipping_address_line1}</div>
-                {order.shipping_address_line2 && <div>{order.shipping_address_line2}</div>}
+                {order.shipping_address_line2 && (
+                  <div>{order.shipping_address_line2}</div>
+                )}
                 <div>
-                  {order.shipping_city}, {order.shipping_state} {order.shipping_zip}
+                  {order.shipping_city}, {order.shipping_state}{" "}
+                  {order.shipping_zip}
                 </div>
-                <div className="text-gray-400">{order.shipping_country || "USA"}</div>
+                <div className="text-gray-400">
+                  {order.shipping_country || "USA"}
+                </div>
               </div>
             ) : (
               <div className="text-yellow-400 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+                  />
                 </svg>
                 No shipping address on file. Click Edit to add one.
               </div>
@@ -814,8 +872,8 @@ export default function OrderDetail() {
                       ).toFixed(2)}
                     </td>
                     <td className="p-2 text-center">
-                      {req.net_shortage > 0 && (
-                        req.has_bom ? (
+                      {req.net_shortage > 0 &&
+                        (req.has_bom ? (
                           <button
                             onClick={() => handleCreateWorkOrder(req)}
                             className="text-purple-400 hover:text-purple-300 text-sm"
@@ -829,8 +887,7 @@ export default function OrderDetail() {
                           >
                             Create PO
                           </button>
-                        )
-                      )}
+                        ))}
                     </td>
                   </tr>
                 ))}
@@ -852,8 +909,10 @@ export default function OrderDetail() {
               <div className="mt-4 p-3 bg-red-900/20 border border-red-500/30 rounded-lg">
                 <p className="text-red-400 text-sm">
                   ⚠️ Material shortages detected. Create{" "}
-                  <span className="text-purple-400">Work Orders</span> for sub-assemblies or{" "}
-                  <span className="text-blue-400">Purchase Orders</span> for raw materials.
+                  <span className="text-purple-400">Work Orders</span> for
+                  sub-assemblies or{" "}
+                  <span className="text-blue-400">Purchase Orders</span> for raw
+                  materials.
                 </p>
               </div>
             )}
@@ -929,7 +988,13 @@ export default function OrderDetail() {
                   </div>
                 </div>
                 <button
-                  onClick={() => navigate(`/admin/production?search=${encodeURIComponent(po.code || `WO-${po.id}`)}`)}
+                  onClick={() =>
+                    navigate(
+                      `/admin/production?search=${encodeURIComponent(
+                        po.code || `WO-${po.id}`
+                      )}`
+                    )
+                  }
                   className="text-blue-400 hover:text-blue-300 text-sm"
                 >
                   View →
@@ -963,8 +1028,18 @@ export default function OrderDetail() {
               }}
               className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm flex items-center gap-1"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                />
               </svg>
               Record Payment
             </button>
@@ -996,9 +1071,13 @@ export default function OrderDetail() {
             )}
             <div>
               <div className="text-sm text-gray-400">Balance Due</div>
-              <div className={`font-medium ${
-                paymentSummary.balance_due > 0 ? "text-yellow-400" : "text-green-400"
-              }`}>
+              <div
+                className={`font-medium ${
+                  paymentSummary.balance_due > 0
+                    ? "text-yellow-400"
+                    : "text-green-400"
+                }`}
+              >
                 ${parseFloat(paymentSummary.balance_due || 0).toFixed(2)}
               </div>
             </div>
@@ -1014,16 +1093,38 @@ export default function OrderDetail() {
                 className="flex justify-between items-center p-3 bg-gray-800 rounded-lg"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    payment.amount < 0 ? "bg-red-500/20" : "bg-green-500/20"
-                  }`}>
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                      payment.amount < 0 ? "bg-red-500/20" : "bg-green-500/20"
+                    }`}
+                  >
                     {payment.amount < 0 ? (
-                      <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                      <svg
+                        className="w-4 h-4 text-red-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"
+                        />
                       </svg>
                     ) : (
-                      <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      <svg
+                        className="w-4 h-4 text-green-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                        />
                       </svg>
                     )}
                   </div>
@@ -1039,7 +1140,11 @@ export default function OrderDetail() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`font-medium ${payment.amount < 0 ? "text-red-400" : "text-green-400"}`}>
+                  <div
+                    className={`font-medium ${
+                      payment.amount < 0 ? "text-red-400" : "text-green-400"
+                    }`}
+                  >
                     ${Math.abs(parseFloat(payment.amount)).toFixed(2)}
                   </div>
                   <div className="text-xs text-gray-500">
@@ -1085,7 +1190,8 @@ export default function OrderDetail() {
                 Cancel Order {order.order_number}?
               </h3>
               <p className="text-gray-400 mb-4">
-                This will cancel the order. The order can still be deleted after cancellation.
+                This will cancel the order. The order can still be deleted after
+                cancellation.
               </p>
               <div className="mb-4">
                 <label className="block text-sm text-gray-400 mb-2">
@@ -1134,7 +1240,8 @@ export default function OrderDetail() {
                 Delete Order {order.order_number}?
               </h3>
               <p className="text-gray-400 mb-4">
-                This action cannot be undone. All order data, including line items and payment records, will be permanently deleted.
+                This action cannot be undone. All order data, including line
+                items and payment records, will be permanently deleted.
               </p>
               <div className="flex justify-end gap-3">
                 <button

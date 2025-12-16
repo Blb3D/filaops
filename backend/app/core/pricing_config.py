@@ -130,8 +130,11 @@ ABS_ASA_SIZE_LIMITS = {
 # CONTACT & NOTIFICATIONS
 # ============================================================================
 
-BUSINESS_EMAIL: str = 'info@blb3dprinting.com'
-BUSINESS_NAME: str = 'BLB3D Printing'
+# Import from settings to avoid hardcoding business email in repo
+from app.core.settings import settings
+
+BUSINESS_EMAIL: str = settings.BUSINESS_EMAIL
+BUSINESS_NAME: str = settings.BUSINESS_NAME
 
 
 # ============================================================================

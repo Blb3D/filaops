@@ -32,5 +32,5 @@ class ScrapReason(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"<ScrapReason {self.code}: {self.name}>"

@@ -5,7 +5,7 @@ Manufacturing Orders (MOs) for tracking production of finished goods.
 Supports creation from sales orders, manual entry, and MRP planning.
 """
 import logging
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -33,6 +33,7 @@ from app.schemas.production_order import (
     ProductionOrderCreate,
     ProductionOrderUpdate,
     ProductionOrderResponse,
+    ProductionOrderScrapResponse,
     ProductionOrderListResponse,
     ProductionOrderOperationUpdate,
     ProductionOrderOperationResponse,
@@ -40,6 +41,7 @@ from app.schemas.production_order import (
     ProductionScheduleSummary,
     ProductionOrderSplitRequest,
     ProductionOrderSplitResponse,
+    ScrapReasonCreate,
     ScrapReasonDetail,
     ScrapReasonUpdate,
     ScrapReasonsResponse,
@@ -221,7 +223,7 @@ async def list_production_orders(
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> List[ProductionOrderListResponse]:
     """List production orders with filtering"""
     query = db.query(ProductionOrder)
 
@@ -312,7 +314,7 @@ async def create_production_order(
     request: ProductionOrderCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Create a new production order"""
     product = db.query(Product).filter(Product.id == request.product_id).first()
     if not product:
@@ -400,59 +402,55 @@ async def get_scrap_reasons(
 async def list_all_scrap_reasons(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> List[ScrapReasonDetail]:
     """List all scrap reasons including inactive (for admin management)"""
     reasons = db.query(ScrapReason).order_by(ScrapReason.sequence, ScrapReason.name).all()
 
     return [
-        {
-            "id": r.id,
-            "code": r.code,
-            "name": r.name,
-            "description": r.description,
-            "active": r.active,
-            "sequence": r.sequence,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
-        }
+        ScrapReasonDetail(
+            id=r.id,
+            code=r.code,
+            name=r.name,
+            description=r.description,
+            active=r.active,
+            sequence=r.sequence,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
         for r in reasons
     ]
 
 
-@router.post("/scrap-reasons")
+@router.post("/scrap-reasons", response_model=ScrapReasonDetail)
 async def create_scrap_reason(
-    code: str = Query(..., min_length=1, max_length=50),
-    name: str = Query(..., min_length=1, max_length=100),
-    description: Optional[str] = Query(None),
-    sequence: int = Query(0),
+    request: ScrapReasonCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ScrapReasonDetail:
     """Create a new scrap reason"""
     # Check for duplicate code
-    existing = db.query(ScrapReason).filter(ScrapReason.code == code).first()
+    existing = db.query(ScrapReason).filter(ScrapReason.code == request.code).first()
     if existing:
-        raise HTTPException(status_code=400, detail=f"Scrap reason with code '{code}' already exists")
+        raise HTTPException(status_code=400, detail=f"Scrap reason with code '{request.code}' already exists")
 
     reason = ScrapReason(
-        code=code.lower().replace(" ", "_"),
-        name=name,
-        description=description,
-        sequence=sequence,
+        code=request.code.lower().replace(" ", "_"),
+        name=request.name,
+        description=request.description,
+        sequence=request.sequence,
         active=True,
     )
     db.add(reason)
     db.commit()
     db.refresh(reason)
 
-    return {
-        "id": reason.id,
-        "code": reason.code,
-        "name": reason.name,
-        "description": reason.description,
-        "active": reason.active,
-        "sequence": reason.sequence,
-    }
+    return ScrapReasonDetail(
+        id=reason.id,
+        code=reason.code,
+        name=reason.name,
+        description=reason.description,
+        sequence=reason.sequence,
+    )
 
 
 @router.put("/scrap-reasons/{reason_id}", response_model=ScrapReasonDetail)
@@ -490,7 +488,7 @@ async def delete_scrap_reason(
     reason_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, str]:
     """Delete a scrap reason (soft delete by marking inactive)"""
     reason = db.query(ScrapReason).filter(ScrapReason.id == reason_id).first()
     if not reason:
@@ -513,7 +511,7 @@ async def get_production_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Get a single production order with full details"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -527,7 +525,7 @@ async def check_material_availability(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     """
     Check material availability for a production order.
 
@@ -640,7 +638,7 @@ async def get_required_orders(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     """
     Get full cascade of WOs and POs needed to fulfill this production order.
 
@@ -656,13 +654,20 @@ async def get_required_orders(
 
     work_orders_needed = []
     purchase_orders_needed = []
-    visited_products = set()
 
-    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0):
-        """Recursively explode BOM to find all requirements"""
-        if product_id in visited_products:
-            return  # Circular reference protection
-        visited_products.add(product_id)
+    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, visited_boms: set = None):
+        """
+        Recursively explode BOM to find all requirements
+        
+        Args:
+            product_id: Product to explode BOM for
+            quantity: Quantity required
+            level: Current BOM depth level
+            visited_boms: Set of BOM IDs visited in current recursion path (prevents circular refs)
+        """
+        # Initialize visited set for top-level calls
+        if visited_boms is None:
+            visited_boms = set()
 
         # Find active BOM for this product
         bom = db.query(BOM).filter(
@@ -672,6 +677,13 @@ async def get_required_orders(
 
         if not bom:
             return
+
+        # Prevent circular references: check if this BOM is already in the current recursion path
+        if bom.id in visited_boms:
+            return  # Circular reference detected, stop recursion
+
+        # Add current BOM to the path for downstream recursion
+        current_path = visited_boms | {bom.id}
 
         bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
 
@@ -713,8 +725,8 @@ async def get_required_orders(
 
             if component.has_bom:
                 work_orders_needed.append(order_info)
-                # Recursively explode this sub-assembly's BOM
-                explode_requirements(component.id, shortage_qty, level + 1)
+                # Recursively explode this sub-assembly's BOM with current path
+                explode_requirements(component.id, shortage_qty, level + 1, current_path)
             else:
                 purchase_orders_needed.append(order_info)
 
@@ -741,7 +753,7 @@ async def update_production_order(
     request: ProductionOrderUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Update a production order"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -767,7 +779,7 @@ async def delete_production_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, str]:
     """Delete a draft production order"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -792,7 +804,7 @@ async def release_production_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Release a draft order for production"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -820,7 +832,7 @@ async def start_production_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Start production on an order"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -847,7 +859,7 @@ async def complete_production_order(
     quantity_scrapped: Optional[Decimal] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Complete a production order"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -964,7 +976,7 @@ async def cancel_production_order(
     notes: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Cancel a production order"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -990,7 +1002,7 @@ async def hold_production_order(
     notes: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderResponse:
     """Put a production order on hold"""
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
@@ -1020,7 +1032,7 @@ async def split_production_order(
     request: ProductionOrderSplitRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderSplitResponse:
     """
     Split a production order into multiple child orders.
 
@@ -1186,7 +1198,7 @@ async def update_operation(
     request: ProductionOrderOperationUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderOperationResponse:
     """Update an operation"""
     op = db.query(ProductionOrderOperation).filter(
         ProductionOrderOperation.id == operation_id,
@@ -1253,7 +1265,7 @@ async def start_operation(
     operator_name: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     """Start an operation"""
     op = db.query(ProductionOrderOperation).filter(
         ProductionOrderOperation.id == operation_id,
@@ -1292,7 +1304,7 @@ async def complete_operation(
     quantity_scrapped: Optional[Decimal] = Query(0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     """Complete an operation and queue the next one"""
     op = db.query(ProductionOrderOperation).filter(
         ProductionOrderOperation.id == operation_id,
@@ -1344,7 +1356,7 @@ async def complete_operation(
 async def get_schedule_summary(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionScheduleSummary:
     """Get production schedule summary stats"""
     today = date.today()
 
@@ -1385,7 +1397,7 @@ async def get_schedule_summary(
 async def get_queue_by_work_center(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> List[WorkCenterQueue]:
     """Get operations queued at each work center"""
     work_centers = db.query(WorkCenter).filter(WorkCenter.active == True).all()  # noqa: E712 - SQL Server requires == True
 
@@ -1453,7 +1465,7 @@ async def get_queue_by_work_center(
     return result
 
 
-@router.post("/{order_id}/scrap", response_model=ProductionOrderResponse)
+@router.post("/{order_id}/scrap", response_model=ProductionOrderScrapResponse)
 async def scrap_production_order(
     order_id: int,
     scrap_reason: str = Query(..., description="Reason for scrapping"),
@@ -1462,7 +1474,7 @@ async def scrap_production_order(
     create_remake: bool = Query(True, description="Automatically create a remake order"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> ProductionOrderScrapResponse:
     """
     Scrap a production order due to print failure.
 
@@ -1637,18 +1649,20 @@ async def scrap_production_order(
     db.commit()
     db.refresh(order)
 
-    response = build_production_order_response(order, db)
+    # Build base response
+    base_response = build_production_order_response(order, db)
+    response_dict = base_response.model_dump()
 
-    # Add remake info to response
+    # Add remake info if created
     if remake_order:
         db.refresh(remake_order)
-        response_dict = response.model_dump()
         response_dict["remake_order_id"] = remake_order.id
         response_dict["remake_order_code"] = remake_order.code
-        # Return as dict since we added extra fields
-        return response_dict
+    else:
+        response_dict["remake_order_id"] = None
+        response_dict["remake_order_code"] = None
 
-    return response
+    return ProductionOrderScrapResponse(**response_dict)
 
 
 @router.get("/{order_id}/cost-breakdown")
@@ -1656,7 +1670,7 @@ async def get_order_cost_breakdown(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-):
+) -> Dict[str, Any]:
     """
     Get detailed cost breakdown for a production order including all remake costs.
 

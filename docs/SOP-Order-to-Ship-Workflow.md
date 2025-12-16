@@ -41,7 +41,7 @@ INVENTORY TRANSACTIONS:
 
 For products with sub-assemblies (e.g., Robot Arm Kit), the MRP cascade works as follows:
 
-```
+```text
 Sales Order Confirmed (Robot Arm Kit)
     ↓
 [AUTO] Production Order Created for Top-Level Assembly

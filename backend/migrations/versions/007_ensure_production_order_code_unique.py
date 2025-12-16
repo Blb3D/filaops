@@ -151,6 +151,22 @@ def upgrade() -> None:
             for code, count in duplicates:
                 print(f"  - Code '{code}': {count} occurrences")
             
+            # Detect database dialect to provide appropriate SQL syntax
+            dialect_name = conn.dialect.name.lower()
+            
+            # Provide dialect-specific aggregate function for listing IDs
+            if dialect_name == 'postgresql':
+                id_aggregate = "string_agg(id::text, ', ')"
+            elif dialect_name == 'mssql':
+                id_aggregate = "STRING_AGG(CAST(id AS NVARCHAR), ', ')"
+            elif dialect_name == 'mysql':
+                id_aggregate = "GROUP_CONCAT(id SEPARATOR ', ')"
+            elif dialect_name == 'sqlite':
+                id_aggregate = "GROUP_CONCAT(id, ', ')"
+            else:
+                # Generic fallback - just show count without IDs
+                id_aggregate = "COUNT(*)"
+            
             # Provide detailed error with resolution steps
             error_msg = (
                 f"Cannot create unique constraint on production_orders.code: "
@@ -165,8 +181,8 @@ def upgrade() -> None:
                 "Before running this migration, you must resolve the duplicate production order codes.\n\n"
                 "Option 1 - Manual Resolution (Recommended):\n"
                 "  1. Connect to your database\n"
-                "  2. Run the duplicate detection query:\n"
-                "     SELECT code, COUNT(*) as count, string_agg(id::text, ', ') as ids\n"
+                f"  2. Run the duplicate detection query ({dialect_name}):\n"
+                f"     SELECT code, COUNT(*) as count, {id_aggregate} as ids\n"
                 "     FROM production_orders WHERE code IS NOT NULL\n"
                 "     GROUP BY code HAVING COUNT(*) > 1;\n"
                 "  3. Manually review and merge/delete duplicate records\n"

@@ -22,6 +22,11 @@ All notable changes to FilaOps will be documented in this file.
   - Code, name, and description fields
   - Sequence ordering and active/inactive toggle
   - Used by scrap modal dropdown
+- New migrations: `010_merge_heads.py`, `011_add_scrap_reasons.py`
+- New model: `ScrapReason` with code, name, description, active, sequence fields
+- New components: `ScrapOrderModal.jsx`, `CompleteOrderModal.jsx`, `AdminScrapReasons.jsx`
+- Updated `production_orders.py` with scrap reasons CRUD and partial scrap logic
+- Added `quantity_scrapped` parameter to scrap endpoint with validation
 
 ### Changed
 
@@ -32,14 +37,6 @@ All notable changes to FilaOps will be documented in this file.
 
 - **Route Ordering**: Fixed scrap-reasons endpoint being matched by `/{order_id}` route (moved static routes before path parameters)
 - **UOM Conversion in Scrap**: Fixed material cost calculation for scrap transactions (was showing raw grams cost instead of converting to kilograms)
-
-### Technical
-
-- New migrations: `010_merge_heads.py`, `011_add_scrap_reasons.py`
-- New model: `ScrapReason` with code, name, description, active, sequence fields
-- New components: `ScrapOrderModal.jsx`, `CompleteOrderModal.jsx`, `AdminScrapReasons.jsx`
-- Updated `production_orders.py` with scrap reasons CRUD and partial scrap logic
-- Added `quantity_scrapped` parameter to scrap endpoint with validation
 
 ## [1.4.0] - 2025-12-15
 
@@ -98,6 +95,7 @@ All notable changes to FilaOps will be documented in this file.
 ## [1.3.0] - 2025-12-11
 
 ### Added
+
 - **Split Production Orders**: Split large production runs across multiple machines or batches
   - Split released orders into 2+ child orders with custom quantity allocation
   - Child orders track independently (PO-2025-001-A, PO-2025-001-B, etc.)
@@ -125,17 +123,20 @@ All notable changes to FilaOps will be documented in this file.
   - VendorDetailPanel with metrics
 
 ### Changed
+
 - **Items Page**: Added Reserved/Available columns, hidden prices for materials/supplies
 - **Production Orders**: Default quantity_completed to quantity_ordered on completion
 - **Work Order Navigation**: Fixed deep linking with search params
 
 ### Fixed
+
 - **Shipping Address Display**: Address fields now correctly parsed and displayed
 - **Production Completion**: Fixed 0% completion bug (quantity_completed now defaults properly)
 - **Work Order Detail**: Fixed white screen when clicking "View" on work orders
 - **Ship Endpoint**: Created proper `/ship` endpoint with carrier and tracking support
 
 ### Technical
+
 - New migrations: `003_add_sales_order_product_id.py`, `004_add_production_order_split.py`
 - Added `SalesOrderUpdateAddress` schema for address PATCH endpoint
 - Added `ProductionOrderSplitRequest/Response` schemas
@@ -144,6 +145,7 @@ All notable changes to FilaOps will be documented in this file.
 ## [1.2.0] - 2025-12-11
 
 ### Added
+
 - **Company Settings**: New admin settings page (`/admin/settings`) for business configuration
   - Company information (name, address, contact details)
   - Logo upload with image storage in database
@@ -162,10 +164,12 @@ All notable changes to FilaOps will be documented in this file.
   - Consistent feedback for all CRUD operations
 
 ### Changed
+
 - **Admin Navigation**: Added Settings menu item for company configuration
 - **Quote PDFs**: Redesigned to professional single-page layout with image beside quote details
 
 ### Technical
+
 - New database migration for company_settings table and quote enhancements
 - ReportLab PDF generation with dynamic layouts
 - Authenticated image endpoints with blob URL handling in React
@@ -173,6 +177,7 @@ All notable changes to FilaOps will be documented in this file.
 ## [1.1.0] - 2025-12-10
 
 ### Added
+
 - **Multi-User Management**: Full team management for admin and operator accounts
   - Admin users API with CRUD operations, password reset, and user activation/deactivation
   - Team Members UI (`/admin/users`) with stats dashboard, filtering, and search
@@ -186,11 +191,13 @@ All notable changes to FilaOps will be documented in this file.
   - Orange badge styling for filament items
 
 ### Changed
+
 - **Login Page**: Renamed to "Staff Login" to reflect multi-user support
 - **README**: Updated tier structure - Multi-user now in Community (free) tier
 - **Item Type Colors**: Supply items now use yellow badges (filaments use orange)
 
 ### Fixed
+
 - **Critical: Frontend Build Failure** (Issue #40): Fixed missing `frontend/index.html`
   - Root cause: `.gitignore` had `*.html` which excluded the Vite entry point
   - Docker builds now work correctly for new installations
@@ -202,6 +209,7 @@ All notable changes to FilaOps will be documented in this file.
 - **Pydantic Schema**: Use correct schema for locations in InventoryCheckResponse
 
 ### Improved
+
 - **Order Workflow UX**: "Advance" button now shows target status (e.g., "→ Confirmed")
 - **Shipping Address Validation**: Clear error message with link to edit order when address missing
 - **Security**: Password hashing, refresh token revocation on password reset
@@ -210,6 +218,7 @@ All notable changes to FilaOps will be documented in this file.
 ## [1.0.1] - 2025-12-09
 
 ### Changed
+
 - **Repository Organization**: Reorganized documentation structure for better collaboration
   - Moved 75+ markdown files into organized `docs/` subdirectories (architecture, planning, history, development, sessions)
   - Organized scripts by purpose (GitHub/, database/, tools/)
@@ -217,6 +226,7 @@ All notable changes to FilaOps will be documented in this file.
   - Added documentation index and organization guide
 
 ### Technical
+
 - **Type Checking**: Added mypy type checking infrastructure
   - Configured mypy in `pyproject.toml` with SQLAlchemy plugin support
   - Integrated type checking into CI pipeline
@@ -230,12 +240,14 @@ All notable changes to FilaOps will be documented in this file.
   - Improved code quality checks
 
 ### Fixed
+
 - Removed workspace files from repository
 - Updated `.gitignore` to exclude workspace files
 
 ## [Unreleased]
 
 ### Added
+
 - **Unified Item Master**: Single `Products` table for all item types (finished goods, components, supplies, materials)
 - **Inventory Transactions**: Complete transaction system for receipts, issues, transfers, adjustments, consumption, and scrap
 - **Order Command Center**: Comprehensive order detail page with MRP explosion, material/capacity requirements, and shortage detection
@@ -248,12 +260,14 @@ All notable changes to FilaOps will be documented in this file.
 - **Customer Management**: Full customer CRUD with navigation from order creation workflow
 
 ### Changed
+
 - **Material System**: Materials now use unified `Products` table instead of separate `MaterialInventory` table
 - **BOM Lines**: Added explicit `unit` field and `is_cost_only` flag for better cost tracking
 - **Order Creation**: Improved workflow with navigation to full customer/item pages instead of inline forms
 - **Dashboard**: Enhanced with actionable alerts and improved data accuracy
 
 ### Fixed
+
 - **SQL Server Compatibility**: Fixed `created_at` timestamp issues for customer creation and refresh tokens
 - **Dashboard Queries**: Corrected column references (`estimated_completion_date` instead of `ship_by_date`)
 - **Low Stock Calculation**: Fixed to properly aggregate inventory across locations and include MRP shortages
@@ -262,6 +276,7 @@ All notable changes to FilaOps will be documented in this file.
 - **Ship Order Logic**: Added validation to prevent shipping orders with incomplete production or material shortages
 
 ### Technical
+
 - **MRP Refactor**: Completed Phase 5 of MRP refactoring plan
 - **Database Schema**: Unified product model with material type and color relationships
 - **API Endpoints**: New endpoints for inventory transactions and enhanced dashboard data
@@ -270,4 +285,3 @@ All notable changes to FilaOps will be documented in this file.
 ## [Previous Versions]
 
 See git history for earlier changes.
-

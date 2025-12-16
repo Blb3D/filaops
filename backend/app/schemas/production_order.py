@@ -269,6 +269,70 @@ class ProductionOrderResponse(BaseModel):
         from_attributes = True
 
 
+class ProductionOrderScrapResponse(ProductionOrderResponse):
+    """Response schema for production order scrap operations.
+    
+    This schema extends ProductionOrderResponse to provide comprehensive information
+    when a production order is scrapped, including details about automatically created
+    remake orders when applicable.
+    
+    Used by the scrap endpoint to return the updated production order state along with
+    information about any automatically generated remake orders that replace the scrapped
+    quantity.
+    
+    Attributes:
+        remake_order_id (Optional[int]): The unique identifier of the automatically 
+            created remake production order. This field is populated when the system 
+            automatically creates a new order to replace scrapped quantity. None if no 
+            remake order was created.
+            
+        remake_order_code (Optional[str]): The human-readable code/reference number 
+            assigned to the remake production order (e.g., "MO-2024-001234"). None if 
+            no remake order was created.
+    
+    Inherited Attributes (from ProductionOrderResponse):
+        All attributes from ProductionOrderResponse are inherited, including:
+        
+        - **Identification**: id, code
+        - **Product References**: product_id, product_sku, product_name
+        - **BOM/Routing**: bom_id, bom_code, routing_id, routing_code
+        - **Sales Order Links**: sales_order_id, sales_order_code, sales_order_line_id
+        - **Quantities**: quantity_ordered, quantity_completed, quantity_scrapped, 
+          quantity_remaining, completion_percent
+        - **Status & Priority**: source, status, priority
+        - **Scheduling**: due_date, scheduled_start, scheduled_end, actual_start, actual_end
+        - **Time Tracking**: estimated_time_minutes, actual_time_minutes
+        - **Cost Tracking**: estimated_material_cost, estimated_labor_cost, 
+          estimated_total_cost, actual_material_cost, actual_labor_cost, actual_total_cost
+        - **Assignment**: assigned_to, notes
+        - **Operations**: operations (list of ProductionOrderOperationResponse)
+        - **Metadata**: created_at, updated_at, created_by, released_at, completed_at
+    
+    Example:
+        ```json
+        {
+            "id": 123,
+            "code": "MO-2024-001000",
+            "product_id": 456,
+            "product_sku": "WIDGET-001",
+            "quantity_ordered": 100,
+            "quantity_scrapped": 100,
+            "status": "cancelled",
+            "remake_order_id": 124,
+            "remake_order_code": "MO-2024-001001",
+            ...
+        }
+        ```
+    
+    See Also:
+        - ProductionOrderResponse: Parent class with full production order details
+        - ProductionOrderStatus: Enum for valid status values
+        - ProductionOrderOperationResponse: Schema for operation details
+    """
+    remake_order_id: Optional[int] = None
+    remake_order_code: Optional[str] = None
+
+
 # ============================================================================
 # Bulk Operations
 # ============================================================================
@@ -368,6 +432,14 @@ class ProductionOrderSplitResponse(BaseModel):
 # ============================================================================
 # Scrap Reason Schemas
 # ============================================================================
+
+class ScrapReasonCreate(BaseModel):
+    """Create schema for scrap reasons"""
+    code: str = Field(..., min_length=1, max_length=50, description="Unique code for the scrap reason")
+    name: str = Field(..., min_length=1, max_length=100, description="Display name")
+    description: Optional[str] = Field(None, description="Detailed description")
+    sequence: int = Field(default=0, ge=0, description="Display order sequence")
+
 
 class ScrapReasonDetail(BaseModel):
     """Detailed scrap reason information"""

@@ -177,6 +177,59 @@ def create_item(data, token=None):
         logging.error(f"Invalid JSON response: {e}")
         raise
 
+def get_item_by_sku(sku, token=None):
+    """Look up an item by SKU
+    
+    Args:
+        sku: SKU to search for
+        token: Optional auth token (will get new one if not provided)
+    
+    Returns:
+        Item dict on success, None if not found
+    
+    Raises:
+        requests.RequestException: On network/HTTP errors
+        ValueError: On invalid response data
+    """
+    if token is None:
+        token = get_token()
+    
+    try:
+        resp = requests.get(
+            f"{BASE_URL}/items",
+            params={"sku": sku},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=REQUEST_TIMEOUT
+        )
+        resp.raise_for_status()
+        
+        try:
+            data = resp.json()
+        except ValueError as e:
+            logging.error(f"Invalid JSON response when looking up SKU {sku}: {e}")
+            raise
+        
+        items = data.get("items", [])
+        if not items:
+            return None
+        
+        # Return first exact match
+        for item in items:
+            if item.get("sku") == sku:
+                return item
+        
+        return None
+        
+    except requests.HTTPError as e:
+        logging.error(f"HTTP error looking up SKU {sku}: {e}")
+        response = getattr(e, 'response', None)
+        if response is not None and response.text:
+            logging.error(f"Response body: {response.text[:200]}")
+        raise
+    except requests.RequestException as e:
+        logging.error(f"Network error looking up SKU {sku}: {e}")
+        raise
+
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("Usage: python api_helper.py [fix_skus|create_pivot|list_items]")
@@ -190,24 +243,46 @@ if __name__ == "__main__":
         logging.info("Successfully authenticated")
 
         if cmd == "fix_skus":
-            # Fix SKUs with trailing tabs
-            print("Fixing GEAR-SPUR-48...")
-            r = patch_item(180, {"sku": "GEAR-SPUR-48"}, token=token)
-            print(f"  Result: {r.get('sku', r)}")
-
-            print("Fixing BRACKET-MOTOR-V2...")
-            r = patch_item(181, {"sku": "BRACKET-MOTOR-V2"}, token=token)
-            print(f"  Result: {r.get('sku', r)}")
+            # Fix SKUs with trailing tabs - look up items by SKU first
+            skus_to_fix = [
+                ("GEAR-SPUR-48", "GEAR-SPUR-48"),  # (current_sku, corrected_sku)
+                ("BRACKET-MOTOR-V2", "BRACKET-MOTOR-V2"),
+            ]
+            
+            for current_sku, corrected_sku in skus_to_fix:
+                print(f"Looking up item with SKU '{current_sku}'...")
+                item = get_item_by_sku(current_sku, token=token)
+                
+                if not item:
+                    logging.warning(f"Item with SKU '{current_sku}' not found, skipping")
+                    continue
+                
+                item_id = item.get("id")
+                if not item_id:
+                    logging.error(f"Item found but missing ID: {item}")
+                    continue
+                
+                print(f"  Found item ID {item_id}, updating SKU to '{corrected_sku}'...")
+                r = patch_item(item_id, {"sku": corrected_sku}, token=token)
+                print(f"  Result: {r.get('sku', r)}")
 
         elif cmd == "create_pivot":
-            print("Creating Pivot Hardware Kit...")
+            # Get category_id from environment variable with default fallback
+            category_id_str = os.getenv("CATEGORY_ID", "3")
+            try:
+                category_id = int(category_id_str)
+            except (ValueError, TypeError):
+                logging.error(f"Invalid CATEGORY_ID '{category_id_str}', must be an integer. Using default: 3")
+                category_id = 3
+            
+            print(f"Creating Pivot Hardware Kit (category_id: {category_id})...")
             r = create_item({
                 "sku": "HW-PIVOT-KIT",
                 "name": "Pivot Hardware Kit",
                 "description": "Pivot pins and springs for gripper assemblies",
                 "item_type": "component",
                 "procurement_type": "buy",
-                "category_id": 3,
+                "category_id": category_id,
                 "unit": "EA",
                 "standard_cost": 2.50
             }, token=token)
@@ -236,7 +311,10 @@ if __name__ == "__main__":
                     print("No finished goods found")
                 else:
                     for i in items[:10]:
-                        print(f"{i['id']:3} | {i['sku']:<25} | {i['name']}")
+                        item_id = i.get('id', 0)
+                        item_sku = i.get('sku', '')
+                        item_name = i.get('name', '')
+                        print(f"{item_id:3} | {item_sku:<25} | {item_name}")
                         
             except requests.HTTPError as e:
                 logging.error(f"HTTP error listing items: {e}")

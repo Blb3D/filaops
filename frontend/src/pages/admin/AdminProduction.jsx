@@ -46,7 +46,8 @@ export default function AdminProduction() {
 
   // Complete modal state
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [selectedOrderForComplete, setSelectedOrderForComplete] = useState(null);
+  const [selectedOrderForComplete, setSelectedOrderForComplete] =
+    useState(null);
 
   // View mode: kanban or scheduler
   const [viewMode, setViewMode] = useState("kanban"); // kanban or scheduler
@@ -72,7 +73,6 @@ export default function AdminProduction() {
       if (!res.ok) throw new Error("Failed to fetch production orders");
 
       const data = await res.json();
-      console.log("Production orders loaded:", data);
       setProductionOrders(data.items || data || []);
     } catch (err) {
       setError(err.message);
@@ -106,7 +106,7 @@ export default function AdminProduction() {
   useEffect(() => {
     const searchFromParams = searchParams.get("search");
     if (searchFromParams && searchFromParams !== filters.search) {
-      setFilters(prev => ({ ...prev, search: searchFromParams }));
+      setFilters((prev) => ({ ...prev, search: searchFromParams }));
     }
   }, [searchParams]);
 
@@ -193,7 +193,9 @@ export default function AdminProduction() {
         fetchProductionOrders();
       } else {
         const errorData = await res.json();
-        toast.error(`Failed to update status: ${errorData.detail || "Unknown error"}`);
+        toast.error(
+          `Failed to update status: ${errorData.detail || "Unknown error"}`
+        );
       }
     } catch (err) {
       toast.error(`Failed to update status: ${err.message || "Network error"}`);
@@ -479,8 +481,18 @@ export default function AdminProduction() {
                             className="flex-1 py-1.5 bg-gray-700/50 text-gray-300 rounded text-sm hover:bg-gray-700 flex items-center justify-center gap-1"
                             title="Split order across multiple machines"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+                              />
                             </svg>
                             Split
                           </button>
@@ -490,7 +502,9 @@ export default function AdminProduction() {
                             setSelectedOrderForScrap(order);
                             setShowScrapModal(true);
                           }}
-                          className={`${order.quantity_ordered > 1 ? 'flex-1' : 'w-full'} py-1.5 bg-red-600/10 text-red-400/80 rounded text-sm hover:bg-red-600/20`}
+                          className={`${
+                            order.quantity_ordered > 1 ? "flex-1" : "w-full"
+                          } py-1.5 bg-red-600/10 text-red-400/80 rounded text-sm hover:bg-red-600/20`}
                           title="Mark as scrap if setup failed"
                         >
                           Scrap

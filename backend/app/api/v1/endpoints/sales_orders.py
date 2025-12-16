@@ -759,15 +759,21 @@ async def get_required_orders_for_sales_order(
     work_orders_needed = []
     purchase_orders_needed = []
     top_level_products = []
-    visited_products = set()
 
-    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, parent_sku: str = None):
-        """Recursively explode BOM to find all requirements"""
-        if product_id in visited_products and level > 0:
-            return  # Circular reference protection (allow top-level duplicates)
-
-        if level > 0:
-            visited_products.add(product_id)
+    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, parent_sku: str = None, visited_bom_ids: set = None):
+        """
+        Recursively explode BOM to find all requirements
+        
+        Args:
+            product_id: Product to explode BOM for
+            quantity: Quantity required
+            level: Current BOM depth level
+            parent_sku: SKU of parent product
+            visited_bom_ids: Set of BOM IDs visited in current recursion path (prevents circular refs)
+        """
+        # Initialize visited set for top-level calls
+        if visited_bom_ids is None:
+            visited_bom_ids = set()
 
         # Find active BOM for this product
         bom = db.query(BOM).filter(
@@ -777,6 +783,13 @@ async def get_required_orders_for_sales_order(
 
         if not bom:
             return
+
+        # Prevent circular references: check if this BOM is already in the current recursion path
+        if bom.id in visited_bom_ids:
+            return  # Circular reference detected, stop recursion
+
+        # Add current BOM to the path for downstream recursion
+        current_path = visited_bom_ids | {bom.id}
 
         bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
 
@@ -819,8 +832,8 @@ async def get_required_orders_for_sales_order(
 
             if component.has_bom:
                 work_orders_needed.append(order_info)
-                # Recursively explode this sub-assembly's BOM
-                explode_requirements(component.id, shortage_qty, level + 1, component.sku)
+                # Recursively explode this sub-assembly's BOM with current path
+                explode_requirements(component.id, shortage_qty, level + 1, component.sku, current_path)
             else:
                 purchase_orders_needed.append(order_info)
 
@@ -856,8 +869,7 @@ async def get_required_orders_for_sales_order(
                         "has_bom": True
                     })
 
-            # Reset visited for each line item's explosion
-            visited_products.clear()
+            # Each line item starts a fresh BOM explosion (no visited set carried over)
             explode_requirements(product.id, qty, level=0, parent_sku=product.sku)
 
     elif order.order_type == "quote_based" and order.product_id:

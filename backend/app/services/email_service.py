@@ -272,7 +272,7 @@ class EmailService:
 
                     <p><strong>Reason:</strong> {reason_text}</p>
 
-                    <p>If you believe this is an error or need assistance, please contact us at info@blb3dprinting.com</p>
+                    <p>If you believe this is an error or need assistance, please contact us at {settings.BUSINESS_EMAIL}</p>
                 </div>
                 <div class="footer">
                     <p>BLB3D Printing</p>
@@ -289,7 +289,7 @@ class EmailService:
 
         Reason: {reason_text}
 
-        If you need assistance, please contact info@blb3dprinting.com
+        If you need assistance, please contact {settings.BUSINESS_EMAIL}
 
         --
         BLB3D Printing
@@ -329,7 +329,7 @@ class EmailService:
 
                     <p>Your password has been successfully changed.</p>
 
-                    <p>If you did not make this change, please contact us immediately at info@blb3dprinting.com</p>
+                    <p>If you did not make this change, please contact us immediately at {settings.BUSINESS_EMAIL}</p>
                 </div>
                 <div class="footer">
                     <p>BLB3D Printing</p>
@@ -344,7 +344,7 @@ class EmailService:
 
         Your password has been successfully changed.
 
-        If you did not make this change, please contact us immediately at info@blb3dprinting.com
+        If you did not make this change, please contact us immediately at {settings.BUSINESS_EMAIL}
 
         --
         BLB3D Printing
