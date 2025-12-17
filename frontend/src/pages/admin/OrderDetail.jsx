@@ -12,6 +12,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 import RecordPaymentModal from "../../components/payments/RecordPaymentModal";
+import ActivityTimeline from "../../components/ActivityTimeline";
 
 export default function OrderDetail() {
   const { orderId } = useParams();
@@ -1159,6 +1160,12 @@ export default function OrderDetail() {
             No payments recorded yet
           </div>
         )}
+      </div>
+
+      {/* Activity Timeline */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Activity</h2>
+        <ActivityTimeline orderId={parseInt(orderId)} />
       </div>
 
       {/* Record Payment Modal */}

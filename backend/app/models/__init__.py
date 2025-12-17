@@ -21,6 +21,7 @@ from app.models.traceability import (
 from app.models.company_settings import CompanySettings
 from app.models.uom import UnitOfMeasure
 from app.models.scrap_reason import ScrapReason
+from app.models.order_event import OrderEvent
 # from app.models.license import License  # Disabled until ready for production
 
 __all__ = [
@@ -78,6 +79,8 @@ __all__ = [
     "UnitOfMeasure",
     # Scrap Reasons
     "ScrapReason",
+    # Order Events (Activity Timeline)
+    "OrderEvent",
     # License (disabled until ready)
     # "License",
 ]
