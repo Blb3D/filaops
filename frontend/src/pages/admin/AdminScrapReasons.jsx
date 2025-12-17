@@ -328,122 +328,68 @@ export default function AdminScrapReasons() {
       )}
     </div>
   );
+}
+
+function ScrapReasonModal({ reason, onSave, onClose }) {
+  const firstInputRef = useRef(null);
+  const [formData, setFormData] = useState({
+    code: reason?.code || "",
+    name: reason?.name || "",
+    description: reason?.description || "",
+    sequence: reason?.sequence || 0,
+  });
+  const [errors, setErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    // Focus first input on mount
+    if (firstInputRef.current) {
+      firstInputRef.current.focus();
+    }
+  }, []);
+
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === "Escape") onClose();
     };
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
   }, [onClose]);
 
+  const validate = () => {
+    const newErrors = {};
+    if (!formData.code.trim()) {
+      newErrors.code = "Code is required";
+    }
+    if (!formData.name.trim()) {
+      newErrors.name = "Name is required";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+
+    setIsSubmitting(true);
+    try {
+      await onSave(formData);
+    } catch {
+      // Error handled by parent
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      onClick={onClose}
-    >
-      <div 
-        className="bg-gray-900 rounded-lg border border-gray-800 w-full max-w-md p-6"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="modal-title"
-      >
-        <h2 id="modal-title" className="text-xl font-bold text-white mb-4">
-          {reason ? "Edit Scrap Reason" : "Add Scrap Reason"}
-        </h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Code *
-            </label>
-            <input
-              type="text"
-              value={formData.code}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  code: e.target.value.toLowerCase().replace(/\s+/g, "_"),
-                })
-              }
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              placeholder="e.g., nozzle_clog"
-              required
-              disabled={!!reason} // Can't change code after creation
-            />
-            <p className="text-gray-500 text-xs mt-1">
-              Unique identifier (lowercase, underscores)
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Name *
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              placeholder="e.g., Nozzle Clog"
-              required
-            />
-            <p className="text-gray-500 text-xs mt-1">
-              Display name shown in dropdown
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Description
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 h-20 resize-none"
-              placeholder="e.g., Nozzle clogged mid-print causing under-extrusion or failure"
-            />
-            <p className="text-gray-500 text-xs mt-1">
-              Helpful explanation shown when selected
-            </p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-400 mb-1">
-              Sort Order
-            </label>
-            <input
-              type="number"
-              value={formData.sequence}
-              onChange={(e) =>
-                setFormData({ ...formData, sequence: parseInt(e.target.value) || 0 })
-              }
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500"
-              min="0"
-            />
-            <p className="text-gray-500 text-xs mt-1">
-              Lower numbers appear first in dropdown
-            </p>
-          </div>
-          <div className="flex justify-end gap-3 pt-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
-            >
-              {reason ? "Save Changes" : "Create Reason"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );    <div
+    <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={handleBackdropClick}
     >
@@ -471,7 +417,6 @@ export default function AdminScrapReasons() {
                   ...formData,
                   code: e.target.value.toLowerCase().replace(/\s+/g, "_"),
                 });
-                // Clear error when user starts typing
                 if (errors.code) {
                   setErrors({ ...errors, code: undefined });
                 }
@@ -482,7 +427,7 @@ export default function AdminScrapReasons() {
                   : "border-gray-700 focus:border-blue-500"
               }`}
               placeholder="e.g., nozzle_clog"
-              disabled={!!reason || isSubmitting} // Can't change code after creation
+              disabled={!!reason || isSubmitting}
             />
             {errors.code && (
               <p className="text-red-400 text-sm mt-1">{errors.code}</p>
@@ -500,7 +445,6 @@ export default function AdminScrapReasons() {
               value={formData.name}
               onChange={(e) => {
                 setFormData({ ...formData, name: e.target.value });
-                // Clear error when user starts typing
                 if (errors.name) {
                   setErrors({ ...errors, name: undefined });
                 }
