@@ -26,7 +26,7 @@ const paymentMethods = [
 
 export default function RecordPaymentModal({
   isRefund = false,
-  orderId = null,  // Pre-selected order (from Order Detail page)
+  orderId = null, // Pre-selected order (from Order Detail page)
   onClose,
   onSuccess,
 }) {
@@ -102,9 +102,12 @@ export default function RecordPaymentModal({
 
   const fetchPaymentSummary = async (orderId) => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/payments/order/${orderId}/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(
+        `${API_URL}/api/v1/payments/order/${orderId}/summary`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       if (res.ok) {
         setPaymentSummary(await res.json());
       }
@@ -142,7 +145,9 @@ export default function RecordPaymentModal({
         sales_order_id: parseInt(form.sales_order_id),
         amount: parseFloat(form.amount),
         payment_method: form.payment_method,
-        payment_date: form.payment_date ? new Date(form.payment_date).toISOString() : null,
+        payment_date: form.payment_date
+          ? new Date(form.payment_date).toISOString()
+          : null,
         transaction_id: form.transaction_id || null,
         check_number: form.payment_method === "check" ? form.check_number : null,
         notes: form.notes || null,
@@ -161,7 +166,9 @@ export default function RecordPaymentModal({
         onSuccess();
       } else {
         const err = await res.json();
-        toast.error(err.detail || `Failed to record ${isRefund ? "refund" : "payment"}`);
+        toast.error(
+          err.detail || `Failed to record ${isRefund ? "refund" : "payment"}`
+        );
       }
     } catch (err) {
       toast.error(`Failed to record ${isRefund ? "refund" : "payment"}`);

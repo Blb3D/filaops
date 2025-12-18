@@ -36,6 +36,12 @@ from app.schemas.sales_order import (
     SalesOrderUpdateAddress,
     SalesOrderCancel,
 )
+from app.schemas.order_event import (
+    OrderEventCreate,
+    OrderEventResponse,
+    OrderEventListResponse,
+)
+from app.models.order_event import OrderEvent
 from app.api.v1.endpoints.auth import get_current_user
 from app.services.inventory_service import process_shipment
 
@@ -262,7 +268,7 @@ async def create_sales_order(
             )
 
         # Check product is active
-        if not product.active:
+        if not product.active: # pyright: ignore[reportGeneralTypeIssues]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Product '{product.sku}' is discontinued and cannot be ordered"
@@ -353,7 +359,7 @@ async def create_sales_order(
 
     if customer and not shipping_address_line1:
         # Copy customer's shipping address if available
-        if customer.shipping_address_line1:
+        if customer.shipping_address_line1 is not None and customer.shipping_address_line1 != "":
             shipping_address_line1 = customer.shipping_address_line1
             shipping_address_line2 = customer.shipping_address_line2
             shipping_city = customer.shipping_city
@@ -1678,3 +1684,171 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
     
     response = SalesOrderResponse.model_validate(order_data)
     return response
+
+
+# ============================================================================
+# ENDPOINT: Order Events (Activity Timeline)
+# ============================================================================
+
+@router.get("/{order_id}/events", response_model=OrderEventListResponse)
+async def get_order_events(
+    order_id: int,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get activity timeline for a sales order.
+
+    Returns all events (status changes, notes, payments, etc.) in reverse
+    chronological order (most recent first).
+    """
+    # Verify order exists and user has access
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales order not found"
+        )
+
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if order.user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this order's events"
+        )
+
+    # Query events
+    query = db.query(OrderEvent).filter(OrderEvent.sales_order_id == order_id)
+    total = query.count()
+
+    events = (
+        query
+        .order_by(desc(OrderEvent.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    # Build response with user names
+    items = []
+    for event in events:
+        user_name = None
+        if event.user_id:
+            user = db.query(User).filter(User.id == event.user_id).first()
+            if user:
+                user_name = user.full_name or user.email
+
+        items.append(OrderEventResponse(
+            id=event.id,
+            sales_order_id=event.sales_order_id,
+            user_id=event.user_id,
+            user_name=user_name,
+            event_type=event.event_type,
+            title=event.title,
+            description=event.description,
+            old_value=event.old_value,
+            new_value=event.new_value,
+            metadata_key=event.metadata_key,
+            metadata_value=event.metadata_value,
+            created_at=event.created_at,
+        ))
+
+    return OrderEventListResponse(items=items, total=total)
+
+
+@router.post("/{order_id}/events", response_model=OrderEventResponse, status_code=status.HTTP_201_CREATED)
+async def add_order_event(
+    order_id: int,
+    event_data: OrderEventCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Add an event to a sales order's activity timeline.
+
+    Typically used for adding notes. Status changes and payments are
+    automatically recorded by their respective endpoints.
+    """
+    # Verify order exists and user has access
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales order not found"
+        )
+
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if order.user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to add events to this order"
+        )
+
+    # Create event
+    event = OrderEvent(
+        sales_order_id=order_id,
+        user_id=current_user.id,
+        event_type=event_data.event_type,
+        title=event_data.title,
+        description=event_data.description,
+        old_value=event_data.old_value,
+        new_value=event_data.new_value,
+        metadata_key=event_data.metadata_key,
+        metadata_value=event_data.metadata_value,
+    )
+
+    db.add(event)
+    db.commit()
+    db.refresh(event)
+
+    user_name = current_user.full_name or current_user.email
+
+    return OrderEventResponse(
+        id=event.id,
+        sales_order_id=event.sales_order_id,
+        user_id=event.user_id,
+        user_name=user_name,
+        event_type=event.event_type,
+        title=event.title,
+        description=event.description,
+        old_value=event.old_value,
+        new_value=event.new_value,
+        metadata_key=event.metadata_key,
+        metadata_value=event.metadata_value,
+        created_at=event.created_at,
+    )
+
+
+# Helper function to record order events (for use by other endpoints)
+def record_order_event(
+    db: Session,
+    order_id: int,
+    event_type: str,
+    title: str,
+    description: str = None,
+    old_value: str = None,
+    new_value: str = None,
+    user_id: int = None,
+    metadata_key: str = None,
+    metadata_value: str = None,
+):
+    """
+    Helper function to record an order event.
+
+    Called internally by status change, payment, and shipping endpoints.
+    """
+    event = OrderEvent(
+        sales_order_id=order_id,
+        user_id=user_id,
+        event_type=event_type,
+        title=title,
+        description=description,
+        old_value=old_value,
+        new_value=new_value,
+        metadata_key=metadata_key,
+        metadata_value=metadata_value,
+    )
+    db.add(event)
+    # Don't commit - let the calling function handle the transaction
