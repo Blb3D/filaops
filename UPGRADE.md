@@ -72,7 +72,92 @@ docker-compose -f docker-compose.dev.yml logs -f backend
 docker-compose -f docker-compose.dev.yml ps
 ```
 
-Visit http://localhost:5174 (dev) or http://localhost:5173 (prod) and verify the application loads.
+Visit the application and verify it loads:
+
+- **Development**: <http://localhost:5174>
+- **Production**: <http://localhost:10000>
+
+---
+
+## Production Deployment Upgrade
+
+**Production Location**: `C:\BLB3D_Production`
+**Ports**: Frontend: 10000, Backend: 7000
+
+### ⚠️ Important: Test in Development First
+
+Before upgrading production, **always test in development**:
+
+```bash
+cd c:\Users\brand\OneDrive\Documents\filaops
+# Follow Docker Installation steps above
+# Test thoroughly before proceeding to production
+```
+
+### Production Upgrade Steps
+
+```bash
+# 1. Navigate to PRODUCTION directory (CRITICAL!)
+cd C:\BLB3D_Production
+
+# 2. (Optional but recommended) Backup database
+# Using SQL Server Management Studio: Right-click DB → Tasks → Backup
+
+# 3. Pull latest release
+git fetch --tags
+git checkout v1.5.0
+
+# 4. Rebuild containers (production config - NO .dev.yml!)
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+
+# 5. Run migrations (IMPORTANT!)
+docker-compose exec backend alembic upgrade head
+
+# 6. Verify services are running
+docker-compose ps
+docker-compose logs -f backend
+```
+
+### Production Verification
+
+Visit <http://localhost:10000> and verify:
+
+- Application loads successfully
+- Can log in
+- Orders page displays correctly
+- No console errors (F12 Developer Tools)
+
+### Production Ports Reference
+
+| Service | Port | Container |
+|---------|------|-----------|
+| Frontend | 10000 | filaops-frontend |
+| Backend | 7000 | filaops-backend |
+| Database | 1433 | filaops-db |
+| Redis | 6379 | filaops-redis |
+
+### Production Troubleshooting
+
+**Services won't start**:
+
+```bash
+# Check logs
+docker-compose logs backend
+docker-compose logs frontend
+
+# Verify .env file has ENVIRONMENT=production
+cat .env | grep ENVIRONMENT
+```
+
+**Port conflicts**:
+
+```bash
+# Check what's using ports
+netstat -ano | findstr :10000
+netstat -ano | findstr :7000
+```
 
 ---
 

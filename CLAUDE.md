@@ -27,9 +27,20 @@ docker-compose up     # ❌ NO!
 | Database | localhost:1434 | filaops-dev-db |
 | Redis | localhost:6380 | filaops-dev-redis |
 
+### Production Environment
+
+**Location**: `C:\BLB3D_Production`
+
+| Service | Port | Container |
+|---------|------|-----------|
+| Frontend | http://localhost:10000 | filaops-frontend |
+| Backend | http://localhost:7000 | filaops-backend |
+| Database | localhost:1433 | filaops-db |
+| Redis | localhost:6379 | filaops-redis |
+
 ### Why This Matters
 
-- Production is completely separate (different folder, different containers, different volumes)
+- Production is completely separate (different folder, different containers, different volumes, different ports)
 - Development has its own Docker volumes (`filaops-dev-*`)
 - You cannot accidentally touch production from this folder
 
