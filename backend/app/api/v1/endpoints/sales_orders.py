@@ -268,7 +268,7 @@ async def create_sales_order(
             )
 
         # Check product is active
-        if not product.active:
+        if not product.active: # pyright: ignore[reportGeneralTypeIssues]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Product '{product.sku}' is discontinued and cannot be ordered"
@@ -359,7 +359,7 @@ async def create_sales_order(
 
     if customer and not shipping_address_line1:
         # Copy customer's shipping address if available
-        if customer.shipping_address_line1:
+        if customer.shipping_address_line1 is not None and customer.shipping_address_line1 != "":
             shipping_address_line1 = customer.shipping_address_line1
             shipping_address_line2 = customer.shipping_address_line2
             shipping_city = customer.shipping_city
