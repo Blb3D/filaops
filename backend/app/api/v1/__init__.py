@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     settings,
     payments,
     printers,
+    system,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router
@@ -143,6 +144,9 @@ router.include_router(
     prefix="/printers",
     tags=["printers"]
 )
+
+# System (version, updates, health)
+router.include_router(system.router)
 
 # License activation (disabled until ready for production)
 # router.include_router(license.router)

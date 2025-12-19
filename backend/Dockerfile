@@ -34,6 +34,16 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ===================
 FROM python:3.11-slim-bookworm
 
+# Build arguments for version injection
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_DATE
+
+# Set environment variables for version tracking
+ENV FILAOPS_VERSION=${VERSION}
+ENV FILAOPS_COMMIT=${COMMIT}
+ENV FILAOPS_BUILD_DATE=${BUILD_DATE}
+
 # Create non-root user first
 RUN useradd --create-home --shell /bin/bash filaops
 

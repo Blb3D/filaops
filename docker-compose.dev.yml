@@ -92,6 +92,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        VERSION: ${FILAOPS_VERSION:-1.5.0-dev}
+        COMMIT: ${FILAOPS_COMMIT:-dev}
+        BUILD_DATE: ${FILAOPS_BUILD_DATE}
     container_name: filaops-dev-backend
     depends_on:
       db:
