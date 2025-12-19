@@ -4,7 +4,7 @@
 # Usage:
 #   1. Copy .env.example to .env and customize
 #   2. Run: docker-compose up -d
-#   3. Open: http://localhost:5173
+#   3. Open: http://localhost:7000
 #
 # First-time setup creates admin user automatically
 
@@ -80,6 +80,10 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      args:
+        VERSION: ${FILAOPS_VERSION:-1.6.0}
+        COMMIT: ${FILAOPS_COMMIT:-unknown}
+        BUILD_DATE: ${FILAOPS_BUILD_DATE}
     container_name: filaops-backend
     depends_on:
       db:
@@ -96,12 +100,12 @@ services:
       - DB_TRUSTED_CONNECTION=false
       - SECRET_KEY=${SECRET_KEY:-change-this-in-production-use-openssl-rand-hex-32}
       - REDIS_URL=redis://redis:6379/0
-      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:5173}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:7000}
       - DEBUG=${DEBUG:-false}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - TIER=${TIER:-open}
     ports:
-      - "8000:8000"
+      - "10000:8000"
     volumes:
       - filaops-uploads:/app/uploads
     healthcheck:
@@ -120,22 +124,22 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:10000}
     container_name: filaops-frontend
     depends_on:
       backend:
         condition: service_healthy
     ports:
-      - "5173:80"
+      - "7000:80"
     restart: unless-stopped
 
 volumes:
   filaops-db-data:
-    name: filaops-db-data
+    name: filaops-prod-db-data
   filaops-redis-data:
-    name: filaops-redis-data
+    name: filaops-prod-redis-data
   filaops-uploads:
-    name: filaops-uploads
+    name: filaops-prod-uploads
 
 networks:
   default:
