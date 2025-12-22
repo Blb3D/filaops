@@ -39,12 +39,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install backend deps (Windows-friendly pins)
+      - name: Install backend dependencies
         working-directory: backend
         run: |
           python -m pip install -U pip
-          pip install "sqlalchemy>=2.0,<2.1" "psycopg[binary]" "alembic" "fastapi" "uvicorn" `
-            "pydantic-settings" "email-validator" "PyJWT" "cryptography" "passlib[bcrypt]" "python-multipart" "requests"
+          pip install -r requirements.txt
 
       - name: Wait for Postgres
         run: |

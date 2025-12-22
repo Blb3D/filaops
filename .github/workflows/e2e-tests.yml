@@ -13,6 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: filaops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U postgres
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
     steps:
       - uses: actions/checkout@v4
       
@@ -23,9 +38,40 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       
-      - name: Start Docker Compose
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install backend dependencies
+        working-directory: backend
         run: |
-          docker-compose -f docker-compose.dev.yml up -d
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run database migrations
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: alembic upgrade head
+      
+      - name: Start backend server
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
           
       - name: Wait for backend
         run: |
@@ -39,10 +85,17 @@ jobs:
         working-directory: frontend
         run: npx playwright install chromium
       
+      - name: Start frontend dev server
+        working-directory: frontend
+        run: |
+          npm run dev > /tmp/frontend.log 2>&1 &
+          echo $! > /tmp/frontend.pid
+          sleep 5
+      
       - name: Run smoke tests
         working-directory: frontend
         env:
-          BASE_URL: http://localhost:5174
+          BASE_URL: http://localhost:5173
         run: npm run test:smoke
       
       - name: Upload test results
@@ -56,14 +109,31 @@ jobs:
       - name: Show logs on failure
         if: failure()
         run: |
-          docker-compose -f docker-compose.dev.yml logs backend
-          docker-compose -f docker-compose.dev.yml logs frontend
+          echo "=== Backend logs ==="
+          cat /tmp/backend.log || true
+          echo "=== Frontend logs ==="
+          cat /tmp/frontend.log || true
 
   full-tests:
     name: Full E2E Tests
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: smoke-tests # Only run if smoke tests pass
+    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: filaops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready -U postgres
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     
     steps:
       - uses: actions/checkout@v4
@@ -75,9 +145,40 @@ jobs:
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
       
-      - name: Start Docker Compose
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install backend dependencies
+        working-directory: backend
         run: |
-          docker-compose -f docker-compose.dev.yml up -d
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Run database migrations
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: alembic upgrade head
+      
+      - name: Start backend server
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
+          echo $! > /tmp/backend.pid
           
       - name: Wait for backend
         run: |
@@ -91,10 +192,17 @@ jobs:
         working-directory: frontend
         run: npx playwright install chromium
       
+      - name: Start frontend dev server
+        working-directory: frontend
+        run: |
+          npm run dev > /tmp/frontend.log 2>&1 &
+          echo $! > /tmp/frontend.pid
+          sleep 5
+      
       - name: Run all E2E tests
         working-directory: frontend
         env:
-          BASE_URL: http://localhost:5174
+          BASE_URL: http://localhost:5173
         run: npm run test:e2e
       
       - name: Upload test results
@@ -110,5 +218,7 @@ jobs:
       - name: Show logs on failure
         if: failure()
         run: |
-          docker-compose -f docker-compose.dev.yml logs backend
-          docker-compose -f docker-compose.dev.yml logs frontend
+          echo "=== Backend logs ==="
+          cat /tmp/backend.log || true
+          echo "=== Frontend logs ==="
+          cat /tmp/frontend.log || true

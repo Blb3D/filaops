@@ -105,24 +105,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build check
+      - name: Build check (development mode)
         run: npm run build
         env:
-          VITE_API_URL: "http://localhost:8000"
+          VITE_API_URL: "http://localhost:8001"
+          # Note: Production builds are disabled - see frontend/PRODUCTION_BUILD_BLOCKED.md
 
   # ============================================
-  # Docker Build Test
+  # Note: Docker builds removed - project now uses PostgreSQL directly
   # ============================================
-  docker-build:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build backend Docker image
-        run: docker build -t filaops-backend:test ./backend
-
-      - name: Build frontend Docker image
-        run: docker build -t filaops-frontend:test ./frontend
-        env:
-          VITE_API_URL: "http://localhost:8000"
