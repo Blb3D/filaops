@@ -82,7 +82,6 @@ FilaOps is an ERP system for 3D printing businesses built with:
 - Example:
   ```python
   .filter(Model.active == True)  # noqa: E712 - SQL Server requires == True
-  ```
 
 ### Commit Message Format
 ```
