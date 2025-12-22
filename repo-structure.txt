@@ -1,0 +1,477 @@
+BLB3D_Production_DEV\
++-- .ai-instructions\
+¦   +-- NO_PRODUCTION_BUILDS.md
++-- .claude\
+¦   +-- settings.local.json
++-- .github\
+¦   +-- DISCUSSION_TEMPLATE\
+¦   ¦   +-- feedback.yml
+¦   +-- ISSUE_TEMPLATE\
+¦   ¦   +-- infrastructure.md
+¦   ¦   +-- issue-3d-viewer-instances.md
+¦   ¦   +-- issue-multi-material-ux.md
+¦   +-- workflows\
+¦   ¦   +-- ci.yml
+¦   ¦   +-- discord-release-notification.yml
+¦   ¦   +-- e2e-tests.yml
+¦   +-- copilot-instructions.md
+¦   +-- DISCORD_ANNOUNCEMENT_v1.5.0.md
+¦   +-- DISCUSSION_POST_v1.5.0.md
+¦   +-- DISCUSSION_UPGRADE_GUIDE.md
++-- backend\
+¦   +-- app\
+¦   ¦   +-- api\
+¦   ¦   ¦   +-- v1\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   +-- core\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- config.py
+¦   ¦   ¦   +-- features.py
+¦   ¦   ¦   +-- limiter.py
+¦   ¦   ¦   +-- pricing_config.py
+¦   ¦   ¦   +-- security.py
+¦   ¦   ¦   +-- settings.py
+¦   ¦   ¦   +-- version.py
+¦   ¦   +-- db\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- base.py
+¦   ¦   ¦   +-- session.py
+¦   ¦   +-- models\
+¦   ¦   ¦   +-- materials\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- bom.py
+¦   ¦   ¦   +-- company_settings.py
+¦   ¦   ¦   +-- inventory.py
+¦   ¦   ¦   +-- item_category.py
+¦   ¦   ¦   +-- license.py
+¦   ¦   ¦   +-- machine.py
+¦   ¦   ¦   +-- manufacturing.py
+¦   ¦   ¦   +-- material.py
+¦   ¦   ¦   +-- mrp.py
+¦   ¦   ¦   +-- order_event.py
+¦   ¦   ¦   +-- payment.py
+¦   ¦   ¦   +-- print_job.py
+¦   ¦   ¦   +-- printer.py
+¦   ¦   ¦   +-- product.py
+¦   ¦   ¦   +-- production_order.py
+¦   ¦   ¦   +-- purchase_order.py
+¦   ¦   ¦   +-- quote.py
+¦   ¦   ¦   +-- routing.py
+¦   ¦   ¦   +-- sales_order.py
+¦   ¦   ¦   +-- scrap_reason.py
+¦   ¦   ¦   +-- traceability.py
+¦   ¦   ¦   +-- uom.py
+¦   ¦   ¦   +-- user.py
+¦   ¦   ¦   +-- vendor.py
+¦   ¦   ¦   +-- work_center.py
+¦   ¦   +-- schemas\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- auth.py
+¦   ¦   ¦   +-- bom.py
+¦   ¦   ¦   +-- customer.py
+¦   ¦   ¦   +-- item.py
+¦   ¦   ¦   +-- manufacturing.py
+¦   ¦   ¦   +-- mrp.py
+¦   ¦   ¦   +-- order_event.py
+¦   ¦   ¦   +-- payment.py
+¦   ¦   ¦   +-- printer.py
+¦   ¦   ¦   +-- production_order.py
+¦   ¦   ¦   +-- purchasing.py
+¦   ¦   ¦   +-- quote.py
+¦   ¦   ¦   +-- sales_order.py
+¦   ¦   ¦   +-- scheduling.py
+¦   ¦   ¦   +-- traceability.py
+¦   ¦   ¦   +-- uom.py
+¦   ¦   ¦   +-- user_admin.py
+¦   ¦   +-- services\
+¦   ¦   ¦   +-- printer_discovery\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- bambu_client.py
+¦   ¦   ¦   +-- bom_service.py
+¦   ¦   ¦   +-- email_service.py
+¦   ¦   ¦   +-- file_storage.py
+¦   ¦   ¦   +-- google_drive.py
+¦   ¦   ¦   +-- inventory_service.py
+¦   ¦   ¦   +-- lot_policy.py
+¦   ¦   ¦   +-- material_service.py
+¦   ¦   ¦   +-- mrp.py
+¦   ¦   ¦   +-- mrp_enhanced_completion.py
+¦   ¦   ¦   +-- mrp_trigger_service.py
+¦   ¦   ¦   +-- order_status.py
+¦   ¦   ¦   +-- production_execution.py
+¦   ¦   ¦   +-- quote_conversion_service.py
+¦   ¦   ¦   +-- shipping_service.py
+¦   ¦   ¦   +-- transaction_audit_service.py
+¦   ¦   ¦   +-- uom_service.py
+¦   ¦   +-- __init__.py
+¦   ¦   +-- exceptions.py
+¦   ¦   +-- logging_config.py
+¦   ¦   +-- main.py
+¦   +-- docs\
+¦   ¦   +-- MRP_ENHANCEMENT_IMPLEMENTATION.md
+¦   +-- migrations\
+¦   ¦   +-- versions\
+¦   ¦   ¦   +-- 002_add_company_settings_and_quote_tax.py
+¦   ¦   ¦   +-- 003_add_sales_order_product_id.py
+¦   ¦   ¦   +-- 004_add_production_order_split.py
+¦   ¦   ¦   +-- 005_units_of_measure.py
+¦   ¦   ¦   +-- 006_add_mrp_tracking_to_sales_orders.py
+¦   ¦   ¦   +-- 007_ensure_production_order_code_unique.py
+¦   ¦   ¦   +-- 008_printer_brand_agnostic_fields.py
+¦   ¦   ¦   +-- 009_accounting_enhancements.py
+¦   ¦   ¦   +-- 010_merge_heads.py
+¦   ¦   ¦   +-- 011_add_scrap_reasons.py
+¦   ¦   ¦   +-- 012_add_qc_workflow_fields.py
+¦   ¦   ¦   +-- 013_add_order_events.py
+¦   ¦   ¦   +-- 014_add_fulfillment_status.py
+¦   ¦   ¦   +-- 015_add_work_centers_and_machines.py
+¦   ¦   ¦   +-- 016_add_scrap_tracking.py
+¦   ¦   ¦   +-- baseline_001_stamp_existing.py
+¦   ¦   +-- env.py
+¦   ¦   +-- README
+¦   ¦   +-- script.py.mako
+¦   +-- scripts\
+¦   ¦   +-- add_quote_customer_fields.sql
+¦   ¦   +-- add_shipping_addresses.py
+¦   ¦   +-- clear_test_data.py
+¦   ¦   +-- database_integrity_check.py
+¦   ¦   +-- fix_bom_line_units.py
+¦   ¦   +-- fix_resource_foreign_key.py
+¦   ¦   +-- fix_work_center_type.py
+¦   ¦   +-- migrate_sqlserver_to_postgres.py
+¦   ¦   +-- phase2b_quotes_tables.sql
+¦   ¦   +-- seed_example_data.py
+¦   ¦   +-- seed_production_test_data.py
+¦   ¦   +-- seed_test_data.py
+¦   ¦   +-- test_order_to_ship_workflow.py
+¦   +-- tests\
+¦   ¦   +-- integration\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- test_admin_endpoints.py
+¦   ¦   ¦   +-- test_auth_endpoints.py
+¦   ¦   ¦   +-- test_quote_endpoints.py
+¦   ¦   +-- unit\
+¦   ¦   ¦   +-- __init__.py
+¦   ¦   ¦   +-- test_auth.py
+¦   ¦   ¦   +-- test_mrp_service.py
+¦   ¦   ¦   +-- test_uom_service.py
+¦   ¦   +-- __init__.py
+¦   ¦   +-- conftest.py
+¦   +-- .dockerignore
+¦   +-- .env.example
+¦   +-- alembic.ini
+¦   +-- check_work_centers.py
+¦   +-- copy_database_simple.ps1
+¦   +-- database.py
+¦   +-- Dockerfile
+¦   +-- pyproject.toml
+¦   +-- pytest.ini
+¦   +-- requirements.txt
+¦   +-- test_order_status.py
++-- config\
+¦   +-- integration.yaml
++-- docs\
+¦   +-- architecture\
+¦   ¦   +-- API_REFERENCE.md
+¦   +-- Business Docs\
+¦   ¦   +-- FilaOps\
+¦   ¦       +-- BLB3D ERP System - Deep Technical Review.pdf
+¦   ¦       +-- MEDICAL_DEVICE_COMPLIANCE_GAP_ANALYSIS.pdf
+¦   ¦       +-- PROJECT_REVIEW_2024.pdf
+¦   +-- development\
+¦   ¦   +-- GITHUB_ISSUES_TO_CREATE.md
+¦   +-- flows\
+¦   ¦   +-- bom-flow.md
+¦   ¦   +-- items-inventory-flow.md
+¦   ¦   +-- purchasing-flow.md
+¦   +-- history\
+¦   ¦   +-- archived\
+¦   ¦   ¦   +-- FRONTEND_INTEGRATION_COMPLETE.md
+¦   ¦   ¦   +-- MIGRATION_COMPLETE.md
+¦   ¦   ¦   +-- PHASE2_COMPLETE.md
+¦   ¦   ¦   +-- PHASE2D_COMPLETE.md
+¦   ¦   +-- PHASE1_COMPLETE.md
+¦   ¦   +-- SALES_ORDER_API_COMPLIANCE.md
+¦   +-- images\
+¦   ¦   +-- README.md
+¦   +-- releases\
+¦   ¦   +-- RELEASE_NOTES_v1.5.0.md
+¦   ¦   +-- ROADMAP_v1.6.0.md
+¦   ¦   +-- v1.5.0_COMPREHENSIVE_FIXES.md
+¦   ¦   +-- v1.5.0_KNOWN_ISSUES.md
+¦   +-- screenshots\
+¦   ¦   +-- quote-to-ship\
+¦   ¦   ¦   +-- 01-company-settings.png
+¦   ¦   ¦   +-- 02-company-settings.png
+¦   ¦   ¦   +-- 02-company-settings-inventory-dashboard.png
+¦   ¦   ¦   +-- 03-company-settings-inventory-locations.png
+¦   ¦   ¦   +-- 03-company-settings-inventory-warehouse.png
+¦   ¦   ¦   +-- 03-company-settings-inventory-warehouse-locations.png
+¦   ¦   ¦   +-- 04-work-centers.png
+¦   ¦   ¦   +-- 04-work-centers-add.png
+¦   ¦   ¦   +-- 04-work-centers-add-example.png
+¦   ¦   ¦   +-- 04-work-centers-dashboard-complete.png
+¦   ¦   ¦   +-- 04-work-centers-machine-addition.png
+¦   ¦   ¦   +-- 04-work-centers-machine-dashboard.png
+¦   ¦   ¦   +-- 05-customer-add-customer.png
+¦   ¦   ¦   +-- 05-customer-dashboard.png
+¦   ¦   ¦   +-- 06-import-materials.png
+¦   ¦   ¦   +-- 06-import-materials-uploadcsv.png
+¦   ¦   ¦   +-- 06-import-materials-uploadcsv-reimport-add-category.png
+¦   ¦   ¦   +-- 08-create-BOM.png
+¦   ¦   ¦   +-- 08-create-BOM-complete-assembly-item.png
+¦   ¦   ¦   +-- 08-create-BOM-creation-modal1.png
+¦   ¦   ¦   +-- 08-create-BOM-creation-modal2.png
+¦   ¦   ¦   +-- 08-create-BOM-creation-modal3.png
+¦   ¦   +-- setup-wizard\
+¦   ¦   ¦   +-- 01-setup-create-admin-account.png
+¦   ¦   ¦   +-- 02-setup-load-sample-materials.png
+¦   ¦   ¦   +-- 03-setup-import-products.png
+¦   ¦   ¦   +-- 04-setup-import-customers.png
+¦   ¦   ¦   +-- 05-setup-import-orders.png
+¦   ¦   ¦   +-- 06-setup-import-inventory.png
+¦   ¦   ¦   +-- 07-Dashboard-overview.png
+¦   ¦   +-- sop\
+¦   ¦   ¦   +-- bom-page.png
+¦   ¦   ¦   +-- customers-add-modal.png
+¦   ¦   ¦   +-- customers-page.png
+¦   ¦   ¦   +-- dashboard-page.png
+¦   ¦   ¦   +-- items-page.png
+¦   ¦   ¦   +-- manufacturing-page.png
+¦   ¦   ¦   +-- orders-page.png
+¦   ¦   ¦   +-- payments-page.png
+¦   ¦   ¦   +-- production-page.png
+¦   ¦   ¦   +-- purchasing-page.png
+¦   ¦   ¦   +-- quotes-new-modal.png
+¦   ¦   ¦   +-- quotes-page.png
+¦   ¦   ¦   +-- settings-page.png
+¦   ¦   ¦   +-- shipping-page.png
+¦   ¦   +-- bom-detail.png
+¦   ¦   +-- dashboard.png
+¦   ¦   +-- items.png
+¦   ¦   +-- quote-portal.png
+¦   ¦   +-- quote-result.png
+¦   +-- sessions\
+¦   ¦   +-- CLAUDE.md
+¦   ¦   +-- SESSION_2025_12_09_INFRASTRUCTURE.md
+¦   +-- testing\
+¦   ¦   +-- accounting-module-test-plan.md
+¦   +-- EMAIL_CONFIGURATION.md
+¦   +-- filaops-documentation.jsx
+¦   +-- FUTURE-MRP-ENHANCEMENT.md
+¦   +-- MARKETPLACE_IMPORT_GUIDE.md
+¦   +-- MIGRATION_RUNBOOK.md
+¦   +-- ORGANIZATION.md
+¦   +-- printer-management.md
+¦   +-- README.md
+¦   +-- README_SEEDING.md
+¦   +-- Sample-logo.png
+¦   +-- SOP-Order-to-Ship-Workflow.md
+¦   +-- SQUARESPACE_IMPORT_GUIDE.md
++-- frontend\
+¦   +-- docs\
+¦   ¦   +-- screenshots\
+¦   ¦       +-- sop\
+¦   +-- e2e\
+¦   ¦   +-- fixtures\
+¦   ¦   ¦   +-- auth.ts
+¦   ¦   +-- tests\
+¦   ¦   ¦   +-- business-logic.spec.ts
+¦   ¦   ¦   +-- capture-screenshots.spec.ts
+¦   ¦   ¦   +-- customers.spec.ts
+¦   ¦   ¦   +-- full-workflow.spec.ts
+¦   ¦   ¦   +-- functional-workflow.spec.ts
+¦   ¦   ¦   +-- orders.spec.ts
+¦   ¦   ¦   +-- order-status-workflow.spec.ts
+¦   ¦   ¦   +-- order-to-ship.spec.ts
+¦   ¦   ¦   +-- scheduling.spec.ts
+¦   ¦   ¦   +-- smoke.spec.ts
+¦   ¦   ¦   +-- sop-comprehensive.spec.ts
+¦   ¦   +-- auth.setup.ts
+¦   ¦   +-- config.ts
+¦   +-- public\
+¦   ¦   +-- vite.svg
+¦   +-- src\
+¦   ¦   +-- assets\
+¦   ¦   ¦   +-- react.svg
+¦   ¦   +-- components\
+¦   ¦   ¦   +-- payments\
+¦   ¦   ¦   +-- purchasing\
+¦   ¦   ¦   +-- ActivityTimeline.jsx
+¦   ¦   ¦   +-- AdminLayout.jsx
+¦   ¦   ¦   +-- BOMEditor.jsx
+¦   ¦   ¦   +-- CompleteOrderModal.jsx
+¦   ¦   ¦   +-- EmptyState.jsx
+¦   ¦   ¦   +-- ExportImport.jsx
+¦   ¦   ¦   +-- ItemForm.jsx
+¦   ¦   ¦   +-- ItemWizard.jsx
+¦   ¦   ¦   +-- MaterialForm.jsx
+¦   ¦   ¦   +-- ProductionGanttScheduler.jsx
+¦   ¦   ¦   +-- ProductionScheduler.jsx
+¦   ¦   ¦   +-- ProductionSchedulingModal.jsx
+¦   ¦   ¦   +-- ProFeaturesAnnouncement.jsx
+¦   ¦   ¦   +-- QCInspectionModal.jsx
+¦   ¦   ¦   +-- RelativeDate.jsx
+¦   ¦   ¦   +-- RoutingEditor.jsx
+¦   ¦   ¦   +-- SalesOrderWizard.jsx
+¦   ¦   ¦   +-- ScrapOrderModal.jsx
+¦   ¦   ¦   +-- SplitOrderModal.jsx
+¦   ¦   ¦   +-- StatCard.jsx
+¦   ¦   ¦   +-- Toast.jsx
+¦   ¦   ¦   +-- UpdateNotification.jsx
+¦   ¦   +-- config\
+¦   ¦   ¦   +-- api.js
+¦   ¦   +-- hooks\
+¦   ¦   ¦   +-- useFeatureFlags.js
+¦   ¦   ¦   +-- useUpdateChecker.js
+¦   ¦   ¦   +-- useVersionCheck.js
+¦   ¦   +-- pages\
+¦   ¦   ¦   +-- admin\
+¦   ¦   ¦   +-- Onboarding.jsx
+¦   ¦   ¦   +-- Pricing.jsx
+¦   ¦   ¦   +-- Setup.jsx
+¦   ¦   +-- utils\
+¦   ¦   ¦   +-- version.js
+¦   ¦   +-- App.css
+¦   ¦   +-- App.jsx
+¦   ¦   +-- index.css
+¦   ¦   +-- main.jsx
+¦   +-- .dockerignore
+¦   +-- .gitignore
+¦   +-- Dockerfile
+¦   +-- eslint.config.js
+¦   +-- index.html
+¦   +-- nginx.conf
+¦   +-- package.json
+¦   +-- package-lock.json
+¦   +-- playwright.config.ts
+¦   +-- postcss.config.js
+¦   +-- PRODUCTION_BUILD_BLOCKED.md
+¦   +-- README.md
+¦   +-- tailwind.config.js
+¦   +-- vite.config.js
++-- mock-api\
+¦   +-- sample-responses\
+¦   ¦   +-- analyze-3mf.json
+¦   ¦   +-- generate-quote.json
+¦   ¦   +-- materials-options.json
+¦   +-- package.json
+¦   +-- package-lock.json
+¦   +-- README.md
+¦   +-- server.js
++-- scripts\
+¦   +-- database\
+¦   ¦   +-- add_procurement_type.sql
+¦   ¦   +-- add_shipping_columns.sql
+¦   ¦   +-- copy_database_to_filaops.sql
+¦   ¦   +-- create_admin.sql
+¦   ¦   +-- create_licenses_table.sql
+¦   ¦   +-- create_quote_materials_table.sql
+¦   ¦   +-- find_and_fix_material_types.sql
+¦   ¦   +-- fix_customer_number_index.sql
+¦   ¦   +-- fix_material_types.sql
+¦   ¦   +-- init-db.sql
+¦   ¦   +-- inventory_cleanup.sql
+¦   ¦   +-- mat_diagnostic.sql
+¦   ¦   +-- mat_sync_01_material_types.sql
+¦   ¦   +-- mat_sync_02_colors.sql
+¦   ¦   +-- mat_sync_03_clear_data.sql
+¦   ¦   +-- mat_sync_04_material_colors.sql
+¦   ¦   +-- mat_sync_04a_material_colors_pla.sql
+¦   ¦   +-- mat_sync_04b_material_colors_other.sql
+¦   ¦   +-- mat_sync_05a_inventory_pla.sql
+¦   ¦   +-- material_catalog_sync_step1.sql
+¦   ¦   +-- material_tables.sql
+¦   ¦   +-- mrp_phase1_schema_updates.sql
+¦   ¦   +-- nuke_and_rebuild_materials.sql
+¦   ¦   +-- phase2_users_table.sql
+¦   ¦   +-- product_updates.sql
+¦   ¦   +-- setup_database.sql
+¦   ¦   +-- verify_database.sql
+¦   +-- github\
+¦   ¦   +-- add-github-topics.ps1
+¦   ¦   +-- check-duplicate-issues.ps1
+¦   ¦   +-- create-core-issues.ps1
+¦   ¦   +-- create-new-issues.ps1
+¦   ¦   +-- create-release.ps1
+¦   ¦   +-- update-completed-issues.ps1
+¦   ¦   +-- update-issue-27.ps1
+¦   ¦   +-- update-remaining-issues.ps1
+¦   +-- init-db.sql\
+¦   +-- tools\
+¦   ¦   +-- analyze_amazon.py
+¦   ¦   +-- analyze_comparison.py
+¦   ¦   +-- check_data.py
+¦   ¦   +-- check_material_status.py
+¦   ¦   +-- copy_and_sanitize_database.py
+¦   ¦   +-- create_test_order_with_bom.py
+¦   ¦   +-- fix_routing_constraint.py
+¦   ¦   +-- fix_user_passwords.py
+¦   ¦   +-- fresh_database_setup.py
+¦   ¦   +-- material_import.py
+¦   ¦   +-- material_import_v2.py
+¦   ¦   +-- migrate_audit_columns.py
+¦   ¦   +-- migrate_categorize_components.py
+¦   ¦   +-- migrate_categorize_materials.py
+¦   ¦   +-- migrate_manufacturing_routes.py
+¦   ¦   +-- migrate_material_inventory_to_products.py
+¦   ¦   +-- migrate_mrp_tables.py
+¦   ¦   +-- migrate_phase4a_items.py
+¦   ¦   +-- migrate_purchasing_tables.py
+¦   ¦   +-- migrate_sales_orders.py
+¦   ¦   +-- migrate_traceability.py
+¦   ¦   +-- show_db_skus.py
+¦   ¦   +-- test_all_auth.py
+¦   ¦   +-- test_auth.py
+¦   ¦   +-- test_connection.py
+¦   ¦   +-- TEST_MATERIAL_CREATE.json
+¦   ¦   +-- test_material_endpoint.py
+¦   ¦   +-- verify_costs.py
+¦   +-- api_helper.py
+¦   +-- fix-linting-errors.py
+¦   +-- fix-temporal-dead-zones.js
+¦   +-- README.md
+¦   +-- update-readme-docker.ps1
+¦   +-- viral-launch.ps1
++-- .env.dev
++-- .env.example
++-- .gitignore
++-- CHANGELOG.md
++-- CLAUDE.md
++-- CONTRIBUTING.md
++-- DEBUGGING_GUIDE.md
++-- DEV_README.md
++-- docker-compose.dev.yml
++-- docker-compose.yml
++-- FAQ.md
++-- FIXES_APPLIED.md
++-- GETTING_STARTED.md
++-- HOW_IT_WORKS.md
++-- IMPLEMENTATION_COMPLETE.md
++-- INSTALL.md
++-- ISSUES_FIXED.md
++-- LICENSE
++-- Make-ReviewBundle.ps1
++-- nul
++-- package.json
++-- package-lock.json
++-- PHASE_B_COMPLETE.md
++-- playwright.config.ts
++-- PROGRESS_SUMMARY.md
++-- PROPRIETARY.md
++-- QUICK_START.md
++-- README.md
++-- RELEASE_NOTES.md
++-- release-notes-v1.0.1.md
++-- REMAINING_RECOMMENDATIONS.md
++-- repo-structure.txt
++-- run_tests.ps1
++-- Show-Tree.ps1
++-- start.ps1
++-- start-backend.ps1
++-- start-backend-dev.ps1
++-- start-frontend.ps1
++-- start-simple.ps1
++-- TEST_WORKFLOW_GUIDE.md
++-- TROUBLESHOOTING.md
++-- UPGRADE.md

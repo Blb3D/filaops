@@ -1,3 +1,8 @@
+﻿try:
+    from app.services import google_drive
+except Exception:
+    google_drive = None  # type: ignore
+
 """
 Purchase Order models for purchasing module
 """
@@ -99,3 +104,4 @@ class PurchaseOrderLine(Base):
 
     def __repr__(self):
         return f"<PurchaseOrderLine {self.line_number}: {self.quantity_ordered}>"
+

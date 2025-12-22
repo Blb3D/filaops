@@ -1,55 +1,22 @@
-# FilaOps Core ERP - Required Dependencies
-# These are needed to run the basic ERP system
-
-# FastAPI and Server
+﻿# backend/requirements.txt
+# (optional) replace your current file with this Postgres-friendly set
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
 python-multipart==0.0.18
-
-# Database (SQL Server)
 sqlalchemy==2.0.23
-pyodbc==5.0.1
+psycopg[binary]>=3.1
 alembic==1.17.2
-
-# Data Validation
 pydantic==2.10.5
 pydantic-settings==2.7.0
 email-validator==2.2.0
-
-# Authentication & Security
 PyJWT==2.10.1
 bcrypt==4.0.1
 python-dotenv==1.0.0
 slowapi==0.1.9
-
-# Utilities
 python-dateutil==2.8.2
 httpx==0.25.1
 requests==2.31.0
 semver==3.0.2
-
-# PDF Generation (pure Python, no system deps)
 reportlab==4.4.6
-
-# Development & Code Quality
 mypy==1.7.1
 types-python-dateutil==2.8.19.14
-
-# -------------------------------------------
-# Optional: For integrations (FilaOps Pro)
-# Uncomment if you need these features
-# -------------------------------------------
-
-# Google Cloud Storage (quote file backup)
-# google-cloud-storage==2.14.0
-
-# WooCommerce integration
-# woocommerce==3.0.0
-
-# Background job processing
-# celery==5.3.4
-# redis==5.0.1
-
-# QuickBooks integration
-# intuit-oauth==1.2.4
-# python-quickbooks==0.9.5

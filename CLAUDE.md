@@ -48,7 +48,7 @@ docker-compose up     # ❌ NO!
 
 ## Project Overview
 FilaOps is an ERP system for 3D printing businesses built with:
-- **Backend**: Python/FastAPI with SQLAlchemy (SQL Server compatible)
+- **Backend**: Python/FastAPI with SQLAlchemy and PostgreSQL
 - **Frontend**: React with Vite, Tailwind CSS
 - **Deployment**: Docker Compose
 
@@ -75,18 +75,9 @@ FilaOps is an ERP system for 3D printing businesses built with:
 4. **Wait for CodeRabbit review** (if PR is open)
    - Address any CodeRabbit findings before merging
    - Common issues: SQL Server compatibility, type hints, error handling
-
-### SQL Server Compatibility
-- Use `== True` not `.is_(True)` for boolean comparisons (SQL Server generates invalid `IS 1`)
-- Add `# noqa: E712` comment to suppress linting warnings
-- Example:
-  ```python
-  .filter(Model.active == True)  # noqa: E712 - SQL Server requires == True
-
+'''markdown
 ### Commit Message Format
 ```
-type: Short description
-
 Longer description if needed.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
