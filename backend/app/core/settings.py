@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     Application settings with validation.
 
     Environment variables take precedence over .env file values.
-    Prefix BLB3D_ can be used for any setting (e.g., BLB3D_DEBUG=true).
+    Prefix FILAOPS_ can be used for any setting (e.g., FILAOPS_DEBUG=true).
     """
 
     # -------------------------------------------------
@@ -170,7 +170,7 @@ class Settings(BaseSettings):
     # Google Cloud Storage
     # ===================
     GCS_ENABLED: bool = Field(default=False, description="Enable GCS backup")
-    GCS_BUCKET_NAME: str = Field(default="blb3d-quote-files", description="Bucket")
+    GCS_BUCKET_NAME: str = Field(default="filaops-quote-files", description="Bucket")
     GCS_PROJECT_ID: Optional[str] = Field(default=None)
     GCS_CREDENTIALS_PATH: Optional[str] = Field(default=None)
 

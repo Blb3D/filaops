@@ -16,7 +16,7 @@ Usage:
 from typing import Any, Dict, Optional
 
 
-class BLB3DException(Exception):
+class FilaOpsException(Exception):
     """
     Base exception for all FilaOps ERP errors.
 
@@ -27,7 +27,7 @@ class BLB3DException(Exception):
         details: Additional context for debugging
     """
 
-    error_code: str = "BLB3D_ERROR"
+    error_code: str = "FILAOPS_ERROR"
     status_code: int = 500
 
     def __init__(
@@ -56,7 +56,7 @@ class BLB3DException(Exception):
 # ===================
 
 
-class ValidationError(BLB3DException):
+class ValidationError(FilaOpsException):
     """Raised when input validation fails."""
 
     error_code = "VALIDATION_ERROR"
@@ -78,7 +78,7 @@ class ValidationError(BLB3DException):
         super().__init__(message, details=details)
 
 
-class InvalidStateError(BLB3DException):
+class InvalidStateError(FilaOpsException):
     """Raised when an operation is invalid for the current state."""
 
     error_code = "INVALID_STATE"
@@ -100,7 +100,7 @@ class InvalidStateError(BLB3DException):
         super().__init__(message, details=details)
 
 
-class DuplicateError(BLB3DException):
+class DuplicateError(FilaOpsException):
     """Raised when attempting to create a duplicate resource."""
 
     error_code = "DUPLICATE_ERROR"
@@ -131,7 +131,7 @@ class DuplicateError(BLB3DException):
 # ===================
 
 
-class AuthenticationError(BLB3DException):
+class AuthenticationError(FilaOpsException):
     """Raised when authentication fails."""
 
     error_code = "AUTHENTICATION_ERROR"
@@ -193,7 +193,7 @@ class InvalidTokenError(AuthenticationError):
 # ===================
 
 
-class PermissionDeniedError(BLB3DException):
+class PermissionDeniedError(FilaOpsException):
     """Raised when user lacks permission for an action."""
 
     error_code = "PERMISSION_DENIED"
@@ -220,7 +220,7 @@ class PermissionDeniedError(BLB3DException):
 # ===================
 
 
-class NotFoundError(BLB3DException):
+class NotFoundError(FilaOpsException):
     """Raised when a resource is not found."""
 
     error_code = "NOT_FOUND"
@@ -248,7 +248,7 @@ class NotFoundError(BLB3DException):
 # ===================
 
 
-class ConflictError(BLB3DException):
+class ConflictError(FilaOpsException):
     """Raised when there's a resource conflict."""
 
     error_code = "CONFLICT"
@@ -282,7 +282,7 @@ class ConcurrencyError(ConflictError):
 # ===================
 
 
-class BusinessRuleError(BLB3DException):
+class BusinessRuleError(FilaOpsException):
     """Raised when a business rule is violated."""
 
     error_code = "BUSINESS_RULE_ERROR"
@@ -362,7 +362,7 @@ class ProductionNotReadyError(BusinessRuleError):
 # ===================
 
 
-class IntegrationError(BLB3DException):
+class IntegrationError(FilaOpsException):
     """Raised when an external service integration fails."""
 
     error_code = "INTEGRATION_ERROR"
@@ -426,7 +426,7 @@ class BambuSuiteError(IntegrationError):
         super().__init__("Bambu Print Suite", message, details=details)
 
 
-class DatabaseError(BLB3DException):
+class DatabaseError(FilaOpsException):
     """Raised when a database operation fails."""
 
     error_code = "DATABASE_ERROR"
@@ -441,7 +441,7 @@ class DatabaseError(BLB3DException):
         super().__init__(message, details=details)
 
 
-class FileStorageError(BLB3DException):
+class FileStorageError(FilaOpsException):
     """Raised when file storage operations fail."""
 
     error_code = "FILE_STORAGE_ERROR"
@@ -465,7 +465,7 @@ class FileStorageError(BLB3DException):
 # ===================
 
 
-class ServiceUnavailableError(BLB3DException):
+class ServiceUnavailableError(FilaOpsException):
     """Raised when a service is temporarily unavailable."""
 
     error_code = "SERVICE_UNAVAILABLE"

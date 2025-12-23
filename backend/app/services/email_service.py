@@ -88,7 +88,7 @@ class EmailService:
         approve_url = f"{frontend_url}/admin/password-reset/approve/{approval_token}"
         deny_url = f"{frontend_url}/admin/password-reset/deny/{approval_token}"
 
-        subject = f"[BLB3D] Password Reset Request - {user_email}"
+        subject = f"[FilaOps] Password Reset Request - {user_email}"
 
         html_body = f"""
         <!DOCTYPE html>
@@ -133,7 +133,7 @@ class EmailService:
                     </p>
                 </div>
                 <div class="footer">
-                    <p>BLB3D Printing - Admin Notification</p>
+                    <p>FilaOps - Admin Notification</p>
                 </div>
             </div>
         </body>
@@ -154,7 +154,7 @@ class EmailService:
         This request expires in 24 hours.
 
         --
-        BLB3D Printing
+        FilaOps
         """
 
         return self._send_email(admin_email, subject, html_body, text_body)
@@ -171,7 +171,7 @@ class EmailService:
         """
         reset_url = f"{frontend_url}/reset-password/{reset_token}"
 
-        subject = "[BLB3D] Your Password Reset Has Been Approved"
+        subject = "[FilaOps] Your Password Reset Has Been Approved"
 
         html_body = f"""
         <!DOCTYPE html>
@@ -230,7 +230,7 @@ class EmailService:
         If you didn't request this, please contact us immediately.
 
         --
-        BLB3D Printing
+        FilaOps
         """
 
         return self._send_email(user_email, subject, html_body, text_body)
@@ -244,7 +244,7 @@ class EmailService:
         """
         Notify user that their password reset was denied
         """
-        subject = "[BLB3D] Password Reset Request Denied"
+        subject = "[FilaOps] Password Reset Request Denied"
 
         reason_text = reason or "Please contact support for assistance."
 
@@ -292,7 +292,7 @@ class EmailService:
         If you need assistance, please contact {settings.BUSINESS_EMAIL}
 
         --
-        BLB3D Printing
+        FilaOps
         """
 
         return self._send_email(user_email, subject, html_body, text_body)
@@ -305,7 +305,7 @@ class EmailService:
         """
         Confirm to user that their password was successfully changed
         """
-        subject = "[BLB3D] Your Password Has Been Changed"
+        subject = "[FilaOps] Your Password Has Been Changed"
 
         html_body = f"""
         <!DOCTYPE html>
@@ -347,7 +347,7 @@ class EmailService:
         If you did not make this change, please contact us immediately at {settings.BUSINESS_EMAIL}
 
         --
-        BLB3D Printing
+        FilaOps
         """
 
         return self._send_email(user_email, subject, html_body, text_body)

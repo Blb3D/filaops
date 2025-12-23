@@ -1,5 +1,5 @@
 """
-BLB3D Pricing Configuration
+FilaOps Pricing Configuration
 
 This module contains all pricing rules, markups, and business logic
 for the customer portal quote engine.

@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.limiter import limiter, apply_rate_limiting  # <- drop-in optional limiter
 from app.api.v1 import router as api_v1_router
 from app.core.config import settings
-from app.exceptions import BLB3DException
+from app.exceptions import FilaOpsException
 from app.logging_config import setup_logging, get_logger
 
 # Setup structured logging
@@ -125,10 +125,10 @@ app.add_middleware(
 # Exception Handlers
 # ===================
 
-@app.exception_handler(BLB3DException)
-async def blb3d_exception_handler(request: Request, exc: BLB3DException):
+@app.exception_handler(FilaOpsException)
+async def filaops_exception_handler(request: Request, exc: FilaOpsException):
     logger.warning(
-        f"BLB3D Exception: {exc.error_code} - {exc.message}",
+        f"FilaOps Exception: {exc.error_code} - {exc.message}",
         extra={"error_code": exc.error_code, "details": exc.details, "path": request.url.path}
     )
     return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
