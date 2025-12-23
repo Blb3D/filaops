@@ -128,6 +128,7 @@ class POLineBase(BaseModel):
     product_id: int = Field(..., description="Product/Item ID")
     quantity_ordered: Decimal = Field(..., gt=0, description="Quantity to order")
     unit_cost: Decimal = Field(..., ge=0, description="Cost per unit")
+    purchase_unit: Optional[str] = Field(None, max_length=20, description="Unit of measure for purchase (e.g., G, KG, EA, LB)")
     notes: Optional[str] = None
 
 
@@ -151,6 +152,7 @@ class POLineResponse(POLineBase):
     line_total: Decimal
     product_sku: Optional[str] = None
     product_name: Optional[str] = None
+    product_unit: Optional[str] = None  # Product's default unit
     created_at: datetime
     updated_at: datetime
 
@@ -262,12 +264,23 @@ class POStatusUpdate(BaseModel):
 # Receiving
 # ============================================================================
 
+class SpoolCreateData(BaseModel):
+    """Data for creating a single spool"""
+    weight_g: Decimal = Field(..., gt=0, description="Spool weight in GRAMS")
+    spool_number: Optional[str] = Field(None, description="Auto-generated if not provided")
+    supplier_lot_number: Optional[str] = None
+    expiry_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
 class ReceiveLineItem(BaseModel):
     """Receive a single line item"""
     line_id: int
     quantity_received: Decimal = Field(..., gt=0)
     lot_number: Optional[str] = None
     notes: Optional[str] = None
+    create_spools: bool = Field(False, description="Whether to create material spools")
+    spools: Optional[List[SpoolCreateData]] = Field(None, description="Individual spool data if creating spools")
 
 
 class ReceivePORequest(BaseModel):
@@ -284,3 +297,4 @@ class ReceivePOResponse(BaseModel):
     total_quantity: Decimal
     inventory_updated: bool
     transactions_created: List[int] = []  # IDs of inventory transactions
+    spools_created: List[str] = []  # List of spool numbers created

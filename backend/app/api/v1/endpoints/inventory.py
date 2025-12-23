@@ -1,278 +1,412 @@
 """
 Inventory API Endpoints
 
-These endpoints handle material availability checks
-and inventory transactions for the integration.
+Handles inventory transactions, negative inventory approvals, and reporting.
 """
-from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
-from pydantic import BaseModel
 from datetime import datetime
+from decimal import Decimal
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import func, desc, and_, or_
 
 from app.db.session import get_db
+from app.api.v1.endpoints.auth import get_current_user
+from app.models import User, InventoryTransaction, Inventory, Product
+from app.services.inventory_service import create_inventory_transaction, get_or_create_inventory
 from app.logging_config import get_logger
-from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
-from app.models.product import Product
 
-router = APIRouter()
 logger = get_logger(__name__)
 
-class InventoryCheckRequest(BaseModel):
-    """Request to check inventory availability"""
-    material_type: str
-    required_quantity: float  # in kg
-
-class InventoryLocationRequest(BaseModel):
-    """Inventory location details"""
-    location: str
-    quantity: float
-
-class InventoryCheckResponse(BaseModel):
-    """Inventory availability response"""
-    available: bool
-    on_hand_quantity: float
-    allocated_quantity: float
-    available_quantity: float
-    locations: List[InventoryLocationRequest]
+router = APIRouter()
 
 
-@router.post("/check", response_model=InventoryCheckResponse)
-async def check_inventory_availability(
-    request: InventoryCheckRequest,
-    db: Session = Depends(get_db)
+@router.post("/transactions/{transaction_id}/approve-negative")
+async def approve_negative_inventory(
+    transaction_id: int,
+    approval_reason: str = Query(..., description="Reason for approving negative inventory"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Check if material is available for printing
-
-    Called by Bambu Print Suite before starting a print job
-    to ensure sufficient material is in stock.
+    Approve a negative inventory transaction that requires approval.
+    
+    This allows inventory to go negative with proper documentation and audit trail.
     """
-    try:
-        logger.info(f"Checking availability for {request.material_type}: {request.required_quantity} kg")
-
-        # Find the product (material) by SKU or name
-        product = db.query(Product).filter(
-            (Product.sku == request.material_type) |
-            (Product.name.like(f"%{request.material_type}%"))
-        ).filter(Product.is_raw_material== True)  # noqa: E712.first()
-
-        if not product:
-            # Material not found - return zero availability
-            logger.warning(f"Material {request.material_type} not found in database")
-            return InventoryCheckResponse(
-                available=False,
-                on_hand_quantity=0.0,
-                allocated_quantity=0.0,
-                available_quantity=0.0,
-                locations=[]
-            )
-
-        # Query inventory for this product across all locations
-        inventory_items = db.query(Inventory).filter(Inventory.product_id == product.id).all()
-
-        # Calculate totals
-        total_on_hand = sum(float(item.on_hand_quantity) for item in inventory_items)
-        total_allocated = sum(float(item.allocated_quantity) for item in inventory_items)
-        total_available = sum(float(item.available_quantity) for item in inventory_items)
-
-        # Check if sufficient quantity is available
-        is_available = total_available >= request.required_quantity
-
-        # Build location list (simplified - using location_id as location name for now)
-        locations = [
-            InventoryLocationRequest(
-                location=f"LOC-{item.location_id}",
-                quantity=float(item.available_quantity)
-            )
-            for item in inventory_items if float(item.available_quantity) > 0
-        ]
-
-        return InventoryCheckResponse(
-            available=is_available,
-            on_hand_quantity=total_on_hand,
-            allocated_quantity=total_allocated,
-            available_quantity=total_available,
-            locations=locations
+    transaction = db.query(InventoryTransaction).filter(
+        InventoryTransaction.id == transaction_id
+    ).first()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    if not transaction.requires_approval:
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction does not require approval"
         )
+    
+    if transaction.approved_by:
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction already approved"
+        )
+    
+    # Get inventory record
+    inventory = get_or_create_inventory(
+        db,
+        transaction.product_id,
+        transaction.location_id
+    )
+    
+    # Store original transaction type before changing it
+    original_type = transaction.transaction_type
+    
+    # Update transaction with approval
+    transaction.requires_approval = False
+    transaction.approval_reason = approval_reason
+    transaction.approved_by = current_user.email if current_user else "system"
+    transaction.approved_at = datetime.utcnow()
+    transaction.transaction_type = "negative_adjustment"
+    
+    # Now apply the inventory change (check original type to determine if it's a consumption)
+    if original_type in ["issue", "consumption", "shipment", "scrap"]:
+        inventory.on_hand_quantity = Decimal(str(inventory.on_hand_quantity)) - transaction.quantity
+        inventory.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(transaction)
+    
+    logger.info(
+        f"Negative inventory transaction {transaction_id} approved by {current_user.email if current_user else 'system'}: "
+        f"Product {transaction.product_id}, Quantity: {transaction.quantity}, Reason: {approval_reason}"
+    )
+    
+    return {
+        "success": True,
+        "transaction_id": transaction_id,
+        "message": "Negative inventory transaction approved",
+        "product_id": transaction.product_id,
+        "quantity": float(transaction.quantity),
+        "approved_by": transaction.approved_by,
+        "approved_at": transaction.approved_at.isoformat() if transaction.approved_at else None,
+    }
 
-    except Exception as e:
-        logger.error(f"Failed to check inventory: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-class InventoryTransactionRequest(BaseModel):
-    """Request to create inventory transaction"""
-    transaction_type: str  # consumption, receipt, adjustment
-    reference_type: str  # print_job, sales_order, etc.
-    reference_id: str
-    product_sku: str
-    quantity: float  # in kg
-    location: str
-    notes: Optional[str] = None
-
-@router.post("/transactions")
-async def create_inventory_transaction(
-    transaction_req: InventoryTransactionRequest,
-    db: Session = Depends(get_db)
+@router.get("/negative-inventory-report")
+async def get_negative_inventory_report(
+    start_date: Optional[datetime] = Query(None, description="Start date for report"),
+    end_date: Optional[datetime] = Query(None, description="End date for report"),
+    include_approved: bool = Query(True, description="Include approved transactions"),
+    include_pending: bool = Query(True, description="Include pending approvals"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Create an inventory transaction
-
-    Called by Bambu Print Suite when material is consumed during printing,
-    or when print jobs are completed to update inventory levels.
+    Generate negative inventory report showing all negative inventory occurrences.
+    
+    Shows:
+    - All negative inventory transactions
+    - Approval history
+    - Reasons for adjustments
+    - Impact on inventory levels
     """
-    try:
-        logger.info(
-            f"Creating {transaction_req.transaction_type} transaction for "
-            f"{transaction_req.product_sku}: {transaction_req.quantity} kg"
+    query = db.query(InventoryTransaction).join(Product).filter(
+        or_(
+            InventoryTransaction.transaction_type == "negative_adjustment",
+            InventoryTransaction.requires_approval.is_(True),
         )
-
-        # Find the product
-        product = db.query(Product).filter(Product.sku == transaction_req.product_sku).first()
-        if not product:
-            raise HTTPException(status_code=404, detail=f"Product {transaction_req.product_sku} not found")
-
-        # Create the inventory transaction
-        transaction = InventoryTransaction(
-            product_id=product.id,
-            transaction_type=transaction_req.transaction_type,
-            reference_type=transaction_req.reference_type,
-            reference_id=int(transaction_req.reference_id) if transaction_req.reference_id.isdigit() else None,
-            quantity=transaction_req.quantity,
-            to_location=transaction_req.location if transaction_req.transaction_type == 'receipt' else None,
-            from_location=transaction_req.location if transaction_req.transaction_type == 'consumption' else None,
-            notes=transaction_req.notes,
-            transaction_date=datetime.utcnow()
-        )
-
-        db.add(transaction)
-
-        # Update inventory quantities based on transaction type
-        # Find or get default location
-        location = None
-        if transaction_req.location:
-            # Try to find location by code or name
-            location = db.query(InventoryLocation).filter(
-                (InventoryLocation.code == transaction_req.location) |
-                (InventoryLocation.name == transaction_req.location)
-            ).first()
+    )
+    
+    if start_date:
+        query = query.filter(InventoryTransaction.created_at >= start_date)
+    if end_date:
+        query = query.filter(InventoryTransaction.created_at <= end_date)
+    
+    if not include_approved:
+        query = query.filter(InventoryTransaction.approved_by.is_(None))
+    if not include_pending:
+        query = query.filter(InventoryTransaction.requires_approval.is_(False))
+    
+    transactions = query.order_by(desc(InventoryTransaction.created_at)).all()
+    
+    # Get current inventory levels for affected products
+    product_ids = list(set([t.product_id for t in transactions]))
+    inventory_levels = {}
+    if product_ids:
+        inv_query = db.query(
+            Inventory.product_id,
+            func.sum(Inventory.on_hand_quantity).label("on_hand"),
+            func.sum(Inventory.allocated_quantity).label("allocated"),
+        ).filter(
+            Inventory.product_id.in_(product_ids)
+        ).group_by(Inventory.product_id).all()
         
-        # Fallback to default location (MAIN or first available)
-        if not location:
-            location = db.query(InventoryLocation).filter(
-                InventoryLocation.code == 'MAIN'
-            ).first()
-            if not location:
-                location = db.query(InventoryLocation).filter(
-                    InventoryLocation.active == True
-                ).first()
+        for row in inv_query:
+            inventory_levels[row.product_id] = {
+                "on_hand": float(row.on_hand or 0),
+                "allocated": float(row.allocated or 0),
+                "available": float(row.on_hand or 0) - float(row.allocated or 0),
+            }
+    
+    report_items = []
+    for txn in transactions:
+        product = db.query(Product).filter(Product.id == txn.product_id).first()
+        inv_level = inventory_levels.get(txn.product_id, {
+            "on_hand": 0,
+            "allocated": 0,
+            "available": 0,
+        })
         
-        # If still no location, create a default one
-        if not location:
-            location = InventoryLocation(
-                code="MAIN",
-                name="Main Warehouse",
-                type="warehouse",
-                active=True
+        report_items.append({
+            "transaction_id": txn.id,
+            "created_at": txn.created_at.isoformat() if txn.created_at else None,
+            "product_id": txn.product_id,
+            "product_sku": product.sku if product else None,
+            "product_name": product.name if product else None,
+            "quantity": float(txn.quantity),
+            "transaction_type": txn.transaction_type,
+            "reference_type": txn.reference_type,
+            "reference_id": txn.reference_id,
+            "requires_approval": txn.requires_approval,
+            "approval_reason": txn.approval_reason,
+            "approved_by": txn.approved_by,
+            "approved_at": txn.approved_at.isoformat() if txn.approved_at else None,
+            "created_by": txn.created_by,
+            "notes": txn.notes,
+            "current_inventory": inv_level,
+        })
+    
+    return {
+        "report_period": {
+            "start_date": start_date.isoformat() if start_date else None,
+            "end_date": end_date.isoformat() if end_date else None,
+        },
+        "total_transactions": len(report_items),
+        "pending_approvals": len([t for t in report_items if t["requires_approval"] and not t["approved_by"]]),
+        "approved_transactions": len([t for t in report_items if t["approved_by"]]),
+        "transactions": report_items,
+    }
+
+
+@router.post("/validate-consistency")
+async def validate_inventory_consistency_endpoint(
+    product_id: Optional[int] = Query(None, description="Filter by product ID"),
+    location_id: Optional[int] = Query(None, description="Filter by location ID"),
+    auto_fix: bool = Query(False, description="Automatically fix inconsistencies"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Validate inventory consistency: check that allocated doesn't exceed on_hand.
+    
+    Optionally auto-fix by reducing allocated to match on_hand.
+    """
+    from app.services.inventory_service import validate_inventory_consistency
+    
+    inconsistencies = validate_inventory_consistency(
+        db=db,
+        product_id=product_id,
+        location_id=location_id,
+        auto_fix=auto_fix,
+    )
+    
+    return {
+        "total_checked": len(inconsistencies),
+        "inconsistencies_found": len([i for i in inconsistencies if not i.get("fixed", False)]),
+        "inconsistencies_fixed": len([i for i in inconsistencies if i.get("fixed", False)]),
+        "inconsistencies": inconsistencies,
+    }
+
+
+@router.post("/adjust-quantity")
+async def adjust_inventory_quantity(
+    product_id: int = Query(..., description="Product ID to adjust"),
+    location_id: int = Query(1, description="Location ID (defaults to 1)"),
+    new_on_hand_quantity: float = Query(..., description="New on-hand quantity (in product's base unit)"),
+    adjustment_reason: str = Query(..., description="Reason for adjustment (e.g., 'Physical count', 'Found inventory', 'Damaged goods')"),
+    input_unit: Optional[str] = Query(None, description="Unit of the input quantity (e.g., 'G' for grams, 'KG' for kilograms)"),
+    cost_per_unit: Optional[float] = Query(None, description="Cost per unit for accounting (optional, defaults to product's effective cost)"),
+    notes: Optional[str] = Query(None, description="Additional notes"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Adjust inventory on-hand quantity and create an adjustment transaction.
+    
+    This endpoint:
+    1. Gets current on-hand quantity
+    2. Calculates the difference (adjustment amount)
+    3. Creates an inventory transaction of type 'adjustment'
+    4. Updates the inventory on-hand quantity
+    5. Ensures MRP calculations will reflect the change
+    
+    The adjustment transaction will be:
+    - Positive quantity if increasing inventory (receipt/adjustment)
+    - Negative quantity if decreasing inventory (issue/adjustment)
+    """
+    from app.services.inventory_service import get_or_create_inventory, create_inventory_transaction
+    from app.services.inventory_helpers import is_material
+    
+    # Get product to check unit
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Get or create inventory record
+    inventory = get_or_create_inventory(db, product_id, location_id)
+    
+    # Check if this is a material
+    is_mat = is_material(product)
+    
+    # Get current on-hand quantity (in transaction unit: GRAMS for materials)
+    current_qty_transaction_unit = float(inventory.on_hand_quantity or 0)
+    
+    # Convert input quantity to transaction unit (GRAMS for materials, product_unit for others)
+    input_qty = Decimal(str(new_on_hand_quantity))
+    product_unit = (product.unit or "EA").upper()
+    
+    # Handle unit conversion if input_unit is provided
+    if input_unit and input_unit.upper() != (product_unit if not is_mat else "G"):
+        from app.services.uom_service import convert_quantity_safe
+        
+        # Target unit: GRAMS for materials, product_unit for others
+        target_unit = "G" if is_mat else product_unit
+        
+        try:
+            # Convert from input unit to target unit
+            converted_qty, was_converted = convert_quantity_safe(
+                db, 
+                input_qty, 
+                input_unit.upper(), 
+                target_unit
             )
-            db.add(location)
-            db.flush()
-        
-        # Find or create inventory for this product at this location
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == product.id,
-            Inventory.location_id == location.id
-        ).first()
-
-        # Create inventory record if it doesn't exist
-        if not inventory:
-            inventory = Inventory(
-                product_id=product.id,
-                location_id=location.id,
-                on_hand_quantity=0.0,
-                allocated_quantity=0.0,
-            )
-            db.add(inventory)
-            db.flush()
-
-        if inventory:
-            if transaction_req.transaction_type == 'consumption':
-                # Decrease on-hand and available quantities
-                inventory.on_hand_quantity = float(inventory.on_hand_quantity) - transaction_req.quantity
-                inventory.available_quantity = float(inventory.available_quantity) - transaction_req.quantity
-
-            elif transaction_req.transaction_type == 'receipt':
-                # Increase on-hand and available quantities
-                inventory.on_hand_quantity = float(inventory.on_hand_quantity) + transaction_req.quantity
-                inventory.available_quantity = float(inventory.available_quantity) + transaction_req.quantity
-
-            elif transaction_req.transaction_type == 'adjustment':
-                # Set to exact quantity (transaction.quantity is the new total)
-                inventory.on_hand_quantity = transaction_req.quantity
-                inventory.available_quantity = transaction_req.quantity - float(inventory.allocated_quantity)
-
-        db.commit()
-        db.refresh(transaction)
-
+            if was_converted:
+                new_qty_transaction_unit = converted_qty
+                logger.info(
+                    f"Converted {input_qty} {input_unit} to {new_qty_transaction_unit} {target_unit} "
+                    f"for product {product.sku} (material: {is_mat})"
+                )
+            else:
+                # Conversion failed - try simple conversion for common cases
+                if input_unit.upper() == "G" and target_unit == "KG":
+                    new_qty_transaction_unit = input_qty / Decimal("1000")
+                elif input_unit.upper() == "KG" and target_unit == "G":
+                    new_qty_transaction_unit = input_qty * Decimal("1000")
+                elif input_unit.upper() == "LB" and target_unit == "G":
+                    new_qty_transaction_unit = input_qty * Decimal("453.592")
+                else:
+                    new_qty_transaction_unit = input_qty
+                    logger.warning(
+                        f"Could not convert {input_qty} {input_unit} to {target_unit} for product {product.sku}, using as-is"
+                    )
+        except Exception as e:
+            # Simple conversion fallback
+            if input_unit.upper() == "KG" and target_unit == "G":
+                new_qty_transaction_unit = input_qty * Decimal("1000")
+                logger.info(f"Simple conversion: {input_qty} KG = {new_qty_transaction_unit} G")
+            elif input_unit.upper() == "G" and target_unit == "KG":
+                new_qty_transaction_unit = input_qty / Decimal("1000")
+                logger.info(f"Simple conversion: {input_qty} G = {new_qty_transaction_unit} KG")
+            else:
+                new_qty_transaction_unit = input_qty
+                logger.warning(f"Could not convert units, using input as-is: {e}")
+    else:
+        # No conversion needed - input is already in target unit
+        new_qty_transaction_unit = input_qty
+    
+    adjustment_qty = new_qty_transaction_unit - Decimal(str(current_qty_transaction_unit))
+    
+    if adjustment_qty == 0:
+        # No change needed
         return {
-            "transaction_id": transaction.id,
-            "status": "success",
-            "created_at": transaction.created_at.isoformat()
+            "success": True,
+            "message": "No adjustment needed - quantity unchanged",
+            "product_id": product_id,
+            "current_quantity": float(current_qty_transaction_unit),  # Already in transaction unit
+            "new_quantity": float(new_qty_transaction_unit),  # Already in transaction unit
+            "adjustment": 0,
         }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to create inventory transaction: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/materials")
-async def list_materials(db: Session = Depends(get_db)):
-    """
-    List all available materials
-
-    Returns materials that can be used for 3D printing,
-    used by Bambu Print Suite for material selection.
-    """
-    try:
-        # Query products table for raw materials
-        materials = db.query(Product).filter(
-            Product.is_raw_material== True,  # noqa: E712
-            Product.active == True
-        ).all()
-
-        # Get inventory quantities for each material
-        result_materials = []
-        for material in materials:
-            # Get total on-hand quantity across all locations
-            inventory_items = db.query(Inventory).filter(
-                Inventory.product_id == material.id
-            ).all()
-
-            total_on_hand = sum(float(item.on_hand_quantity) for item in inventory_items)
-
-            # Parse material type from SKU or name (simplified)
-            material_type = "PLA"  # Default
-            if "PLA" in material.name.upper():
-                material_type = "PLA"
-            elif "PETG" in material.name.upper():
-                material_type = "PETG"
-            elif "ABS" in material.name.upper():
-                material_type = "ABS"
-            elif "TPU" in material.name.upper():
-                material_type = "TPU"
-
-            result_materials.append({
-                "sku": material.sku,
-                "name": material.name,
-                "type": material_type,
-                "on_hand": total_on_hand,
-                "cost_per_kg": float(material.cost) if material.cost else 0.0
-            })
-
-        return {"materials": result_materials}
-
-    except Exception as e:
-        logger.error(f"Failed to list materials: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    
+    # Store original adjustment amount for response
+    original_adjustment = float(adjustment_qty)
+    
+    # Determine transaction type
+    if adjustment_qty > 0:
+        # Increase inventory - use 'receipt' type for positive adjustments
+        transaction_type = "receipt"
+        transaction_notes = f"Quantity adjustment (increase): {adjustment_reason}. {notes or ''}"
+        abs_adjustment_qty = adjustment_qty
+    else:
+        # Decrease inventory - use 'adjustment' type for negative adjustments
+        transaction_type = "adjustment"
+        transaction_notes = f"Quantity adjustment (decrease): {adjustment_reason}. {notes or ''}"
+        # Make quantity positive for transaction record
+        abs_adjustment_qty = abs(adjustment_qty)
+    
+    # Update inventory directly to the new quantity (in transaction unit: GRAMS for materials)
+    inventory.on_hand_quantity = float(new_qty_transaction_unit)
+    inventory.updated_at = datetime.utcnow()
+    
+    # Get cost per unit for accounting
+    # For materials: Cost is per-KG, so keep it as-is (even though transaction qty is in grams)
+    # For others: Cost is per product_unit
+    from app.services.inventory_service import get_effective_cost
+    transaction_cost_per_unit = None
+    if cost_per_unit is not None:
+        transaction_cost_per_unit = Decimal(str(cost_per_unit))
+    else:
+        # Use product's effective cost for accounting
+        transaction_cost_per_unit = get_effective_cost(product)
+    
+    # Create inventory transaction record for audit trail
+    # STAR SCHEMA: Store quantity in transaction unit (GRAMS for materials)
+    transaction = InventoryTransaction(
+        product_id=product_id,
+        location_id=location_id,
+        transaction_type=transaction_type,
+        quantity=float(abs_adjustment_qty),  # GRAMS for materials, product_unit for others
+        reference_type="manual_adjustment",
+        reference_id=0,  # No specific reference document
+        cost_per_unit=transaction_cost_per_unit,  # Cost per product_unit (KG for materials)
+        notes=transaction_notes,
+        created_by=current_user.email if current_user else "system",
+        created_at=datetime.utcnow(),
+        requires_approval=False,
+    )
+    db.add(transaction)
+    
+    # Commit to ensure inventory is updated
+    db.commit()
+    
+    # Refresh inventory to get updated values
+    db.refresh(inventory)
+    db.refresh(transaction)
+    
+    unit_label = "g" if is_mat else product_unit
+    logger.info(
+        f"Inventory quantity adjusted by {current_user.email if current_user else 'system'}: "
+        f"Product {product_id} ({product.sku if product else 'N/A'}), "
+        f"Location {location_id}, "
+        f"Old: {current_qty_transaction_unit:.1f}{unit_label}, New: {float(new_qty_transaction_unit):.1f}{unit_label}, "
+        f"Adjustment: {original_adjustment:+.1f}{unit_label}, "
+        f"Reason: {adjustment_reason}"
+    )
+    
+    return {
+        "success": True,
+        "message": "Inventory quantity adjusted successfully",
+        "transaction_id": transaction.id,
+        "product_id": product_id,
+        "product_sku": product.sku if product else None,
+        "product_name": product.name if product else None,
+        "location_id": location_id,
+        "previous_quantity": float(current_qty_transaction_unit),  # In transaction unit (GRAMS for materials)
+        "new_quantity": float(inventory.on_hand_quantity or 0),  # In transaction unit (GRAMS for materials)
+        "adjustment_amount": original_adjustment,  # In transaction unit (GRAMS for materials)
+        "transaction_type": transaction_type,
+        "adjustment_reason": adjustment_reason,
+        "allocated_quantity": float(inventory.allocated_quantity or 0),
+        "available_quantity": float((inventory.on_hand_quantity or 0) - (inventory.allocated_quantity or 0)),
+    }

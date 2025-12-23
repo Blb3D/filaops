@@ -93,7 +93,7 @@ def get_uom_by_code(db: Session, code: str) -> Optional[UnitOfMeasure]:
     """
     return db.query(UnitOfMeasure).filter(
         func.upper(UnitOfMeasure.code) == code.upper(),
-        UnitOfMeasure.active == True  # noqa: E712 - SQL Server requires == True,  # noqa: E712 not .is_(True)
+        UnitOfMeasure.active.is_(True)
     ).first()
 
 
@@ -296,7 +296,7 @@ def get_units_by_class(db: Session, uom_class: str) -> list:
     """
     return db.query(UnitOfMeasure).filter(
         UnitOfMeasure.uom_class == uom_class,
-        UnitOfMeasure.active == True  # noqa: E712 - SQL Server requires == True,  # noqa: E712 not .is_(True)
+        UnitOfMeasure.active.is_(True)
     ).all()
 
 

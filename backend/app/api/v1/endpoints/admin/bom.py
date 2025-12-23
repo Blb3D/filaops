@@ -73,6 +73,51 @@ def get_component_inventory(component_id: int, db: Session) -> dict:
     }
 
 
+def calculate_material_line_cost(
+    effective_qty: Decimal,
+    line_unit: Optional[str],
+    cost_per_kg: Decimal,
+    db: Optional[Session] = None
+) -> Decimal:
+    """Calculate material line cost by converting quantity to grams, then computing (qty_g/1000) × cost_per_kg.
+    
+    Args:
+        effective_qty: The effective quantity (including scrap factor)
+        line_unit: The unit of the quantity (None, "G", "KG", or other)
+        cost_per_kg: The cost per kilogram as Decimal
+        db: Optional database session for UOM conversion
+        
+    Returns:
+        The line cost as Decimal: (qty_g / 1000) × cost_per_kg
+    """
+    # Normalize units: treat None or "G" as grams, handle "KG" by multiplying by 1000
+    if not line_unit or line_unit.upper() == "G":
+        qty_g = effective_qty
+    elif line_unit.upper() == "KG":
+        qty_g = effective_qty * Decimal("1000")
+    else:
+        # Unit is neither G nor KG - try conversion if db is provided
+        if db is not None:
+            qty_g, success = convert_quantity_safe(db, effective_qty, line_unit, "G")
+            if not success:
+                # Conversion failed, fall back to assuming grams
+                logger.warning(
+                    f"Unit conversion unavailable for unit '{line_unit}', "
+                    f"effective_qty={effective_qty}. Assuming grams as fallback."
+                )
+                qty_g = effective_qty
+        else:
+            # No DB available, fall back to assuming grams
+            logger.warning(
+                f"Unit conversion unavailable for unit '{line_unit}', "
+                f"effective_qty={effective_qty}. Assuming grams as fallback."
+            )
+            qty_g = effective_qty
+    
+    # Compute and return (qty_g / 1000) × cost_per_kg as Decimal
+    return (qty_g / Decimal("1000")) * cost_per_kg
+
+
 def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: Decimal, db: Session = None) -> dict:
     """Build a standardized BOM line response dict.
 
@@ -85,16 +130,25 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
     Returns:
         Dict containing the standardized line response
     """
+    from app.services.inventory_helpers import is_material
+    
     component_unit = component.unit if component else None
+    is_mat = is_material(component) if component else False
 
     # Calculate effective quantity including scrap factor
     qty = line.quantity or Decimal("0")
     scrap = line.scrap_factor or Decimal("0")
     effective_qty = qty * (1 + scrap / 100)
 
-    # Convert cost to BOM line's unit if different from component's unit
+    # For materials: Cost is always $/KG, regardless of component.unit or line.unit
+    # For others: Convert cost to BOM line's unit if different from component's unit
     display_cost = comp_cost
-    if (
+    if is_mat:
+        # Materials: Cost is always per-KG (industry standard)
+        # comp_cost is already per-KG (from get_effective_cost)
+        # Don't convert - keep as $/KG
+        display_cost = comp_cost
+    elif (
         db is not None
         and line.unit
         and component_unit
@@ -102,18 +156,25 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
         and comp_cost
         and comp_cost > 0
     ):
+        # Non-materials: Convert cost to BOM line's unit if different from component's unit
         # Cost is per component_unit, convert to per line.unit
-        # E.g., $20/KG -> $0.02/G (divide by 1000)
-        # We convert 1 unit of line.unit to component_unit, then multiply by cost
         # Use _safe variant to handle empty UOM table with inline fallbacks
         converted_factor, success = convert_quantity_safe(db, Decimal("1"), line.unit, component_unit)
         if success:
             display_cost = comp_cost * converted_factor
 
-    # Calculate line cost using the display cost and effective quantity (with scrap)
+    # Calculate line cost
+    # For materials: line_cost = (quantity_g / 1000) × cost_per_kg
+    # For others: line_cost = quantity × cost_per_unit
     line_cost = None
     if display_cost and display_cost > 0 and effective_qty:
-        line_cost = float(display_cost) * float(effective_qty)
+        if is_mat:
+            # Material: use helper function to calculate cost
+            line_cost_decimal = calculate_material_line_cost(effective_qty, line.unit, display_cost, db)
+            line_cost = float(line_cost_decimal)
+        else:
+            # Non-materials: simple multiplication
+            line_cost = float(display_cost) * float(effective_qty)
 
     return {
         "id": line.id,
@@ -130,8 +191,10 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
         "component_name": component.name if component else None,
         "component_unit": component_unit,
         "component_cost": float(display_cost) if display_cost else None,
+        "component_cost_unit": "KG" if is_mat else component_unit,  # Show /KG for materials
         "line_cost": line_cost,
         "qty_needed": float(effective_qty),
+        "is_material": is_mat,  # Flag for frontend display
     }
 
 
@@ -171,7 +234,7 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
         # Check if component has its own BOM (is a sub-assembly)
         component_has_bom = db.query(BOM).filter(
             BOM.product_id == line.component_id,
-            BOM.active == True
+            BOM.active.is_(True)
         ).first() is not None
 
         # Build base line response using helper
@@ -210,6 +273,8 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
 
 def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
     """Recalculate total BOM cost from component costs, with UOM conversion"""
+    from app.services.inventory_helpers import is_material
+    
     total = Decimal("0")
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -221,25 +286,29 @@ def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
                 # Add scrap factor: qty * (1 + scrap/100)
                 effective_qty = qty * (1 + scrap / 100)
 
-                # Apply UOM conversion if line unit differs from component unit
-                # E.g., if component is priced per KG but line is in G,
-                # we need to convert line qty to component unit for costing
-                component_unit = component.unit
-                line_unit = line.unit
-
-                if line_unit and component_unit and line_unit.upper() != component_unit.upper():
-                    # Convert effective_qty from line.unit to component.unit
-                    # E.g., 25 G -> 0.025 KG
-                    # Use _safe variant to handle empty UOM table with inline fallbacks
-                    converted_qty, success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
-                    if success:
-                        total += cost * converted_qty
-                    else:
-                        # Conversion failed (incompatible units), fall back to direct multiplication
-                        total += cost * effective_qty
+                is_mat = is_material(component)
+                
+                if is_mat:
+                    # Materials: Cost is per-KG, quantity might be in G
+                    # Use helper function to calculate: (qty_g / 1000) × cost_per_kg
+                    total += calculate_material_line_cost(effective_qty, line.unit, cost, db)
                 else:
-                    # Same unit or no unit specified, direct multiply
-                    total += cost * effective_qty
+                    # Non-materials: Apply UOM conversion if line unit differs from component unit
+                    component_unit = component.unit
+                    line_unit = line.unit
+
+                    if line_unit and component_unit and line_unit.upper() != component_unit.upper():
+                        # Convert effective_qty from line.unit to component.unit
+                        # Use _safe variant to handle empty UOM table with inline fallbacks
+                        converted_qty, success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
+                        if success:
+                            total += cost * converted_qty
+                        else:
+                            # Conversion failed (incompatible units), fall back to direct multiplication
+                            total += cost * effective_qty
+                    else:
+                        # Same unit or no unit specified, direct multiply
+                        total += cost * effective_qty
     return total
 
 
@@ -268,7 +337,7 @@ async def list_boms(
         query = query.filter(BOM.product_id == product_id)
 
     if active_only:
-        query = query.filter(BOM.active == True)  # noqa: E712
+        query = query.filter(BOM.active.is_(True))  # noqa: E712
 
     if search:
         query = query.join(Product).filter(
@@ -289,7 +358,7 @@ async def list_boms(
         # Get routing process cost for this product
         routing = db.query(Routing).filter(
             Routing.product_id == bom.product_id,
-            Routing.is_active == True
+            Routing.is_active.is_(True)
         ).first()
         process_cost = routing.total_cost if routing and routing.total_cost else Decimal("0")
 
@@ -724,6 +793,8 @@ async def recalculate_bom(
     previous_cost = bom.total_cost
 
     # Calculate line costs for response (with UOM conversion)
+    from app.services.inventory_helpers import is_material
+    
     line_costs = []
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -734,12 +805,19 @@ async def recalculate_bom(
             scrap = line.scrap_factor or Decimal("0")
             effective_qty = qty * (1 + scrap / 100)
 
-            # Apply UOM conversion if needed
+            is_mat = is_material(component)
             component_unit = component.unit
             line_unit = line.unit
             unit_cost = component_cost
 
-            if line_unit and component_unit and line_unit.upper() != component_unit.upper():
+            if is_mat:
+                # Materials: Cost is per-KG, quantity might be in G
+                # Use helper function to calculate: (qty_g / 1000) × cost_per_kg
+                line_cost_decimal = calculate_material_line_cost(effective_qty, line_unit, component_cost, db)
+                line_cost = float(line_cost_decimal)  # Cast to float for API response
+                unit_cost = component_cost  # Keep as $/KG
+            elif line_unit and component_unit and line_unit.upper() != component_unit.upper():
+                # Non-materials: Apply UOM conversion if needed
                 # Use _safe variant to handle empty UOM table with inline fallbacks
                 converted_qty, qty_success = convert_quantity_safe(db, effective_qty, line_unit, component_unit)
                 if qty_success:
@@ -893,7 +971,7 @@ async def get_bom_by_product(
     bom = (
         db.query(BOM)
         .options(joinedload(BOM.product), joinedload(BOM.lines))
-        .filter(BOM.product_id == product_id, BOM.active == True)  # noqa: E712
+        .filter(BOM.product_id == product_id, BOM.active.is_(True))  # noqa: E712
         .order_by(desc(BOM.version))
         .first()
     )
@@ -974,7 +1052,7 @@ def explode_bom_recursive(
         # Check if this component has its own BOM (sub-assembly)
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)  # noqa: E712
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))  # noqa: E712
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1052,7 +1130,7 @@ def calculate_rolled_up_cost(bom_id: int, db: Session, visited: set = None) -> D
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)  # noqa: E712
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))  # noqa: E712
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1200,7 +1278,7 @@ async def get_cost_rollup(
         # Check for sub-BOM
         sub_bom = (
             db.query(BOM)
-            .filter(BOM.product_id == component.id, BOM.active == True)  # noqa: E712
+            .filter(BOM.product_id == component.id, BOM.active.is_(True))  # noqa: E712
             .order_by(desc(BOM.version))
             .first()
         )
@@ -1303,7 +1381,7 @@ async def where_used(
     )
 
     if not include_inactive:
-        query = query.filter(BOM.active == True)  # noqa: E712
+        query = query.filter(BOM.active.is_(True))  # noqa: E712
 
     lines = query.all()
 
@@ -1379,7 +1457,7 @@ async def validate_bom(
             # Check if it's a sub-assembly
             sub_bom = db.query(BOM).filter(
                 BOM.product_id == component.id,
-                BOM.active == True
+                BOM.active.is_(True)
             ).first()
 
             if not sub_bom:
