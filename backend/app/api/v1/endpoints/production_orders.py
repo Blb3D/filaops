@@ -5,7 +5,7 @@ Manufacturing Orders (MOs) for tracking production of finished goods.
 Supports creation from sales orders, manual entry, and MRP planning.
 """
 import logging
-from typing import List, Optional, Dict, Any
+from typing import Annotated, List, Optional, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal
 
@@ -15,6 +15,8 @@ from sqlalchemy import func, desc, or_, case
 
 from app.db.session import get_db
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_pagination_params
+from app.schemas.common import PaginationParams
 from app.models import (
     User,
     ProductionOrder,
@@ -214,19 +216,23 @@ def copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: 
 
 @router.get("/", response_model=List[ProductionOrderListResponse])
 async def list_production_orders(
-    status: Optional[str] = Query(None),
-    product_id: Optional[int] = Query(None),
-    sales_order_id: Optional[int] = Query(None),
-    priority: Optional[int] = Query(None, ge=1, le=5),
-    due_before: Optional[date] = Query(None),
-    due_after: Optional[date] = Query(None),
-    search: Optional[str] = Query(None),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=200),
+    pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
+    status: Optional[str] = Query(None, description="Filter by status"),
+    product_id: Optional[int] = Query(None, description="Filter by product ID"),
+    sales_order_id: Optional[int] = Query(None, description="Filter by sales order ID"),
+    priority: Optional[int] = Query(None, ge=1, le=5, description="Filter by priority (1-5)"),
+    due_before: Optional[date] = Query(None, description="Filter orders due before this date"),
+    due_after: Optional[date] = Query(None, description="Filter orders due after this date"),
+    search: Optional[str] = Query(None, description="Search by PO code, product SKU, or name"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> List[ProductionOrderListResponse]:
-    """List production orders with filtering"""
+    """
+    List production orders with filtering and pagination.
+
+    Note: This endpoint will be updated to return ListResponse[ProductionOrderListResponse]
+    in the next API version for consistency with other list endpoints.
+    """
     query = db.query(ProductionOrder)
 
     if status:
@@ -259,7 +265,7 @@ async def list_production_orders(
         ProductionOrder.created_at.desc(),
     )
 
-    orders = query.offset(skip).limit(limit).all()
+    orders = query.offset(pagination.offset).limit(pagination.limit).all()
 
     result = []
     for order in orders:

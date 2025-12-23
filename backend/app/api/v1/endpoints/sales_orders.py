@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from sqlalchemy.exc import IntegrityError
 
@@ -696,7 +696,11 @@ async def get_user_sales_orders(
     if limit > 100:
         limit = 100
 
-    query = db.query(SalesOrder)
+    # OPTIMIZED: Use joinedload to eager load user relationship for better performance
+    query = db.query(SalesOrder).options(
+        joinedload(SalesOrder.user),
+        joinedload(SalesOrder.product)
+    )
 
     # Admin users can see all orders, regular users only see their own
     if current_user.account_type != "admin":
@@ -879,13 +883,16 @@ async def get_required_orders_for_sales_order(
 
     # Process based on order type
     if order.order_type == "line_item":
-        # Get all lines for this order
-        lines = db.query(SalesOrderLine).filter(
+        # OPTIMIZED: Get all lines with eager-loaded products in one query
+        lines = db.query(SalesOrderLine).options(
+            joinedload(SalesOrderLine.product)
+        ).filter(
             SalesOrderLine.sales_order_id == order_id
         ).all()
 
         for line in lines:
-            product = db.query(Product).filter(Product.id == line.product_id).first()
+            # OPTIMIZED: Use eager-loaded product (no additional query)
+            product = line.product
             if not product:
                 continue
 

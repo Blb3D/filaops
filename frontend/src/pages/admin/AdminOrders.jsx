@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import SalesOrderWizard from "../../components/SalesOrderWizard";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
+import { validateLength } from "../../utils/validation";
 
 const statusColors = {
   pending: "bg-yellow-500/20 text-yellow-400",
@@ -42,6 +43,7 @@ export default function AdminOrders() {
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellingOrder, setCancellingOrder] = useState(null);
   const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationError, setCancellationError] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingOrder, setDeletingOrder] = useState(null);
 
@@ -212,6 +214,20 @@ export default function AdminOrders() {
   const handleCancelOrder = async () => {
     if (!cancellingOrder) return;
 
+    // Validate cancellation reason if provided
+    setCancellationError("");
+    if (cancellationReason && cancellationReason.trim()) {
+      const lengthError = validateLength(
+        cancellationReason.trim(),
+        "Cancellation reason",
+        { max: 500 }
+      );
+      if (lengthError) {
+        setCancellationError(lengthError);
+        return;
+      }
+    }
+
     try {
       const res = await fetch(
         `${API_URL}/api/v1/sales-orders/${cancellingOrder.id}/cancel`,
@@ -230,6 +246,7 @@ export default function AdminOrders() {
         setShowCancelModal(false);
         setCancellingOrder(null);
         setCancellationReason("");
+        setCancellationError("");
         fetchOrders();
       } else {
         const errorData = await res.json();
@@ -690,11 +707,29 @@ export default function AdminOrders() {
                 </label>
                 <textarea
                   value={cancellationReason}
-                  onChange={(e) => setCancellationReason(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                  onChange={(e) => {
+                    setCancellationReason(e.target.value);
+                    setCancellationError("");
+                  }}
+                  className={`w-full bg-gray-800 border rounded-lg px-4 py-2 text-white ${
+                    cancellationError
+                      ? "border-red-500 focus:border-red-500"
+                      : "border-gray-700"
+                  }`}
                   rows={3}
                   placeholder="Enter reason for cancellation..."
+                  maxLength={500}
                 />
+                {cancellationError && (
+                  <div className="text-red-400 text-sm mt-1">
+                    {cancellationError}
+                  </div>
+                )}
+                {cancellationReason && (
+                  <div className="text-gray-500 text-xs mt-1">
+                    {cancellationReason.length}/500 characters
+                  </div>
+                )}
               </div>
               <div className="flex justify-end gap-3">
                 <button
@@ -702,6 +737,7 @@ export default function AdminOrders() {
                     setShowCancelModal(false);
                     setCancellingOrder(null);
                     setCancellationReason("");
+                    setCancellationError("");
                   }}
                   className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600"
                 >

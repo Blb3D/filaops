@@ -2,7 +2,7 @@
 Vendors API Endpoints
 """
 from fastapi import APIRouter, HTTPException, Depends
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
@@ -12,6 +12,7 @@ from app.logging_config import get_logger
 from app.models.vendor import Vendor
 from app.models.purchase_order import PurchaseOrder
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_pagination_params
 from app.models.user import User
 from app.schemas.purchasing import (
     VendorCreate,
@@ -19,6 +20,7 @@ from app.schemas.purchasing import (
     VendorListResponse,
     VendorResponse,
 )
+from app.schemas.common import PaginationParams, ListResponse, PaginationMeta
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -40,19 +42,20 @@ def _generate_vendor_code(db: Session) -> str:
 # Vendor CRUD
 # ============================================================================
 
-@router.get("/", response_model=List[VendorListResponse])
+@router.get("/", response_model=ListResponse[VendorListResponse])
 async def list_vendors(
+    pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
     search: Optional[str] = None,
     active_only: bool = True,
-    skip: int = 0,
-    limit: int = 100,
     db: Session = Depends(get_db),
 ):
     """
-    List all vendors
+    List all vendors with pagination
 
     - **search**: Search by name, code, or contact
     - **active_only**: Only show active vendors
+    - **offset**: Number of records to skip (default: 0)
+    - **limit**: Maximum records to return (default: 50, max: 500)
     """
     query = db.query(Vendor)
 
@@ -68,7 +71,11 @@ async def list_vendors(
             (Vendor.email.ilike(search_filter))
         )
 
-    vendors = query.order_by(Vendor.name).offset(skip).limit(limit).all()
+    # Get total count before pagination
+    total = query.count()
+
+    # Apply pagination
+    vendors = query.order_by(Vendor.name).offset(pagination.offset).limit(pagination.limit).all()
 
     # Get PO counts for each vendor
     po_counts = dict(
@@ -94,7 +101,15 @@ async def list_vendors(
             po_count=po_counts.get(v.id, 0)
         ))
 
-    return result
+    return ListResponse(
+        items=result,
+        pagination=PaginationMeta(
+            total=total,
+            offset=pagination.offset,
+            limit=pagination.limit,
+            returned=len(result)
+        )
+    )
 
 
 @router.get("/{vendor_id}", response_model=VendorResponse)

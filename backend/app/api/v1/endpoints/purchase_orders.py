@@ -2,8 +2,8 @@
 Purchase Orders API Endpoints
 """
 import os
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
+from typing import Annotated, List, Optional
 from datetime import datetime, date
 from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
@@ -20,6 +20,7 @@ from app.models.product import Product
 from app.models.inventory import Inventory, InventoryTransaction
 from app.models.material_spool import MaterialSpool
 from app.api.v1.endpoints.auth import get_current_user
+from app.api.v1.deps import get_pagination_params
 from app.models.user import User
 from app.schemas.purchasing import (
     PurchaseOrderCreate,
@@ -33,6 +34,7 @@ from app.schemas.purchasing import (
     ReceivePORequest,
     ReceivePOResponse,
 )
+from app.schemas.common import PaginationParams, ListResponse, PaginationMeta
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -66,21 +68,22 @@ def _calculate_totals(po: PurchaseOrder) -> None:
 # Purchase Order CRUD
 # ============================================================================
 
-@router.get("/", response_model=List[PurchaseOrderListResponse])
+@router.get("/", response_model=ListResponse[PurchaseOrderListResponse])
 async def list_purchase_orders(
-    status: Optional[str] = None,
-    vendor_id: Optional[int] = None,
-    search: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
+    pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
+    status: Optional[str] = Query(None, description="Filter by status (draft, ordered, shipped, received, closed, cancelled)"),
+    vendor_id: Optional[int] = Query(None, description="Filter by vendor ID"),
+    search: Optional[str] = Query(None, description="Search by PO number"),
     db: Session = Depends(get_db),
 ):
     """
-    List purchase orders
+    List purchase orders with pagination
 
     - **status**: Filter by status (draft, ordered, shipped, received, closed, cancelled)
     - **vendor_id**: Filter by vendor
     - **search**: Search by PO number
+    - **offset**: Number of records to skip (default: 0)
+    - **limit**: Maximum records to return (default: 50, max: 500)
     """
     query = db.query(PurchaseOrder).options(joinedload(PurchaseOrder.vendor))
 
@@ -93,7 +96,11 @@ async def list_purchase_orders(
     if search:
         query = query.filter(PurchaseOrder.po_number.ilike(f"%{search}%"))
 
-    pos = query.order_by(desc(PurchaseOrder.created_at)).offset(skip).limit(limit).all()
+    # Get total count before pagination
+    total = query.count()
+
+    # Apply pagination
+    pos = query.order_by(desc(PurchaseOrder.created_at)).offset(pagination.offset).limit(pagination.limit).all()
 
     result = []
     for po in pos:
@@ -110,7 +117,15 @@ async def list_purchase_orders(
             created_at=po.created_at,
         ))
 
-    return result
+    return ListResponse(
+        items=result,
+        pagination=PaginationMeta(
+            total=total,
+            offset=pagination.offset,
+            limit=pagination.limit,
+            returned=len(result)
+        )
+    )
 
 
 @router.get("/{po_id}", response_model=PurchaseOrderResponse)

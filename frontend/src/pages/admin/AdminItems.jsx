@@ -6,6 +6,12 @@ import RoutingEditor from "../../components/RoutingEditor";
 import StatCard from "../../components/StatCard";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
+import {
+  validateRequired,
+  validateLength,
+  validateNumber,
+} from "../../utils/validation";
+import { RequiredIndicator } from "../../components/ErrorMessage";
 
 // Item type options
 const ITEM_TYPES = [
@@ -289,8 +295,59 @@ function CategoryModal({ category, categories, onSave, onClose }) {
     is_active: category?.is_active ?? true,
   });
 
+  const [errors, setErrors] = useState({});
+
+  const validateCategoryForm = () => {
+    const validationErrors = {};
+
+    const codeError = validateRequired(form.code, "Category code");
+    if (codeError) validationErrors.code = codeError;
+    else {
+      const lengthError = validateLength(form.code, "Category code", {
+        min: 2,
+        max: 20,
+      });
+      if (lengthError) validationErrors.code = lengthError;
+    }
+
+    const nameError = validateRequired(form.name, "Category name");
+    if (nameError) validationErrors.name = nameError;
+    else {
+      const lengthError = validateLength(form.name, "Category name", {
+        min: 2,
+        max: 100,
+      });
+      if (lengthError) validationErrors.name = lengthError;
+    }
+
+    if (form.description) {
+      const descError = validateLength(form.description, "Description", {
+        max: 500,
+      });
+      if (descError) validationErrors.description = descError;
+    }
+
+    if (form.sort_order !== "" && form.sort_order !== null) {
+      const sortError = validateNumber(form.sort_order, "Sort order", {
+        min: 0,
+        max: 9999,
+      });
+      if (sortError) validationErrors.sort_order = sortError;
+    }
+
+    return validationErrors;
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
+    setErrors({});
+
+    const validationErrors = validateCategoryForm();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+
     const data = { ...form };
     if (data.parent_id === "") data.parent_id = null;
     else if (data.parent_id) data.parent_id = parseInt(data.parent_id);
@@ -310,27 +367,47 @@ function CategoryModal({ category, categories, onSave, onClose }) {
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Code *</label>
+            <label className="block text-sm text-gray-400 mb-1">
+              Code <RequiredIndicator />
+            </label>
             <input
               type="text"
               value={form.code}
-              onChange={(e) =>
-                setForm({ ...form, code: e.target.value.toUpperCase() })
-              }
-              required
+              onChange={(e) => {
+                setForm({ ...form, code: e.target.value.toUpperCase() });
+                setErrors({ ...errors, code: "" });
+              }}
               placeholder="e.g. FILAMENT"
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+              className={`w-full bg-gray-800 border rounded-lg px-4 py-2 text-white ${
+                errors.code
+                  ? "border-red-500 focus:border-red-500"
+                  : "border-gray-700"
+              }`}
             />
+            {errors.code && (
+              <div className="text-red-400 text-sm mt-1">{errors.code}</div>
+            )}
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Name *</label>
+            <label className="block text-sm text-gray-400 mb-1">
+              Name <RequiredIndicator />
+            </label>
             <input
               type="text"
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              required
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+              onChange={(e) => {
+                setForm({ ...form, name: e.target.value });
+                setErrors({ ...errors, name: "" });
+              }}
+              className={`w-full bg-gray-800 border rounded-lg px-4 py-2 text-white ${
+                errors.name
+                  ? "border-red-500 focus:border-red-500"
+                  : "border-gray-700"
+              }`}
             />
+            {errors.name && (
+              <div className="text-red-400 text-sm mt-1">{errors.name}</div>
+            )}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">
@@ -355,12 +432,23 @@ function CategoryModal({ category, categories, onSave, onClose }) {
             </label>
             <textarea
               value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
+              onChange={(e) => {
+                setForm({ ...form, description: e.target.value });
+                setErrors({ ...errors, description: "" });
+              }}
               rows={2}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+              className={`w-full bg-gray-800 border rounded-lg px-4 py-2 text-white ${
+                errors.description
+                  ? "border-red-500 focus:border-red-500"
+                  : "border-gray-700"
+              }`}
+              maxLength={500}
             />
+            {errors.description && (
+              <div className="text-red-400 text-sm mt-1">
+                {errors.description}
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -370,11 +458,21 @@ function CategoryModal({ category, categories, onSave, onClose }) {
               <input
                 type="number"
                 value={form.sort_order}
-                onChange={(e) =>
-                  setForm({ ...form, sort_order: e.target.value })
-                }
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                onChange={(e) => {
+                  setForm({ ...form, sort_order: e.target.value });
+                  setErrors({ ...errors, sort_order: "" });
+                }}
+                className={`w-full bg-gray-800 border rounded-lg px-4 py-2 text-white ${
+                  errors.sort_order
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-gray-700"
+                }`}
               />
+              {errors.sort_order && (
+                <div className="text-red-400 text-sm mt-1">
+                  {errors.sort_order}
+                </div>
+              )}
             </div>
             <div className="flex items-center pt-6">
               <input

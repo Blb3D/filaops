@@ -337,27 +337,32 @@ async def get_dashboard_summary(
     from app.services.mrp import MRPService, ComponentRequirement
     
     # 1. Get items below reorder point (count unique products)
-    # Need to aggregate inventory across locations first
+    # OPTIMIZED: Single query aggregating inventory by product_id
     low_stock_products = set()
-    
+
+    # Get products with reorder points and their total inventory in one query
+    inventory_by_product = db.query(
+        Inventory.product_id,
+        func.coalesce(func.sum(Inventory.available_quantity), 0).label("total_available")
+    ).group_by(Inventory.product_id).all()
+
+    # Create lookup dict for fast access
+    inventory_lookup = {row.product_id: float(row.total_available) for row in inventory_by_product}
+
     # Get all products with reorder points
-    products_with_reorder = db.query(Product).filter(
+    products_with_reorder = db.query(Product.id, Product.reorder_point).filter(
         Product.active.is_(True),  # noqa: E712
         Product.reorder_point.isnot(None),
         Product.reorder_point > 0
     ).all()
-    
-    for product in products_with_reorder:
-        # Get total available quantity across all locations
-        inv_totals = db.query(
-            func.coalesce(func.sum(Inventory.available_quantity), 0).label("available")
-        ).filter(Inventory.product_id == product.id).first()
-        
-        available = float(inv_totals.available) if inv_totals else 0
-        reorder_point = float(product.reorder_point) if product.reorder_point else 0
-        
-        if available <= reorder_point:
-            low_stock_products.add(product.id)
+
+    # Check each product against inventory (all in-memory, no additional queries)
+    for product_id, reorder_point in products_with_reorder:
+        available = inventory_lookup.get(product_id, 0)
+        reorder_val = float(reorder_point) if reorder_point else 0
+
+        if available <= reorder_val:
+            low_stock_products.add(product_id)
     
     # 2. Get MRP shortages from active sales orders
     active_orders = db.query(SalesOrder).filter(

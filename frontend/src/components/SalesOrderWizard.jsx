@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config/api";
+import { validateRequired, validateQuantity } from "../utils/validation";
 
 // Item type options
 const ITEM_TYPES = [
@@ -885,6 +886,49 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Validate current step before proceeding
+  const validateStep = (step) => {
+    setError(null);
+
+    if (step === 1) {
+      // Validate customer selection
+      const customerError = validateRequired(
+        orderData.customer_id,
+        "Customer"
+      );
+      if (customerError) {
+        setError(customerError);
+        return false;
+      }
+    }
+
+    if (step === 2) {
+      // Validate line items
+      if (lineItems.length === 0) {
+        setError("Please add at least one product to the order");
+        return false;
+      }
+
+      // Validate each line item has quantity > 0
+      for (const item of lineItems) {
+        const qtyError = validateQuantity(item.quantity, "Quantity");
+        if (qtyError) {
+          setError(`${item.name}: ${qtyError}`);
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  // Handle step transition
+  const handleNextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep(currentStep + 1);
     }
   };
 
@@ -2663,7 +2707,7 @@ export default function SalesOrderWizard({ isOpen, onClose, onSuccess }) {
 
           {currentStep < 3 ? (
             <button
-              onClick={() => setCurrentStep(currentStep + 1)}
+              onClick={handleNextStep}
               disabled={currentStep === 2 && lineItems.length === 0}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-500 disabled:opacity-50"
             >

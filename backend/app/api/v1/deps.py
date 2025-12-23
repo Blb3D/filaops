@@ -1,18 +1,19 @@
 """
 API Dependencies
 
-Authentication dependencies that can be safely imported without
-triggering rate limiter initialization issues.
+Authentication dependencies and common query parameter dependencies
+that can be safely imported without triggering rate limiter initialization issues.
 """
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.user import User
 from app.core.security import get_user_from_token
+from app.schemas.common import PaginationParams
 
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -111,3 +112,50 @@ async def get_current_staff_user(
             detail="Staff access required"
         )
     return current_user
+
+
+def get_pagination_params(
+    offset: int = Query(
+        default=0,
+        ge=0,
+        description="Number of records to skip (for pagination)"
+    ),
+    limit: int = Query(
+        default=50,
+        ge=1,
+        le=500,
+        description="Maximum number of records to return (1-500)"
+    )
+) -> PaginationParams:
+    """
+    Dependency for standardized pagination parameters.
+
+    All list endpoints should use this dependency for consistent pagination behavior.
+    Uses offset-based pagination which is simple and predictable.
+
+    Args:
+        offset: Number of records to skip (default: 0)
+        limit: Maximum records to return (default: 50, max: 500)
+
+    Returns:
+        PaginationParams object with validated offset and limit
+
+    Example:
+        @router.get("/items")
+        async def list_items(
+            pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
+            db: Session = Depends(get_db)
+        ):
+            items = db.query(Item).offset(pagination.offset).limit(pagination.limit).all()
+            total = db.query(Item).count()
+            return {
+                "items": items,
+                "pagination": {
+                    "total": total,
+                    "offset": pagination.offset,
+                    "limit": pagination.limit,
+                    "returned": len(items)
+                }
+            }
+    """
+    return PaginationParams(offset=offset, limit=limit)

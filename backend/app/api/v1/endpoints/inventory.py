@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, desc, and_, or_
 
 from app.db.session import get_db
@@ -112,23 +112,26 @@ async def get_negative_inventory_report(
     - Reasons for adjustments
     - Impact on inventory levels
     """
-    query = db.query(InventoryTransaction).join(Product).filter(
+    # OPTIMIZED: Use joinedload to eager load product relationship
+    query = db.query(InventoryTransaction).options(
+        joinedload(InventoryTransaction.product)
+    ).filter(
         or_(
             InventoryTransaction.transaction_type == "negative_adjustment",
             InventoryTransaction.requires_approval.is_(True),
         )
     )
-    
+
     if start_date:
         query = query.filter(InventoryTransaction.created_at >= start_date)
     if end_date:
         query = query.filter(InventoryTransaction.created_at <= end_date)
-    
+
     if not include_approved:
         query = query.filter(InventoryTransaction.approved_by.is_(None))
     if not include_pending:
         query = query.filter(InventoryTransaction.requires_approval.is_(False))
-    
+
     transactions = query.order_by(desc(InventoryTransaction.created_at)).all()
     
     # Get current inventory levels for affected products
@@ -152,13 +155,14 @@ async def get_negative_inventory_report(
     
     report_items = []
     for txn in transactions:
-        product = db.query(Product).filter(Product.id == txn.product_id).first()
+        # OPTIMIZED: Use eager-loaded product relationship (no additional query)
+        product = txn.product
         inv_level = inventory_levels.get(txn.product_id, {
             "on_hand": 0,
             "allocated": 0,
             "available": 0,
         })
-        
+
         report_items.append({
             "transaction_id": txn.id,
             "created_at": txn.created_at.isoformat() if txn.created_at else None,

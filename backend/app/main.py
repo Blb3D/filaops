@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy.exc import SQLAlchemyError
+from datetime import datetime
 
 # NOTE: slowapi is optional now
 from app.core.limiter import limiter, apply_rate_limiting  # <- drop-in optional limiter
@@ -131,7 +132,10 @@ async def filaops_exception_handler(request: Request, exc: FilaOpsException):
         f"FilaOps Exception: {exc.error_code} - {exc.message}",
         extra={"error_code": exc.error_code, "details": exc.details, "path": request.url.path}
     )
-    return JSONResponse(status_code=exc.status_code, content=exc.to_dict())
+    # Add timestamp to error response for consistency
+    error_dict = exc.to_dict()
+    error_dict["timestamp"] = datetime.utcnow().isoformat() + "Z"
+    return JSONResponse(status_code=exc.status_code, content=error_dict)
 
 
 @app.exception_handler(RequestValidationError)
@@ -143,7 +147,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     logger.warning("Validation error on %s", request.url.path, extra={"errors": errors})
     return JSONResponse(
         status_code=422,
-        content={"error": "VALIDATION_ERROR", "message": "Request validation failed", "details": {"errors": errors}},
+        content={
+            "error": "VALIDATION_ERROR",
+            "message": "Request validation failed",
+            "details": {"errors": errors},
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        },
     )
 
 
@@ -152,7 +161,11 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
     logger.error(f"Database error on {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"error": "DATABASE_ERROR", "message": "A database error occurred. Please try again."},
+        content={
+            "error": "DATABASE_ERROR",
+            "message": "A database error occurred. Please try again.",
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        },
     )
 
 
@@ -161,7 +174,11 @@ async def general_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unexpected error on {request.url.path}: {str(exc)}", exc_info=True)
     return JSONResponse(
         status_code=500,
-        content={"error": "INTERNAL_ERROR", "message": "An unexpected error occurred. Please try again later."},
+        content={
+            "error": "INTERNAL_ERROR",
+            "message": "An unexpected error occurred. Please try again later.",
+            "timestamp": datetime.utcnow().isoformat() + "Z"
+        },
     )
 
 

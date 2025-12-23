@@ -80,3 +80,4 @@ Added a remove button in each operation row with:
 3. Add drag-and-drop resequencing
 4. Add undo functionality
 
+
