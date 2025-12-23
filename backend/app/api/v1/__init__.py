@@ -24,6 +24,8 @@ from app.api.v1.endpoints import (
     payments,
     printers,
     system,
+    spools,
+    traceability,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router
@@ -147,6 +149,16 @@ router.include_router(
 
 # System (version, updates, health)
 router.include_router(system.router)
+
+# Material Spools
+router.include_router(spools.router)
+
+# Quality - Traceability
+router.include_router(
+    traceability.router,
+    prefix="/traceability",
+    tags=["quality"]
+)
 
 # License activation (disabled until ready for production)
 # router.include_router(license.router)
