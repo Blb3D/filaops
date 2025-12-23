@@ -44,7 +44,9 @@ export default function POCreateModal({
         product_id: l.product_id,
         product_sku: l.product_sku,
         product_name: l.product_name,
+        product_unit: l.product_unit || "",
         quantity_ordered: l.quantity_ordered,
+        purchase_unit: l.purchase_unit || l.product_unit || "",
         unit_cost: l.unit_cost,
         notes: l.notes || "",
       })) || [],
@@ -55,14 +57,16 @@ export default function POCreateModal({
       ...form,
       lines: [
         ...form.lines,
-        {
-          product_id: "",
-          product_sku: "",
-          product_name: "",
-          quantity_ordered: 1,
-          unit_cost: 0,
-          notes: "",
-        },
+      {
+        product_id: "",
+        product_sku: "",
+        product_name: "",
+        product_unit: "",
+        quantity_ordered: 1,
+        purchase_unit: "",
+        unit_cost: 0,
+        notes: "",
+      },
       ],
     });
   };
@@ -80,14 +84,71 @@ export default function POCreateModal({
     setForm({ ...form, lines: newLines });
   };
 
+  // UOM conversion helper
+  const convertUOM = (qty, fromUnit, toUnit) => {
+    if (!fromUnit || !toUnit || fromUnit === toUnit) return qty;
+    
+    // Common conversions
+    const conversions = {
+      // Mass conversions (to KG)
+      'G': { 'KG': 0.001, 'LB': 0.00220462, 'OZ': 0.035274 },
+      'KG': { 'G': 1000, 'LB': 2.20462, 'OZ': 35.274 },
+      'LB': { 'G': 453.592, 'KG': 0.453592, 'OZ': 16 },
+      'OZ': { 'G': 28.3495, 'KG': 0.0283495, 'LB': 0.0625 },
+      // Count units (no conversion)
+      'EA': { 'EA': 1 },
+      'PK': { 'PK': 1 },
+      'BOX': { 'BOX': 1 },
+      'ROLL': { 'ROLL': 1 },
+    };
+    
+    const fromUpper = fromUnit.toUpperCase();
+    const toUpper = toUnit.toUpperCase();
+    
+    if (conversions[fromUpper] && conversions[fromUpper][toUpper]) {
+      return qty * conversions[fromUpper][toUpper];
+    }
+    
+    // If no conversion found, return original quantity
+    return qty;
+  };
+
   const handleProductSelect = (index, productId, product) => {
     const newLines = [...form.lines];
+    const currentLine = newLines[index];
+    
     if (product) {
+      const productUnit = product.unit || 'EA';
+      const hadProduct = currentLine.product_id && currentLine.product_id !== "";
+      const currentPurchaseUnit = currentLine.purchase_unit || (hadProduct ? currentLine.purchase_unit : productUnit);
+      const currentQty = parseFloat(currentLine.quantity_ordered) || 1;
+      
+      // If product changed, convert quantity from old purchase_unit to new product_unit
+      let convertedQty = currentQty;
+      let finalPurchaseUnit = productUnit; // Default to product's unit for new selections
+      
+      if (hadProduct && currentLine.product_id !== productId) {
+        // Product changed - convert quantity and keep current purchase_unit if set
+        finalPurchaseUnit = currentPurchaseUnit || productUnit;
+        if (currentPurchaseUnit && currentPurchaseUnit !== productUnit) {
+          convertedQty = convertUOM(currentQty, currentPurchaseUnit, productUnit);
+        }
+      } else if (!hadProduct) {
+        // New product selection - use product's unit
+        finalPurchaseUnit = productUnit;
+      } else {
+        // Same product - keep current purchase_unit
+        finalPurchaseUnit = currentPurchaseUnit || productUnit;
+      }
+      
       newLines[index] = {
         ...newLines[index],
         product_id: productId,
         product_sku: product.sku,
         product_name: product.name,
+        product_unit: productUnit,
+        purchase_unit: finalPurchaseUnit,
+        quantity_ordered: convertedQty,
         // Auto-populate unit_cost from product's last_cost if available
         unit_cost:
           product.last_cost || product.cost || newLines[index].unit_cost,
@@ -98,6 +159,8 @@ export default function POCreateModal({
         product_id: "",
         product_sku: "",
         product_name: "",
+        product_unit: "",
+        purchase_unit: "",
       };
     }
     setForm({ ...form, lines: newLines });
@@ -123,6 +186,8 @@ export default function POCreateModal({
         product_id: newItem.id,
         product_sku: newItem.sku,
         product_name: newItem.name,
+        product_unit: newItem.unit || 'EA',
+        purchase_unit: newItem.unit || 'EA',
         unit_cost:
           newItem.last_cost ||
           newItem.cost ||
@@ -180,6 +245,7 @@ export default function POCreateModal({
       data.lines = form.lines.map((l) => ({
         product_id: parseInt(l.product_id),
         quantity_ordered: parseFloat(l.quantity_ordered),
+        purchase_unit: l.purchase_unit || l.product_unit || null,
         unit_cost: parseFloat(l.unit_cost),
         notes: l.notes || null,
       }));
@@ -342,8 +408,9 @@ export default function POCreateModal({
                 {/* Table Header */}
                 {form.lines.length > 0 && (
                   <div className="grid grid-cols-12 gap-2 px-3 py-2 text-xs text-gray-400 font-medium border-b border-gray-800">
-                    <div className="col-span-5">Product</div>
+                    <div className="col-span-4">Product</div>
                     <div className="col-span-2 text-right">Qty</div>
+                    <div className="col-span-1 text-center">UOM</div>
                     <div className="col-span-2 text-right">Unit Cost</div>
                     <div className="col-span-2 text-right">Total</div>
                     <div className="col-span-1"></div>
@@ -357,7 +424,7 @@ export default function POCreateModal({
                       className="grid grid-cols-12 gap-2 items-center bg-gray-800/30 p-3 rounded-lg group hover:bg-gray-800/50 transition-colors"
                     >
                       {/* Product Search */}
-                      <div className="col-span-5">
+                      <div className="col-span-4">
                         <ProductSearchSelect
                           value={line.product_id}
                           products={localProducts}
@@ -376,19 +443,61 @@ export default function POCreateModal({
                         <input
                           type="number"
                           value={line.quantity_ordered}
-                          onChange={(e) =>
-                            updateLine(
-                              index,
-                              "quantity_ordered",
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => {
+                            const newQty = parseFloat(e.target.value) || 0;
+                            const currentPurchaseUnit = line.purchase_unit || line.product_unit || 'EA';
+                            const productUnit = line.product_unit || 'EA';
+                            
+                            // Convert quantity when UOM changes
+                            let convertedQty = newQty;
+                            if (currentPurchaseUnit !== productUnit) {
+                              convertedQty = convertUOM(newQty, currentPurchaseUnit, productUnit);
+                            }
+                            
+                            updateLine(index, "quantity_ordered", e.target.value);
+                          }}
                           placeholder="Qty"
                           min="0.01"
                           step="0.01"
                           className="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-right"
                           required
                         />
+                      </div>
+
+                      {/* UOM Dropdown */}
+                      <div className="col-span-1">
+                        <select
+                          value={line.purchase_unit || line.product_unit || ""}
+                          onChange={(e) => {
+                            const newUnit = e.target.value;
+                            const oldUnit = line.purchase_unit || line.product_unit || 'EA';
+                            const currentQty = parseFloat(line.quantity_ordered) || 0;
+                            
+                            // Convert quantity when UOM changes
+                            const convertedQty = convertUOM(currentQty, oldUnit, newUnit);
+                            
+                            // Update both fields in a single state update to avoid race conditions
+                            const newLines = [...form.lines];
+                            newLines[index] = {
+                              ...newLines[index],
+                              purchase_unit: newUnit,
+                              quantity_ordered: convertedQty,
+                            };
+                            setForm({ ...form, lines: newLines });
+                          }}
+                          className="w-full bg-gray-700 border border-gray-600 rounded-lg px-2 py-2 text-white text-sm"
+                          disabled={!line.product_id}
+                        >
+                          <option value="">-</option>
+                          <option value="EA">EA</option>
+                          <option value="G">G</option>
+                          <option value="KG">KG</option>
+                          <option value="LB">LB</option>
+                          <option value="OZ">OZ</option>
+                          <option value="PK">PK</option>
+                          <option value="BOX">BOX</option>
+                          <option value="ROLL">ROLL</option>
+                        </select>
                       </div>
 
                       {/* Unit Cost */}

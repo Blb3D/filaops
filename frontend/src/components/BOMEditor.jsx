@@ -323,9 +323,67 @@ export default function BOMEditor({
     setLines(lines.filter((_, i) => i !== index));
   };
 
+  // UOM conversion helper (same as PO)
+  const convertUOM = (qty, fromUnit, toUnit) => {
+    if (!fromUnit || !toUnit || fromUnit === toUnit) return qty;
+    
+    // Common conversions
+    const conversions = {
+      // Mass conversions (to KG)
+      'G': { 'KG': 0.001, 'LB': 0.00220462, 'OZ': 0.035274 },
+      'KG': { 'G': 1000, 'LB': 2.20462, 'OZ': 35.274 },
+      'LB': { 'G': 453.592, 'KG': 0.453592, 'OZ': 16 },
+      'OZ': { 'G': 28.3495, 'KG': 0.0283495, 'LB': 0.0625 },
+      // Length conversions (to M)
+      'MM': { 'M': 0.001, 'CM': 0.1, 'IN': 0.0393701, 'FT': 0.00328084 },
+      'CM': { 'M': 0.01, 'MM': 10, 'IN': 0.393701, 'FT': 0.0328084 },
+      'M': { 'MM': 1000, 'CM': 100, 'IN': 39.3701, 'FT': 3.28084 },
+      'IN': { 'M': 0.0254, 'MM': 25.4, 'CM': 2.54, 'FT': 0.0833333 },
+      'FT': { 'M': 0.3048, 'MM': 304.8, 'CM': 30.48, 'IN': 12 },
+      // Count units (no conversion)
+      'EA': { 'EA': 1 },
+      'PK': { 'PK': 1 },
+      'BOX': { 'BOX': 1 },
+      'ROLL': { 'ROLL': 1 },
+      'HR': { 'HR': 1 },
+    };
+    
+    const fromUpper = fromUnit.toUpperCase();
+    const toUpper = toUnit.toUpperCase();
+    
+    if (conversions[fromUpper] && conversions[fromUpper][toUpper]) {
+      return qty * conversions[fromUpper][toUpper];
+    }
+    
+    // If no conversion found, return original quantity
+    return qty;
+  };
+
   const updateLine = (index, field, value) => {
     const updated = [...lines];
-    updated[index] = { ...updated[index], [field]: value };
+    const currentLine = updated[index];
+    
+    // If unit is changing, convert quantity
+    if (field === 'unit' && currentLine.component_unit) {
+      const oldUnit = currentLine.unit || currentLine.component_unit;
+      const newUnit = value;
+      const currentQty = parseFloat(currentLine.quantity) || 0;
+      
+      if (oldUnit !== newUnit && currentQty > 0) {
+        // Convert quantity when unit changes
+        const convertedQty = convertUOM(currentQty, oldUnit, newUnit);
+        updated[index] = { 
+          ...currentLine, 
+          [field]: value,
+          quantity: convertedQty
+        };
+      } else {
+        updated[index] = { ...currentLine, [field]: value };
+      }
+    } else {
+      updated[index] = { ...currentLine, [field]: value };
+    }
+    
     setLines(updated);
   };
 
@@ -465,15 +523,22 @@ export default function BOMEditor({
                           />
                         </td>
                         <td className="px-4 py-3">
-                          <select
-                            value={line.unit || "EA"}
-                            onChange={(e) =>
-                              updateLine(index, "unit", e.target.value)
-                            }
-                            className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-white focus:border-blue-500 focus:outline-none"
-                          >
-                            {renderUomOptions()}
-                          </select>
+                          <div className="flex items-center gap-1">
+                            <select
+                              value={line.unit || line.component_unit || "EA"}
+                              onChange={(e) =>
+                                updateLine(index, "unit", e.target.value)
+                              }
+                              className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-1 text-white focus:border-blue-500 focus:outline-none"
+                            >
+                              {renderUomOptions()}
+                            </select>
+                            {line.component_unit && line.unit && line.unit !== line.component_unit && (
+                              <span className="text-xs text-gray-500" title={`Component default: ${line.component_unit}`}>
+                                ({line.component_unit})
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -493,12 +558,37 @@ export default function BOMEditor({
                           />
                         </td>
                         <td className="px-4 py-3 text-right text-white">
-                          $
-                          {(
-                            line.quantity *
-                            (1 + (line.scrap_factor || 0) / 100) *
-                            (line.component_cost || 0)
-                          ).toFixed(2)}
+                          {line.line_cost != null ? (
+                            <>
+                              ${line.line_cost.toFixed(2)}
+                              {line.is_material && (
+                                <span className="text-xs text-gray-500 ml-1" title="Cost calculated: (quantity_g / 1000) × cost_per_kg">
+                                  (${line.component_cost?.toFixed(4) || '0.0000'}/KG)
+                                </span>
+                              )}
+                              {!line.is_material && line.unit && line.component_unit && line.unit !== line.component_unit && (
+                                <span className="text-xs text-gray-500 ml-1" title="Cost converted from component unit">
+                                  *
+                                </span>
+                              )}
+                            </>
+                          ) : line.component_cost != null ? (
+                            <>
+                              $
+                              {(
+                                line.quantity *
+                                (1 + (line.scrap_factor || 0) / 100) *
+                                (line.component_cost || 0)
+                              ).toFixed(2)}
+                              {line.unit && line.component_unit && line.unit !== line.component_unit && (
+                                <span className="text-xs text-gray-500 ml-1" title="Cost converted from component unit">
+                                  *
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            "-"
+                          )}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <input
@@ -619,15 +709,44 @@ export default function BOMEditor({
                   <label className="block text-sm font-medium text-gray-300 mb-1">
                     Unit
                   </label>
-                  <select
-                    value={newLine.unit}
-                    onChange={(e) =>
-                      setNewLine({ ...newLine, unit: e.target.value })
-                    }
-                    className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
-                  >
-                    {renderUomOptions()}
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={newLine.unit}
+                      onChange={(e) => {
+                        const newUnit = e.target.value;
+                        const selected = allComponents.find(
+                          (c) => c.id === parseInt(newLine.component_id)
+                        );
+                        const oldUnit = newLine.unit || (selected?.unit || 'EA');
+                        const currentQty = parseFloat(newLine.quantity) || 0;
+                        
+                        // Convert quantity when unit changes
+                        let convertedQty = currentQty;
+                        if (oldUnit !== newUnit && currentQty > 0) {
+                          convertedQty = convertUOM(currentQty, oldUnit, newUnit);
+                        }
+                        
+                        setNewLine({ 
+                          ...newLine, 
+                          unit: newUnit,
+                          quantity: convertedQty
+                        });
+                      }}
+                      className="flex-1 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:border-blue-500 focus:outline-none"
+                    >
+                      {renderUomOptions()}
+                    </select>
+                    {newLine.component_id && (() => {
+                      const selected = allComponents.find(
+                        (c) => c.id === parseInt(newLine.component_id)
+                      );
+                      return selected?.unit && selected.unit !== newLine.unit ? (
+                        <span className="text-xs text-gray-500" title={`Component default: ${selected.unit}`}>
+                          ({selected.unit})
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">

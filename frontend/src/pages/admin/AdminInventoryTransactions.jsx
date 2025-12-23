@@ -526,7 +526,13 @@ export default function AdminInventoryTransactions() {
                   Reference
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
-                  Cost
+                  Cost/Unit
+                </th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
+                  Total Cost
+                </th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
+                  Unit
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
                   Notes
@@ -565,7 +571,21 @@ export default function AdminInventoryTransactions() {
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-white">{txn.quantity}</td>
+                    <td className="py-3 px-4 text-white">
+                      {txn.product_unit === "KG" ? (
+                        // For materials: quantity is already in GRAMS (star schema)
+                        <>
+                          {parseFloat(txn.quantity).toFixed(4)} <span className="text-gray-500 text-xs ml-1">G</span>
+                        </>
+                      ) : (
+                        // For other items, show as-is
+                        <>
+                          {txn.quantity} {txn.product_unit ? (
+                            <span className="text-gray-500 text-xs ml-1">{txn.product_unit}</span>
+                          ) : null}
+                        </>
+                      )}
+                    </td>
                     <td className="py-3 px-4 text-gray-400">
                       {txn.location_name || "N/A"}
                     </td>
@@ -575,9 +595,25 @@ export default function AdminInventoryTransactions() {
                         : "-"}
                     </td>
                     <td className="py-3 px-4 text-gray-400">
-                      {txn.total_cost
-                        ? `$${parseFloat(txn.total_cost).toFixed(2)}`
-                        : "-"}
+                      {txn.cost_per_unit ? (
+                        // For materials (material_type_id is not null), costs are stored per-KG
+                        // Always show "/KG" for materials, even though quantities are displayed in grams
+                        txn.material_type_id 
+                          ? `$${parseFloat(txn.cost_per_unit).toFixed(4)}/KG`
+                          : `$${parseFloat(txn.cost_per_unit).toFixed(4)}/${txn.product_unit || ""}`
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-white font-medium">
+                      {txn.total_cost ? (
+                        `$${parseFloat(txn.total_cost).toFixed(2)}`
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-gray-500 text-xs">
+                      {txn.material_type_id ? "G" : (txn.product_unit || "-")}
                     </td>
                     <td className="py-3 px-4 text-gray-500 text-sm max-w-xs truncate">
                       {txn.notes || "-"}
@@ -586,7 +622,7 @@ export default function AdminInventoryTransactions() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-gray-500">
+                  <td colSpan={10} className="py-8 text-center text-gray-500">
                     No transactions found
                   </td>
                 </tr>

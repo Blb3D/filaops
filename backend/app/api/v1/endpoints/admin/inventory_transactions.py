@@ -20,8 +20,154 @@ from app.models.user import User
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.product import Product
 from app.api.v1.deps import get_current_staff_user
+from app.services.inventory_helpers import is_material
+from app.services.uom_service import convert_quantity_safe
+from app.logging_config import get_logger
 
 router = APIRouter(prefix="/inventory/transactions", tags=["Admin - Inventory"])
+logger = get_logger(__name__)
+
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def normalize_unit(unit: Optional[str]) -> Optional[str]:
+    """
+    Normalize unit string to standard format.
+    
+    Handles common variations:
+    - "gram", "grams", "g" -> "G"
+    - "kilogram", "kilograms", "kg" -> "KG"
+    - "milligram", "milligrams", "mg" -> "MG"
+    - Other units are uppercased and stripped
+    
+    Args:
+        unit: Unit string to normalize (can be None)
+        
+    Returns:
+        Normalized unit string (uppercase) or None if input is None/empty
+    """
+    if not unit:
+        return None
+    
+    unit = unit.strip().lower()
+    
+    # Handle common mass unit variations
+    if unit in ("gram", "grams", "g"):
+        return "G"
+    elif unit in ("kilogram", "kilograms", "kg"):
+        return "KG"
+    elif unit in ("milligram", "milligrams", "mg"):
+        return "MG"
+    
+    # For other units, just uppercase
+    return unit.upper()
+
+
+def convert_quantity_to_kg_for_cost(
+    db: Session,
+    quantity: Decimal,
+    product_unit: Optional[str],
+    product_id: int,
+    product_sku: Optional[str] = None
+) -> float:
+    """
+    Convert quantity to kilograms for cost calculation.
+    
+    Cost per unit is stored per-KG for materials, so we need to convert
+    the quantity to KG before multiplying by cost_per_unit.
+    
+    Args:
+        db: Database session
+        quantity: Quantity in product's unit
+        product_unit: Product's unit of measure (will be normalized)
+        product_id: Product ID for error messages
+        product_sku: Product SKU for error messages (optional)
+        
+    Returns:
+        Quantity in kilograms as float
+        
+    Raises:
+        ValueError: If unit conversion fails and unit is unknown
+    """
+    normalized_unit = normalize_unit(product_unit)
+    
+    if not normalized_unit:
+        # No unit specified - assume it's already in the correct unit for cost
+        # Log a warning but proceed
+        logger.warning(
+            f"Product {product_id} ({product_sku or 'unknown'}) has no unit specified. "
+            f"Assuming quantity {quantity} is already in cost unit (KG) for cost calculation.",
+            extra={"product_id": product_id, "product_sku": product_sku, "quantity": str(quantity)}
+        )
+        try:
+            return float(quantity)
+        except (ValueError, TypeError) as e:
+            logger.error(
+                f"Failed to cast quantity {quantity} to float for product {product_id}: {e}",
+                extra={"product_id": product_id, "quantity": str(quantity)}
+            )
+            raise ValueError(f"Cannot convert quantity {quantity} to float: {e}")
+    
+    # If already in KG, no conversion needed
+    if normalized_unit == "KG":
+        try:
+            return float(quantity)
+        except (ValueError, TypeError) as e:
+            logger.error(
+                f"Failed to cast quantity {quantity} to float for product {product_id}: {e}",
+                extra={"product_id": product_id, "quantity": str(quantity)}
+            )
+            raise ValueError(f"Cannot convert quantity {quantity} to float: {e}")
+    
+    # Convert from product unit to KG
+    converted_qty, success = convert_quantity_safe(db, quantity, normalized_unit, "KG")
+    
+    if not success:
+        # Try local fallback conversion for common mass units not in the service
+        # This handles cases where MG (milligrams) might not be in the database
+        local_mass_conversions = {
+            "MG": Decimal("0.000001"),  # 1 milligram = 0.000001 kg
+            "G": Decimal("0.001"),       # 1 gram = 0.001 kg (should be in service, but fallback)
+        }
+        
+        if normalized_unit in local_mass_conversions:
+            # Use local conversion factor
+            conversion_factor = local_mass_conversions[normalized_unit]
+            converted_qty = quantity * conversion_factor
+            success = True
+            logger.debug(
+                f"Used local conversion for {normalized_unit} -> KG for product {product_id}",
+                extra={"product_id": product_id, "unit": normalized_unit, "quantity": str(quantity)}
+            )
+    
+    if not success:
+        # Conversion failed - this is a serious error for cost calculation
+        error_msg = (
+            f"Cannot convert quantity {quantity} {normalized_unit} to KG for product {product_id} "
+            f"({product_sku or 'unknown'}). Unit '{normalized_unit}' is unknown or incompatible. "
+            f"This will cause incorrect total_cost calculation."
+        )
+        logger.error(
+            error_msg,
+            extra={
+                "product_id": product_id,
+                "product_sku": product_sku,
+                "quantity": str(quantity),
+                "unit": normalized_unit
+            }
+        )
+        raise ValueError(error_msg)
+    
+    try:
+        return float(converted_qty)
+    except (ValueError, TypeError) as e:
+        logger.error(
+            f"Failed to cast converted quantity {converted_qty} to float for product {product_id}: {e}",
+            extra={"product_id": product_id, "converted_quantity": str(converted_qty)}
+        )
+        raise ValueError(f"Cannot convert quantity {converted_qty} to float: {e}")
 
 
 # ============================================================================
@@ -50,6 +196,8 @@ class TransactionResponse(BaseModel):
     product_id: int
     product_sku: str
     product_name: str
+    product_unit: Optional[str] = None  # Unit of measure for the product
+    material_type_id: Optional[int] = None  # Material type ID if this is a material
     location_id: Optional[int]
     location_name: Optional[str]
     transaction_type: str
@@ -107,14 +255,61 @@ async def list_transactions(
         to_location = db.query(InventoryLocation).filter(InventoryLocation.id == txn.to_location_id).first() if hasattr(txn, 'to_location_id') and txn.to_location_id else None
         
         total_cost = None
-        if txn.cost_per_unit and txn.quantity:
-            total_cost = float(txn.cost_per_unit) * float(txn.quantity)
+        if txn.cost_per_unit is not None and txn.quantity is not None:
+            try:
+                # For materials: cost_per_unit is per-KG, so convert quantity to KG
+                # For non-materials: quantity and cost are typically in same unit, but validate
+                if product and is_material(product):
+                    # Materials: convert quantity from product.unit to KG for cost calculation
+                    quantity_kg = convert_quantity_to_kg_for_cost(
+                        db, txn.quantity, product.unit, product.id, product.sku
+                    )
+                    total_cost = float(txn.cost_per_unit) * quantity_kg
+                else:
+                    # For non-materials: typically quantity and cost are in same unit
+                    # But we should still validate the unit if it's specified
+                    if product is not None and product.unit is not None:
+                        # If unit is specified, ensure it's compatible (e.g., both in same unit)
+                        # For now, assume non-materials have cost_per_unit in the same unit as quantity
+                        # This could be enhanced later if needed
+                        try:
+                            total_cost = float(txn.cost_per_unit) * float(txn.quantity)
+                        except (ValueError, TypeError) as e:
+                            logger.error(
+                                f"Failed to calculate total_cost for non-material product {product.id} "
+                                f"({product.sku}): {e}",
+                                extra={
+                                    "product_id": product.id,
+                                    "product_sku": product.sku,
+                                    "cost_per_unit": str(txn.cost_per_unit),
+                                    "quantity": str(txn.quantity)
+                                }
+                            )
+                            # Don't raise - set total_cost to None to avoid breaking the response
+                            total_cost = None
+                    else:
+                        # No unit specified - assume direct multiplication
+                        total_cost = float(txn.cost_per_unit) * float(txn.quantity)
+            except ValueError as e:
+                # Unit conversion failed - log error and set total_cost to None
+                logger.error(
+                    f"Failed to calculate total_cost for transaction {txn.id}: {e}",
+                    extra={
+                        "transaction_id": txn.id,
+                        "product_id": txn.product_id,
+                        "cost_per_unit": str(txn.cost_per_unit),
+                        "quantity": str(txn.quantity)
+                    }
+                )
+                total_cost = None
         
         result.append(TransactionResponse(
             id=txn.id,
             product_id=txn.product_id,
             product_sku=product.sku if product else "",
             product_name=product.name if product else "",
+            product_unit=product.unit if product else None,  # Include product unit
+            material_type_id=product.material_type_id if product else None,  # Include material type for cost display
             location_id=txn.location_id,
             location_name=location.name if location else None,
             transaction_type=txn.transaction_type,
@@ -308,14 +503,52 @@ async def create_transaction(
         to_location = db.query(InventoryLocation).filter(InventoryLocation.id == request.to_location_id).first()
     
     total_cost = None
-    if transaction.cost_per_unit and transaction.quantity:
-        total_cost = float(transaction.cost_per_unit) * float(transaction.quantity)
+    if transaction.cost_per_unit is not None and transaction.quantity is not None:
+        try:
+            # For materials: cost_per_unit is per-KG, so convert quantity to KG
+            # For non-materials: quantity and cost are typically in same unit
+            if is_material(product):
+                # Materials: convert quantity from product.unit to KG for cost calculation
+                quantity_kg = convert_quantity_to_kg_for_cost(
+                    db, transaction.quantity, product.unit, product.id, product.sku
+                )
+                total_cost = float(transaction.cost_per_unit) * quantity_kg
+            else:
+                # For non-materials: typically quantity and cost are in same unit
+                # If unit is specified, we could validate, but for now assume direct multiplication
+                try:
+                    total_cost = float(transaction.cost_per_unit) * float(transaction.quantity)
+                except (ValueError, TypeError) as e:
+                    logger.error(
+                        f"Failed to calculate total_cost for non-material product {product.id} "
+                        f"({product.sku}): {e}",
+                        extra={
+                            "product_id": product.id,
+                            "product_sku": product.sku,
+                            "cost_per_unit": str(transaction.cost_per_unit),
+                            "quantity": str(transaction.quantity)
+                        }
+                    )
+                    total_cost = None
+        except ValueError as e:
+            # Unit conversion failed - log error and set total_cost to None
+            logger.error(
+                f"Failed to calculate total_cost for transaction {transaction.id}: {e}",
+                extra={
+                    "transaction_id": transaction.id,
+                    "product_id": transaction.product_id,
+                    "cost_per_unit": str(transaction.cost_per_unit),
+                    "quantity": str(transaction.quantity)
+                }
+            )
+            total_cost = None
     
     return TransactionResponse(
         id=transaction.id,
         product_id=transaction.product_id,
         product_sku=product.sku,
         product_name=product.name,
+        product_unit=product.unit,  # Include product unit
         location_id=transaction.location_id,
         location_name=location.name,
         transaction_type=request.transaction_type,  # Use original type for display
@@ -340,7 +573,7 @@ async def list_locations(
     db: Session = Depends(get_db),
 ):
     """List all inventory locations"""
-    locations = db.query(InventoryLocation).filter(InventoryLocation.active == True)  # noqa: E712.all()
+    locations = db.query(InventoryLocation).filter(InventoryLocation.active.is_(True)).all()
     return [
         {
             "id": loc.id,
