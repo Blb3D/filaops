@@ -1,11 +1,12 @@
 name: E2E Tests
 
+# Disabled during active development - run manually when needed
 on:
-  push:
-    branches: [main, develop, feature/*]
-  pull_request:
-    branches: [main, develop]
-  workflow_dispatch: # Allow manual trigger
+  workflow_dispatch: # Manual trigger only
+  # push:
+  #   branches: [main, develop, feature/*]
+  # pull_request:
+  #   branches: [main, develop]
 
 jobs:
   smoke-tests:

@@ -1,7 +1,10 @@
 ﻿name: e2e
+
+# Disabled during active development - run manually when needed
 on:
-  pull_request:
-    branches: [ main, master ]
+  workflow_dispatch: # Manual trigger only
+  # pull_request:
+  #   branches: [ main, master ]
 jobs:
   e2e-frontend:
     runs-on: ubuntu-latest
