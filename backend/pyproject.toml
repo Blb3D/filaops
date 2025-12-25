@@ -68,6 +68,27 @@ disallow_untyped_defs = false
 # ============================================================================
 # Ruff Linting Configuration
 # ============================================================================
+# ============================================================================
+# Coverage Configuration
+# ============================================================================
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    # External integrations - require hardware/external services
+    "app/services/printer_discovery/adapters/*",
+    "app/services/bambu_client.py",
+    "app/services/google_drive.py",
+    # Rate limiting (middleware, tested via integration)
+    "app/rate_limit.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]
+
 [tool.ruff]
 line-length = 120
 target-version = "py311"
