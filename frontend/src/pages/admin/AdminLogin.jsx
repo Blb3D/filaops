@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_URL } from "../../config/api";
+import logoFull from "../../assets/logo_full.png";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -116,13 +117,14 @@ export default function AdminLogin() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <Link
-            to="/"
-            className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent"
-          >
-            FilaOps
+          <Link to="/">
+            <img 
+              src={logoFull} 
+              alt="FilaOps" 
+              className="w-full max-w-md mx-auto mb-8 drop-shadow-[0_0_35px_rgba(0,212,255,0.5)]"
+            />
           </Link>
-          <h1 className="text-xl text-white mt-4">Staff Login</h1>
+          <h1 className="text-2xl text-white mt-4">Staff Login</h1>
           <p className="text-gray-400 mt-2">Sign in to access FilaOps</p>
         </div>
 
@@ -207,7 +209,7 @@ export default function AdminLogin() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-medium hover:from-blue-500 hover:to-purple-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-cyan-500 to-blue-600 text-white py-3 rounded-lg font-medium hover:from-cyan-400 hover:to-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">

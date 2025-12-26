@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import ProFeaturesAnnouncement from "./ProFeaturesAnnouncement";
 import UpdateNotification from "./UpdateNotification";
 import { getCurrentVersion, getCurrentVersionSync, formatVersion } from "../utils/version";
+import logoNavbar from "../assets/logo_navbar.png";
 
 const DashboardIcon = () => (
   <svg
@@ -535,11 +536,8 @@ export default function AdminLayout() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-                <Link
-                  to="/admin"
-                  className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent"
-                >
-                  FilaOps
+                <Link to="/admin" className="flex items-center gap-2">
+                  <img src={logoNavbar} alt="FilaOps" className="h-40" />
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
@@ -578,7 +576,7 @@ export default function AdminLayout() {
                           className={({ isActive }) =>
                             `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                               isActive
-                                ? "bg-gradient-to-r from-emerald-600/20 to-cyan-600/20 text-white border border-emerald-500/30"
+                                ? "bg-gradient-to-r from-cyan-600/20 to-blue-600/20 text-white border border-cyan-500/30"
                                 : "text-gray-400 hover:bg-gray-800 hover:text-white"
                             }`
                           }
@@ -599,17 +597,12 @@ export default function AdminLayout() {
         <aside
           className={`hidden md:flex ${
             sidebarOpen ? "w-64" : "w-20"
-          } bg-gray-900 border-r border-gray-800 transition-all duration-300 flex-col`}
+          } bg-gray-900 border-r border-gray-800 transition-all duration-300 flex-col h-screen sticky top-0`}
         >
           <div className="p-4 border-b border-gray-800 flex items-center justify-between">
-            {sidebarOpen && (
-              <Link
-                to="/admin"
-                className="text-xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent"
-              >
-                FilaOps
-              </Link>
-            )}
+            <Link to="/admin" className="flex items-center gap-2">
+              <img src={logoNavbar} alt="FilaOps" className="h-40" />
+            </Link>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="p-2 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
@@ -637,7 +630,7 @@ export default function AdminLayout() {
                       className={({ isActive }) =>
                         `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                           isActive
-                            ? "bg-gradient-to-r from-emerald-600/20 to-cyan-600/20 text-white border border-emerald-500/30"
+                            ? "bg-gradient-to-r from-cyan-600/20 to-blue-600/20 text-white border border-cyan-500/30"
                             : "text-gray-400 hover:bg-gray-800 hover:text-white"
                         } ${!sidebarOpen ? "justify-center" : ""}`
                       }
@@ -653,11 +646,11 @@ export default function AdminLayout() {
         </aside>
         <div className="flex-1 flex flex-col">
           {user && localStorage.getItem("adminToken") && <UpdateNotification />}
-          <header className="bg-gray-900/50 backdrop-blur-md border-b border-gray-800 px-6 py-4">
+          <header className="sticky top-0 z-30 bg-gray-900/90 backdrop-blur-md border-b border-gray-800 px-6 py-4">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
                 <h1 className="text-lg font-semibold text-white">
-                  FilaOps ERP
+                  ERP
                 </h1>
                 <span className="text-xs text-gray-500">
                   v{formatVersion(currentVersion)}

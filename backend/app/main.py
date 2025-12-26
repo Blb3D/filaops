@@ -3,7 +3,12 @@ FilaOps ERP - Main FastAPI Application
 """
 from contextlib import asynccontextmanager
 
-import sentry_sdk
+try:
+    import sentry_sdk
+    SENTRY_AVAILABLE = True
+except ImportError:
+    SENTRY_AVAILABLE = False
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -22,14 +27,17 @@ from app.logging_config import setup_logging, get_logger
 setup_logging()
 logger = get_logger(__name__)
 
-# Initialize Sentry
-sentry_sdk.init(
-    dsn="https://25adcc072579ef98fbb6b54096aca34f@o4510598139478016.ingest.us.sentry.io/4510598147473408",
-    traces_sample_rate=1.0,
-    profiles_sample_rate=1.0,
-    environment=getattr(settings, "ENVIRONMENT", "development"),
-    release=f"filaops@{settings.VERSION}",
-)
+# Initialize Sentry (optional - only if installed)
+if SENTRY_AVAILABLE:
+    sentry_sdk.init(
+        dsn="https://25adcc072579ef98fbb6b54096aca34f@o4510598139478016.ingest.us.sentry.io/4510598147473408",
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+        environment=getattr(settings, "ENVIRONMENT", "development"),
+        release=f"filaops@{settings.VERSION}",
+    )
+else:
+    logger.info("Sentry SDK not installed - error tracking disabled")
 
 
 # ===================

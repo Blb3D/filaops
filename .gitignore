@@ -375,6 +375,9 @@ docs/metrics/
 # Keep this internal until ready for separate open-source release
 agents/
 
+# Marketing materials (internal promotional content)
+marketing/
+
 # Internal team briefings and planning
 TEAM_BRIEFING.md
 MARCHING_ORDERS.md
