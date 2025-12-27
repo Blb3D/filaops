@@ -601,8 +601,6 @@ class MRPService:
         Returns:
             List of NetRequirement with shortage calculations
         """
-        from app.services.inventory_service import get_allocations_by_production_order
-
         net_requirements = []
         product_ids = [r.product_id for r in requirements]
 
@@ -614,13 +612,6 @@ class MRPService:
 
         # Get incoming supply (open POs)
         incoming_by_product = self._get_incoming_supply(product_ids)
-
-        # Get per-order allocations if we need to adjust for source POs
-        allocations_by_order: Dict[int, Dict[int, Decimal]] = {}
-        if source_production_order_ids:
-            allocations_by_order = get_allocations_by_production_order(
-                self.db, product_ids
-            )
 
         # Get product details
         products = {
@@ -641,19 +632,12 @@ class MRPService:
             incoming = incoming_by_product.get(req.product_id, Decimal("0"))
             safety_stock = Decimal(str(product.safety_stock or 0))
 
-            # Calculate available supply, adjusting for source PO allocations
-            # If source_production_order_ids is provided, add back those POs' allocations
-            # because their demand is already in gross_quantity (avoids double-counting)
-            available = inv["available"]
-            if source_production_order_ids:
-                product_allocations = allocations_by_order.get(req.product_id, {})
-                for po_id in source_production_order_ids:
-                    source_allocation = product_allocations.get(po_id, Decimal("0"))
-                    available += source_allocation
-
             # Net requirement calculation
-            # Net = Gross - Available - Incoming + Safety Stock
-            available_supply = available + incoming
+            # Net = Gross - On-Hand - Incoming + Safety Stock
+            # NOTE: We use on_hand (not available) because allocations represent
+            # the SAME demand we're calculating - using available would double-count.
+            # Allocations are for reservation (preventing over-promising), not MRP.
+            available_supply = inv["on_hand"] + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 
             # Don't report negative shortages

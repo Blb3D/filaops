@@ -857,10 +857,6 @@ async def get_low_stock_items(
             ProductionOrder.status.in_(["draft", "released", "in_progress"]),
         ).all()
 
-        # Collect PO IDs to pass to MRP - these POs' allocations should be
-        # added back to available since their demand is in gross requirements
-        source_po_ids: set = set()
-
         for po in active_pos:
             if po.product_id:
                 try:
@@ -874,8 +870,6 @@ async def get_low_stock_items(
                             source_demand_id=po.id
                         )
                         all_requirements.extend(requirements)
-                        # Track this PO for allocation adjustment
-                        source_po_ids.add(po.id)
                 except Exception:
                     # Skip if BOM explosion fails
                     continue
@@ -915,8 +909,7 @@ async def get_low_stock_items(
                 )
 
             net_requirements = mrp_service.calculate_net_requirements(
-                component_reqs,
-                source_production_order_ids=source_po_ids if source_po_ids else None
+                component_reqs
             )
             
             # Add MRP shortages to items_dict
