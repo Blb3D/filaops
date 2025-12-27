@@ -762,11 +762,18 @@ async def get_low_stock_items(
     # 2. Get MRP shortages from active sales orders (if enabled)
     if include_mrp_shortages:
         from app.models.sales_order import SalesOrder, SalesOrderLine
+        from app.models.production_order import ProductionOrder
         from app.services.mrp import MRPService
 
-        # Get all active sales orders (not cancelled, not completed)
+        # Get active sales orders that DON'T have linked production orders
+        # (POs already account for their demand via inventory allocations)
+        so_ids_with_po = db.query(ProductionOrder.sales_order_id).filter(
+            ProductionOrder.sales_order_id.isnot(None)
+        ).distinct()
+
         active_orders = db.query(SalesOrder).filter(
             SalesOrder.status.notin_(["cancelled", "completed", "delivered"]),
+            ~SalesOrder.id.in_(so_ids_with_po),
         ).all()
 
         mrp_service = MRPService(db)
@@ -794,7 +801,7 @@ async def get_low_stock_items(
                         except Exception:
                             # Skip if BOM explosion fails (no BOM, etc.)
                             continue
-            elif order.order_type == "quote_based" and hasattr(order, 'quote_id') and order.quote_id:
+            elif order.order_type == "quote" and hasattr(order, 'quote_id') and order.quote_id:
                 # For quote-based orders, get product from quote
                 from app.models.quote import Quote
                 quote = db.query(Quote).filter(Quote.id == order.quote_id).first()
@@ -810,7 +817,30 @@ async def get_low_stock_items(
                     except Exception:
                         # Skip if BOM explosion fails
                         continue
-        
+
+        # Also get demand from active Production Orders
+        # (POs that have sales_order_id are already excluded from SO processing above)
+        active_pos = db.query(ProductionOrder).filter(
+            ProductionOrder.status.in_(["draft", "released", "in_progress"]),
+        ).all()
+
+        for po in active_pos:
+            if po.product_id:
+                try:
+                    # Calculate remaining quantity (ordered - completed)
+                    remaining_qty = Decimal(str(po.quantity_ordered or 0)) - Decimal(str(po.quantity_completed or 0))
+                    if remaining_qty > 0:
+                        requirements = mrp_service.explode_bom(
+                            product_id=po.product_id,
+                            quantity=remaining_qty,
+                            source_demand_type="production_order",
+                            source_demand_id=po.id
+                        )
+                        all_requirements.extend(requirements)
+                except Exception:
+                    # Skip if BOM explosion fails
+                    continue
+
         # Aggregate requirements by product_id (sum quantities)
         aggregated_requirements = {}
         

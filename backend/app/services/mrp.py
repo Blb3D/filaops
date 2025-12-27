@@ -525,8 +525,11 @@ class MRPService:
             safety_stock = Decimal(str(product.safety_stock or 0))
 
             # Net requirement calculation
-            # Net = Gross - Available - Incoming + Safety Stock
-            available_supply = inv["available"] + incoming
+            # Net = Gross - On-Hand - Incoming + Safety Stock
+            # NOTE: We use on_hand (not available) because allocations represent
+            # the SAME demand we're calculating - using available would double-count.
+            # Allocations are for reservation (preventing over-promising), not MRP.
+            available_supply = inv["on_hand"] + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 
             # Don't report negative shortages
@@ -855,14 +858,22 @@ class MRPService:
             List of SalesOrder objects
         """
         from app.models.sales_order import SalesOrder
+        from app.models.production_order import ProductionOrder
         from sqlalchemy import or_, and_
-        
+
         # Convert horizon_date to datetime for comparison with DateTime columns
         horizon_datetime = datetime.combine(horizon_date, datetime.min.time())
-        
-        # Get orders that are not cancelled and within horizon
+
+        # Get SOs that already have linked production orders (to exclude them)
+        # POs already account for their demand via inventory allocations
+        so_ids_with_po = self.db.query(ProductionOrder.sales_order_id).filter(
+            ProductionOrder.sales_order_id.isnot(None)
+        ).distinct()
+
+        # Get orders that are not cancelled, within horizon, and don't have linked POs
         query = self.db.query(SalesOrder).filter(
-            SalesOrder.status != "cancelled"
+            SalesOrder.status != "cancelled",
+            ~SalesOrder.id.in_(so_ids_with_po)
         )
         
         # Filter by date - use estimated_completion_date if available, otherwise created_at
