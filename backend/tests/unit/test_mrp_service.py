@@ -904,8 +904,9 @@ class TestNetRequirements:
         
         assert net.gross_quantity == Decimal("10.0")
         assert net.available_quantity == Decimal("4.0")
-        # Net = 10.0 - 4.0 - 0 + 2.0 = 8.0
-        assert net.net_shortage == Decimal("8.0")
+        # Net = Gross - On-Hand - Incoming + Safety (uses on_hand, not available, to avoid double-counting)
+        # = 10.0 - 5.0 - 0 + 2.0 = 7.0
+        assert net.net_shortage == Decimal("7.0")
     
     def test_net_requirement_with_no_inventory(self, db, mrp_service, raw_material_pla):
         """Test net requirement when product has no inventory records"""

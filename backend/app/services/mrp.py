@@ -21,40 +21,10 @@ from app.models import (
 )
 from app.core.settings import get_settings
 from app.logging_config import get_logger
+from app.services.uom_service import INLINE_UOM_CONVERSIONS as UOM_CONVERSIONS
 
 logger = get_logger(__name__)
 settings = get_settings()
-
-
-# ============================================================================
-# UOM Conversion Helpers
-# ============================================================================
-
-# Define conversion factors to base units
-# Mass: base = KG
-# Length: base = M
-# Volume: base = L
-UOM_CONVERSIONS = {
-    # Mass conversions (to KG)
-    'G': {'base': 'KG', 'factor': Decimal('0.001')},
-    'KG': {'base': 'KG', 'factor': Decimal('1')},
-    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
-    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
-    # Length conversions (to M)
-    'MM': {'base': 'M', 'factor': Decimal('0.001')},
-    'CM': {'base': 'M', 'factor': Decimal('0.01')},
-    'M': {'base': 'M', 'factor': Decimal('1')},
-    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
-    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
-    # Volume conversions (to L)
-    'ML': {'base': 'L', 'factor': Decimal('0.001')},
-    'L': {'base': 'L', 'factor': Decimal('1')},
-    # Count units (no conversion)
-    'EA': {'base': 'EA', 'factor': Decimal('1')},
-    'PK': {'base': 'PK', 'factor': Decimal('1')},
-    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
-    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
-}
 
 def convert_uom(quantity: Decimal, from_unit: str, to_unit: str) -> Decimal:
     """
@@ -525,8 +495,11 @@ class MRPService:
             safety_stock = Decimal(str(product.safety_stock or 0))
 
             # Net requirement calculation
-            # Net = Gross - Available - Incoming + Safety Stock
-            available_supply = inv["available"] + incoming
+            # Net = Gross - On-Hand - Incoming + Safety Stock
+            # NOTE: We use on_hand (not available) because allocations represent
+            # the SAME demand we're calculating - using available would double-count.
+            # Allocations are for reservation (preventing over-promising), not MRP.
+            available_supply = inv["on_hand"] + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 
             # Don't report negative shortages
@@ -855,14 +828,22 @@ class MRPService:
             List of SalesOrder objects
         """
         from app.models.sales_order import SalesOrder
+        from app.models.production_order import ProductionOrder
         from sqlalchemy import or_, and_
-        
+
         # Convert horizon_date to datetime for comparison with DateTime columns
         horizon_datetime = datetime.combine(horizon_date, datetime.min.time())
-        
-        # Get orders that are not cancelled and within horizon
+
+        # Get SOs that already have linked production orders (to exclude them)
+        # POs already account for their demand via inventory allocations
+        so_ids_with_po = self.db.query(ProductionOrder.sales_order_id).filter(
+            ProductionOrder.sales_order_id.isnot(None)
+        ).distinct()
+
+        # Get orders that are not cancelled, within horizon, and don't have linked POs
         query = self.db.query(SalesOrder).filter(
-            SalesOrder.status != "cancelled"
+            SalesOrder.status != "cancelled",
+            ~SalesOrder.id.in_(so_ids_with_po)
         )
         
         # Filter by date - use estimated_completion_date if available, otherwise created_at

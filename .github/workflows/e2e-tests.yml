@@ -1,12 +1,12 @@
 name: E2E Tests
 
-# Disabled during active development - run manually when needed
+# Smoke tests run on PRs to main/develop; full E2E on manual trigger
 on:
-  workflow_dispatch: # Manual trigger only
-  # push:
-  #   branches: [main, develop, feature/*]
-  # pull_request:
-  #   branches: [main, develop]
+  workflow_dispatch: # Manual trigger for full suite
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 jobs:
   smoke-tests:
@@ -49,7 +49,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       - name: Run database migrations
         working-directory: backend
         env:
@@ -60,7 +60,18 @@ jobs:
           DB_PASSWORD: postgres
           SECRET_KEY: test-secret-key
         run: alembic upgrade head
-      
+
+      - name: Seed test data
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: python scripts/seed_test_data.py
+
       - name: Start backend server
         working-directory: backend
         env:
@@ -73,7 +84,7 @@ jobs:
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
-          
+
       - name: Wait for backend
         run: |
           timeout 60 bash -c 'until curl -f http://localhost:8001/docs; do sleep 2; done'
@@ -120,6 +131,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: smoke-tests # Only run if smoke tests pass
+    # Skip on PRs to keep feedback fast - runs on merge to main or manual trigger
+    if: github.event_name != 'pull_request'
     
     services:
       postgres:
@@ -156,7 +169,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      
+
       - name: Run database migrations
         working-directory: backend
         env:
@@ -167,7 +180,18 @@ jobs:
           DB_PASSWORD: postgres
           SECRET_KEY: test-secret-key
         run: alembic upgrade head
-      
+
+      - name: Seed test data
+        working-directory: backend
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: filaops
+          DB_USER: postgres
+          DB_PASSWORD: postgres
+          SECRET_KEY: test-secret-key
+        run: python scripts/seed_test_data.py
+
       - name: Start backend server
         working-directory: backend
         env:
@@ -180,7 +204,7 @@ jobs:
         run: |
           uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
-          
+
       - name: Wait for backend
         run: |
           timeout 60 bash -c 'until curl -f http://localhost:8001/docs; do sleep 2; done'
