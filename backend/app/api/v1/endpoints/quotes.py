@@ -33,6 +33,7 @@ router = APIRouter(prefix="/quotes", tags=["Quotes"])
 
 class ManualQuoteCreate(BaseModel):
     """Schema for creating a manual quote"""
+    product_id: Optional[int] = Field(None, description="Link to product with BOM")
     product_name: str = Field(..., max_length=255, description="Product/item name")
     description: Optional[str] = Field(None, max_length=1000, description="Product description")
     quantity: int = Field(1, ge=1, le=10000, description="Quantity")
@@ -103,6 +104,7 @@ class QuoteListItem(BaseModel):
     """Quote list item response"""
     id: int
     quote_number: str
+    product_id: Optional[int] = None
     product_name: Optional[str]
     quantity: int
     unit_price: Optional[Decimal]
@@ -321,6 +323,7 @@ async def create_quote(
     quote = Quote(
         quote_number=quote_number,
         user_id=current_user.id,
+        product_id=request.product_id,
         product_name=request.product_name,
         quantity=request.quantity,
         unit_price=request.unit_price,
@@ -518,22 +521,47 @@ async def convert_quote_to_order(
             detail="Quote has expired"
         )
 
-    # Generate order number
+    # Generate order number - with collision check
     year = datetime.utcnow().year
+    max_attempts = 100  # Prevent infinite loop
+    
+    # Find the highest existing sequence number for this year
+    # Use CAST to sort numerically, not alphabetically
     last_order = db.query(SalesOrder).filter(
         SalesOrder.order_number.like(f"SO-{year}-%")
     ).order_by(desc(SalesOrder.order_number)).first()
 
     if last_order:
         try:
-            seq = int(last_order.order_number.split("-")[2])
-            next_seq = seq + 1
+            next_seq = int(last_order.order_number.split("-")[2]) + 1
         except (IndexError, ValueError):
             next_seq = 1
     else:
         next_seq = 1
-
-    order_number = f"SO-{year}-{next_seq:04d}"
+    
+    # Find next available order number
+    order_number = None
+    for attempt in range(max_attempts):
+        candidate = f"SO-{year}-{next_seq:04d}"
+        
+        # Check if this order number already exists
+        existing = db.query(SalesOrder).filter(
+            SalesOrder.order_number == candidate
+        ).first()
+        
+        if not existing:
+            order_number = candidate
+            break  # Found a unique order number
+        
+        # Collision - increment and try again (don't re-query for max)
+        logger.warning(f"Order number collision: {candidate} already exists, trying next")
+        next_seq += 1
+    
+    if not order_number:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to generate unique order number after multiple attempts"
+        )
 
     # Create sales order
     # Note: quote.subtotal is pre-tax, quote.total_price includes tax
@@ -542,11 +570,33 @@ async def convert_quote_to_order(
     tax = quote.tax_amount or Decimal("0")
     shipping = quote.shipping_cost or Decimal("0")
 
+    # Get shipping address: prefer quote's address, fall back to customer's address
+    shipping_address_line1 = quote.shipping_address_line1
+    shipping_address_line2 = quote.shipping_address_line2
+    shipping_city = quote.shipping_city
+    shipping_state = quote.shipping_state
+    shipping_zip = quote.shipping_zip
+    shipping_country = quote.shipping_country
+    customer_phone = quote.shipping_phone
+
+    # If quote doesn't have shipping address but has customer_id, get from customer
+    if not shipping_address_line1 and quote.customer_id:
+        customer = db.query(User).filter(User.id == quote.customer_id).first()
+        if customer:
+            shipping_address_line1 = customer.shipping_address_line1
+            shipping_address_line2 = customer.shipping_address_line2
+            shipping_city = customer.shipping_city
+            shipping_state = customer.shipping_state
+            shipping_zip = customer.shipping_zip
+            shipping_country = customer.shipping_country
+            if not customer_phone:
+                customer_phone = customer.phone
+
     sales_order = SalesOrder(
         order_number=order_number,
         quote_id=quote.id,
         user_id=quote.user_id,  # Required: copy from quote
-        order_type="quote",
+        order_type="quote_based",
         source="portal",
         product_id=quote.product_id,  # Link to product for BOM explosion
         product_name=quote.product_name,
@@ -556,19 +606,25 @@ async def convert_quote_to_order(
         unit_price=quote.unit_price,
         total_price=subtotal,  # Pre-tax subtotal
         tax_amount=tax,
+        tax_rate=quote.tax_rate,  # Preserve tax rate from quote
         shipping_cost=shipping,
         grand_total=subtotal + tax + shipping,  # Total including tax and shipping
         status="pending",
         payment_status="pending",
         rush_level=quote.rush_level or "standard",
         customer_notes=quote.customer_notes,
-        # Shipping address fields (individual)
-        shipping_address_line1=quote.shipping_address_line1,
-        shipping_address_line2=quote.shipping_address_line2,
-        shipping_city=quote.shipping_city,
-        shipping_state=quote.shipping_state,
-        shipping_zip=quote.shipping_zip,
-        shipping_country=quote.shipping_country or "USA",
+        # Customer info (copied from quote)
+        customer_id=quote.customer_id,
+        customer_name=quote.customer_name,
+        customer_email=quote.customer_email,
+        customer_phone=customer_phone,
+        # Shipping address fields (from quote or customer fallback)
+        shipping_address_line1=shipping_address_line1,
+        shipping_address_line2=shipping_address_line2,
+        shipping_city=shipping_city,
+        shipping_state=shipping_state,
+        shipping_zip=shipping_zip,
+        shipping_country=shipping_country or "USA",
     )
 
     db.add(sales_order)

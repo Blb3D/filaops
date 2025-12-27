@@ -801,22 +801,19 @@ async def get_low_stock_items(
                         except Exception:
                             # Skip if BOM explosion fails (no BOM, etc.)
                             continue
-            elif order.order_type == "quote" and hasattr(order, 'quote_id') and order.quote_id:
-                # For quote-based orders, get product from quote
-                from app.models.quote import Quote
-                quote = db.query(Quote).filter(Quote.id == order.quote_id).first()
-                if quote and quote.product_id:
-                    try:
-                        requirements = mrp_service.explode_bom(
-                            product_id=quote.product_id,
-                            quantity=Decimal(str(order.quantity)),
-                            source_demand_type="sales_order",
-                            source_demand_id=order.id
-                        )
-                        all_requirements.extend(requirements)
-                    except Exception:
-                        # Skip if BOM explosion fails
-                        continue
+            elif order.order_type == "quote_based" and order.product_id:
+                # For quote-based orders, product_id is directly on the order
+                try:
+                    requirements = mrp_service.explode_bom(
+                        product_id=order.product_id,
+                        quantity=Decimal(str(order.quantity)),
+                        source_demand_type="sales_order",
+                        source_demand_id=order.id
+                    )
+                    all_requirements.extend(requirements)
+                except Exception:
+                    # Skip if BOM explosion fails
+                    continue
 
         # Also get demand from active Production Orders
         # (POs that have sales_order_id are already excluded from SO processing above)
