@@ -21,40 +21,10 @@ from app.models import (
 )
 from app.core.settings import get_settings
 from app.logging_config import get_logger
+from app.services.uom_service import INLINE_UOM_CONVERSIONS as UOM_CONVERSIONS
 
 logger = get_logger(__name__)
 settings = get_settings()
-
-
-# ============================================================================
-# UOM Conversion Helpers
-# ============================================================================
-
-# Define conversion factors to base units
-# Mass: base = KG
-# Length: base = M
-# Volume: base = L
-UOM_CONVERSIONS = {
-    # Mass conversions (to KG)
-    'G': {'base': 'KG', 'factor': Decimal('0.001')},
-    'KG': {'base': 'KG', 'factor': Decimal('1')},
-    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
-    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
-    # Length conversions (to M)
-    'MM': {'base': 'M', 'factor': Decimal('0.001')},
-    'CM': {'base': 'M', 'factor': Decimal('0.01')},
-    'M': {'base': 'M', 'factor': Decimal('1')},
-    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
-    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
-    # Volume conversions (to L)
-    'ML': {'base': 'L', 'factor': Decimal('0.001')},
-    'L': {'base': 'L', 'factor': Decimal('1')},
-    # Count units (no conversion)
-    'EA': {'base': 'EA', 'factor': Decimal('1')},
-    'PK': {'base': 'PK', 'factor': Decimal('1')},
-    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
-    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
-}
 
 def convert_uom(quantity: Decimal, from_unit: str, to_unit: str) -> Decimal:
     """

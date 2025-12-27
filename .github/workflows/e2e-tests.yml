@@ -1,12 +1,12 @@
 name: E2E Tests
 
-# Disabled during active development - run manually when needed
+# Smoke tests run on PRs to main/develop; full E2E on manual trigger
 on:
-  workflow_dispatch: # Manual trigger only
-  # push:
-  #   branches: [main, develop, feature/*]
-  # pull_request:
-  #   branches: [main, develop]
+  workflow_dispatch: # Manual trigger for full suite
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 jobs:
   smoke-tests:
@@ -120,6 +120,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: smoke-tests # Only run if smoke tests pass
+    # Skip on PRs to keep feedback fast - runs on merge to main or manual trigger
+    if: github.event_name != 'pull_request'
     
     services:
       postgres:
