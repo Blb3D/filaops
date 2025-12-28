@@ -12,17 +12,19 @@ import { test, expect } from '@playwright/test';
 test.describe('Smoke Tests - Critical Paths', () => {
   
   test('app loads and shows login', async ({ page }) => {
-    await page.goto('/');
-    
-    // If already logged in, log out first
-    const logoutButton = page.getByRole('button', { name: /logout|sign out/i });
-    if (await logoutButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await logoutButton.click();
-      await page.waitForURL(/login/, { timeout: 5000 });
-    }
-    
-    // Should show login page
-    await expect(page.getByRole('heading', { name: /login|sign in/i })).toBeVisible({ timeout: 5000 });
+    // Clear auth to test login page in unauthenticated state
+    await page.context().clearCookies();
+    await page.evaluate(() => localStorage.clear());
+
+    // Navigate directly to login page
+    await page.goto('/admin/login');
+
+    // Should show "Staff Login" heading
+    await expect(page.getByRole('heading', { name: /staff login|login|sign in/i })).toBeVisible({ timeout: 5000 });
+
+    // Verify login form elements exist
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await expect(page.locator('input[type="password"]')).toBeVisible();
   });
 
   test('can navigate to main sections', async ({ page }) => {
