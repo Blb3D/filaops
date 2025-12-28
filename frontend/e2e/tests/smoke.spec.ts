@@ -12,12 +12,13 @@ import { test, expect } from '@playwright/test';
 test.describe('Smoke Tests - Critical Paths', () => {
   
   test('app loads and shows login', async ({ page }) => {
-    // Clear auth to test login page in unauthenticated state
+    // Navigate to login page first, then clear auth
+    await page.goto('/admin/login');
     await page.context().clearCookies();
     await page.evaluate(() => localStorage.clear());
 
-    // Navigate directly to login page
-    await page.goto('/admin/login');
+    // Reload to see login page in unauthenticated state
+    await page.reload();
 
     // Should show "Staff Login" heading
     await expect(page.getByRole('heading', { name: /staff login|login|sign in/i })).toBeVisible({ timeout: 5000 });
