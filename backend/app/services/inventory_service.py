@@ -15,6 +15,7 @@ from app.models.product import Product
 from app.models.bom import BOM, BOMLine
 from app.models.production_order import ProductionOrder
 from app.models.sales_order import SalesOrder
+from app.models.traceability import MaterialLot, ProductionLotConsumption
 from app.logging_config import get_logger
 from app.services.uom_service import (
     convert_quantity_safe,
@@ -573,6 +574,100 @@ def release_production_reservations(
     return releases
 
 
+def consume_from_material_lots(
+    db: Session,
+    component_id: int,
+    quantity: Decimal,
+    production_order_id: int,
+    bom_line_id: Optional[int] = None,
+) -> List[ProductionLotConsumption]:
+    """
+    Consume material from available lots using FIFO (oldest first).
+
+    Creates ProductionLotConsumption records linking production orders to material lots.
+    Updates MaterialLot.quantity_consumed for each lot used.
+
+    Args:
+        db: Database session
+        component_id: Product ID of the component being consumed
+        quantity: Total quantity to consume (in component's inventory unit)
+        production_order_id: Production order consuming the material
+        bom_line_id: Optional BOM line ID
+
+    Returns:
+        List of ProductionLotConsumption records created
+    """
+    consumptions = []
+
+    # Get available lots for this component (FIFO by received_date)
+    available_lots = db.query(MaterialLot).filter(
+        MaterialLot.product_id == component_id,
+        MaterialLot.status == "active",
+    ).order_by(MaterialLot.received_date.asc()).all()
+
+    if not available_lots:
+        logger.debug(f"No active MaterialLots found for component {component_id}")
+        return consumptions
+
+    remaining = quantity
+    for lot in available_lots:
+        if remaining <= Decimal("0"):
+            break
+
+        # Calculate available quantity in this lot
+        available = (
+            lot.quantity_received
+            - lot.quantity_consumed
+            - lot.quantity_scrapped
+            + lot.quantity_adjusted
+        )
+
+        if available <= Decimal("0"):
+            continue
+
+        # Consume from this lot
+        consume_qty = min(available, remaining)
+
+        # Create consumption record
+        consumption = ProductionLotConsumption(
+            production_order_id=production_order_id,
+            material_lot_id=lot.id,
+            bom_line_id=bom_line_id,
+            quantity_consumed=consume_qty,
+            consumed_at=datetime.utcnow(),
+        )
+        db.add(consumption)
+        consumptions.append(consumption)
+
+        # Update lot's consumed quantity
+        lot.quantity_consumed = Decimal(str(lot.quantity_consumed or 0)) + consume_qty
+
+        # Check if lot is now depleted
+        new_available = (
+            lot.quantity_received
+            - lot.quantity_consumed
+            - lot.quantity_scrapped
+            + lot.quantity_adjusted
+        )
+        if new_available <= Decimal("0"):
+            lot.status = "depleted"
+            logger.info(f"MaterialLot {lot.lot_number} depleted")
+
+        remaining -= consume_qty
+        logger.debug(
+            f"Consumed {consume_qty} from lot {lot.lot_number}, "
+            f"remaining in lot: {new_available}"
+        )
+
+    if remaining > Decimal("0"):
+        logger.warning(
+            f"Could not fully consume {quantity} for component {component_id}. "
+            f"Remaining {remaining} not tracked in lots."
+        )
+
+    return consumptions
+
+
 def consume_production_materials(
     db: Session,
     production_order: ProductionOrder,
@@ -668,9 +763,19 @@ def consume_production_materials(
         )
         transactions.append(txn)
 
+        # Record lot consumption for traceability (FIFO)
+        lot_consumptions = consume_from_material_lots(
+            db=db,
+            component_id=line.component_id,
+            quantity=total_qty,
+            production_order_id=production_order.id,
+            bom_line_id=line.id,
+        )
+
         logger.info(
             f"Consumed {total_qty} {component_unit} of {component.sku} "
             f"for production order {production_order.id}"
+            f"{f' (tracked in {len(lot_consumptions)} lot(s))' if lot_consumptions else ''}"
         )
 
     return transactions
