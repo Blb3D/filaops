@@ -736,6 +736,62 @@ export default function OrderDetail() {
         </div>
       </div>
 
+      {/* Customer Information */}
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+        <h2 className="text-lg font-semibold text-white mb-4">Customer</h2>
+        {order.customer_name || order.customer_email ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-sm text-gray-400">Name</div>
+              <div className="text-white font-medium">
+                {order.customer_name || "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">Email</div>
+              <div className="text-white font-medium">
+                {order.customer_email ? (
+                  <a href={`mailto:${order.customer_email}`} className="text-blue-400 hover:underline">
+                    {order.customer_email}
+                  </a>
+                ) : "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400">Phone</div>
+              <div className="text-white font-medium">
+                {order.customer_phone || "—"}
+              </div>
+            </div>
+            {order.customer_id && (
+              <div>
+                <div className="text-sm text-gray-400">Customer ID</div>
+                <div className="text-white font-medium">
+                  <button 
+                    onClick={() => navigate(`/admin/customers/${order.customer_id}`)}
+                    className="text-blue-400 hover:underline"
+                  >
+                    #{order.customer_id}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : order.quote_id ? (
+          <div className="text-gray-400">
+            Customer info available in linked quote.
+            <button 
+              onClick={() => navigate(`/admin/quotes`)} 
+              className="text-blue-400 hover:underline ml-2"
+            >
+              View Quote
+            </button>
+          </div>
+        ) : (
+          <div className="text-gray-400">No customer information on file.</div>
+        )}
+      </div>
+
       {/* Shipping Address */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
         <div className="flex justify-between items-center mb-4">

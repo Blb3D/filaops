@@ -89,6 +89,12 @@ class SalesOrder(Base):
     estimated_completion_date = Column(DateTime, nullable=True)
     actual_completion_date = Column(DateTime, nullable=True)
 
+    # Customer Information (for quote-based orders)
+    customer_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    customer_name = Column(String(200), nullable=True)
+    customer_email = Column(String(255), nullable=True)
+    customer_phone = Column(String(30), nullable=True)
+
     # Shipping Information
     shipping_address_line1 = Column(String(255), nullable=True)
     shipping_address_line2 = Column(String(255), nullable=True)
@@ -123,7 +129,8 @@ class SalesOrder(Base):
     # Links to the MRP run that processed this order
 
     # Relationships
-    user = relationship("User", back_populates="sales_orders")
+    user = relationship("User", back_populates="sales_orders", foreign_keys=[user_id])
+    customer = relationship("User", foreign_keys=[customer_id])  # Customer record (optional)
     quote = relationship("Quote", back_populates="sales_order", uselist=False)
     product = relationship("Product", foreign_keys=[product_id])
     lines = relationship("SalesOrderLine", back_populates="sales_order", cascade="all, delete-orphan")

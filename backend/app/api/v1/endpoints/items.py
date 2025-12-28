@@ -821,6 +821,10 @@ async def get_low_stock_items(
             ProductionOrder.status.in_(["draft", "released", "in_progress"]),
         ).all()
 
+        # Collect PO IDs to pass to MRP - these POs' allocations should be
+        # added back to available since their demand is in gross requirements
+        source_po_ids: set = set()
+
         for po in active_pos:
             if po.product_id:
                 try:
@@ -834,13 +838,15 @@ async def get_low_stock_items(
                             source_demand_id=po.id
                         )
                         all_requirements.extend(requirements)
+                        # Track this PO for allocation adjustment
+                        source_po_ids.add(po.id)
                 except Exception:
                     # Skip if BOM explosion fails
                     continue
 
         # Aggregate requirements by product_id (sum quantities)
         aggregated_requirements = {}
-        
+
         for req in all_requirements:
             key = req.product_id
             if key not in aggregated_requirements:
@@ -853,8 +859,11 @@ async def get_low_stock_items(
                 }
             else:
                 aggregated_requirements[key]["gross_quantity"] += req.gross_quantity
-        
+
         # Calculate net requirements
+        # Pass source_production_order_ids so MRP adds back their allocations
+        # (since their demand is already in gross_quantity, we don't want to
+        # double-count by also subtracting their allocations from available)
         if aggregated_requirements:
             from app.services.mrp import ComponentRequirement
             component_reqs = []
@@ -868,8 +877,11 @@ async def get_low_stock_items(
                         gross_quantity=Decimal(str(req_data["gross_quantity"])),
                     )
                 )
-            
-            net_requirements = mrp_service.calculate_net_requirements(component_reqs)
+
+            net_requirements = mrp_service.calculate_net_requirements(
+                component_reqs,
+                source_production_order_ids=source_po_ids if source_po_ids else None
+            )
             
             # Add MRP shortages to items_dict
             for net_req in net_requirements:

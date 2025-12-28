@@ -240,6 +240,7 @@ export default function AdminQuotes() {
     try {
       // Create a new quote based on the existing one
       const newQuoteData = {
+        product_id: quote.product_id || null,
         product_name: quote.product_name,
         quantity: quote.quantity,
         unit_price: parseFloat(quote.unit_price || 0),
@@ -713,7 +714,7 @@ function QuoteFormModal({ quote, onSave, onClose, token }) {
 
   const fetchCustomers = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/customers?limit=500`, {
+      const res = await fetch(`${API_URL}/api/v1/admin/customers?limit=200`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -824,6 +825,7 @@ function QuoteFormModal({ quote, onSave, onClose, token }) {
 
     // Build the payload - only send fields the backend accepts
     const payload = {
+      product_id: form.product_id || null,
       product_name: form.product_name,
       quantity: form.quantity,
       unit_price: parseFloat(form.unit_price),

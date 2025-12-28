@@ -87,6 +87,65 @@ def get_effective_cost(product: "Product") -> "Optional[Decimal]":
     return None
 
 
+def get_allocations_by_production_order(
+    db: Session,
+    product_ids: List[int]
+) -> Dict[int, Dict[int, Decimal]]:
+    """
+    Get inventory allocations grouped by product_id and production_order_id.
+
+    This is used by MRP to correctly calculate net requirements:
+    - When calculating demand for a specific production order, we need to know
+      which allocations belong to THAT order vs OTHER orders
+    - The Inventory.allocated_quantity is an aggregate - it doesn't tell us
+      which orders own those allocations
+
+    Uses InventoryTransaction records with:
+    - reference_type = "production_order"
+    - transaction_type = "reservation" (adds) or "reservation_release" (subtracts)
+
+    Args:
+        db: Database session
+        product_ids: List of product IDs to get allocations for
+
+    Returns:
+        Dict mapping: {product_id: {production_order_id: allocated_quantity}}
+        Only includes positive allocations (orders with net reservations)
+    """
+    from sqlalchemy import func, case
+    from collections import defaultdict
+
+    if not product_ids:
+        return {}
+
+    # Query all reservation transactions for these products
+    # Sum reservation quantities, subtract reservation_release quantities
+    reservations = db.query(
+        InventoryTransaction.product_id,
+        InventoryTransaction.reference_id.label("production_order_id"),
+        func.sum(
+            case(
+                (InventoryTransaction.transaction_type == "reservation", InventoryTransaction.quantity),
+                (InventoryTransaction.transaction_type == "reservation_release", -InventoryTransaction.quantity),
+                else_=Decimal("0")
+            )
+        ).label("allocated")
+    ).filter(
+        InventoryTransaction.product_id.in_(product_ids),
+        InventoryTransaction.reference_type == "production_order",
+        InventoryTransaction.transaction_type.in_(["reservation", "reservation_release"])
+    ).group_by(
+        InventoryTransaction.product_id,
+        InventoryTransaction.reference_id
+    ).all()
+
+    result: Dict[int, Dict[int, Decimal]] = defaultdict(dict)
+    for row in reservations:
+        allocated = Decimal(str(row.allocated)) if row.allocated else Decimal("0")
+        if allocated > 0 and row.production_order_id is not None:
+            result[row.product_id][row.production_order_id] = allocated
+
+    return dict(result)
 
 
 # ============================================================================

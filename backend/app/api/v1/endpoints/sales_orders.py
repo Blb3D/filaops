@@ -1923,20 +1923,25 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
         "shipping_cost": order.shipping_cost if order.shipping_cost is not None else Decimal("0"),
         "grand_total": order.grand_total,
         "status": order.status,
+        "fulfillment_status": getattr(order, "fulfillment_status", "pending"),
         "payment_status": order.payment_status,
         "payment_method": order.payment_method,
         "payment_transaction_id": order.payment_transaction_id,
         "paid_at": getattr(order, "paid_at", None),
         "estimated_completion_date": getattr(order, "estimated_completion_date", None),
         "actual_completion_date": getattr(order, "actual_completion_date", None),
-        "shipping_name": None,  # Not in SalesOrder model
+        # Customer information
+        "customer_id": getattr(order, "customer_id", None),
+        "customer_name": getattr(order, "customer_name", None),
+        "customer_email": getattr(order, "customer_email", None),
+        "customer_phone": getattr(order, "customer_phone", None),
+        # Shipping address
         "shipping_address_line1": order.shipping_address_line1,
         "shipping_address_line2": order.shipping_address_line2,
         "shipping_city": order.shipping_city,
         "shipping_state": order.shipping_state,
         "shipping_zip": order.shipping_zip,
         "shipping_country": order.shipping_country,
-        "shipping_phone": None,  # Not in SalesOrder model
         "tracking_number": order.tracking_number,
         "carrier": order.carrier,
         "shipped_at": order.shipped_at,

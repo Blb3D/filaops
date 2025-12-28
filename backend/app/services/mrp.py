@@ -453,27 +453,63 @@ class MRPService:
 
     def calculate_net_requirements(
         self,
-        requirements: List[ComponentRequirement]
+        requirements: List[ComponentRequirement],
+        source_production_order_ids: Optional[set] = None
     ) -> List[NetRequirement]:
         """
         Calculate net requirements by comparing gross requirements to available inventory.
 
         Formula: Net = Gross - Available - Incoming + Safety Stock
 
+        CRITICAL: Per-Order Allocation Handling
+        ----------------------------------------
+        The Inventory.allocated_quantity is an aggregate that doesn't track WHICH
+        production orders own those allocations. This causes two problems:
+
+        Scenario A (Own Allocation):
+          - PO-001 needs 1000g, has already reserved 1000g
+          - Using available (on_hand - allocated): shortage shows 0
+          - This is CORRECT - the reservation IS for this order
+
+        Scenario B (Competing Orders):
+          - PO-OTHER reserved 9000g for OTHER orders
+          - PO-NEW needs 1500g (no reservation yet)
+          - Using available: 10000 - 9000 = 1000, need 1500, shortage = 500
+          - This is CORRECT - PO-NEW can't use PO-OTHER's materials
+
+        When source_production_order_ids is provided, we add back those POs'
+        allocations to the available inventory because their demand is already
+        included in the gross requirements.
+
         Args:
             requirements: List of gross component requirements
+            source_production_order_ids: Optional set of PO IDs whose allocations
+                should be added back to available (because their demand is already
+                counted in gross requirements)
 
         Returns:
             List of NetRequirement with shortage calculations
         """
+        from app.services.inventory_service import get_allocations_by_production_order
+
         net_requirements = []
         product_ids = [r.product_id for r in requirements]
+
+        if not product_ids:
+            return net_requirements
 
         # Get inventory levels for all products at once
         inventory_by_product = self._get_inventory_levels(product_ids)
 
         # Get incoming supply (open POs)
         incoming_by_product = self._get_incoming_supply(product_ids)
+
+        # Get per-order allocations if we need to adjust for source POs
+        allocations_by_order: Dict[int, Dict[int, Decimal]] = {}
+        if source_production_order_ids:
+            allocations_by_order = get_allocations_by_production_order(
+                self.db, product_ids
+            )
 
         # Get product details
         products = {
@@ -494,12 +530,19 @@ class MRPService:
             incoming = incoming_by_product.get(req.product_id, Decimal("0"))
             safety_stock = Decimal(str(product.safety_stock or 0))
 
+            # Calculate available supply, adjusting for source PO allocations
+            # If source_production_order_ids is provided, add back those POs' allocations
+            # because their demand is already in gross_quantity (avoids double-counting)
+            available = inv["available"]
+            if source_production_order_ids:
+                product_allocations = allocations_by_order.get(req.product_id, {})
+                for po_id in source_production_order_ids:
+                    source_allocation = product_allocations.get(po_id, Decimal("0"))
+                    available += source_allocation
+
             # Net requirement calculation
-            # Net = Gross - On-Hand - Incoming + Safety Stock
-            # NOTE: We use on_hand (not available) because allocations represent
-            # the SAME demand we're calculating - using available would double-count.
-            # Allocations are for reservation (preventing over-promising), not MRP.
-            available_supply = inv["on_hand"] + incoming
+            # Net = Gross - Available - Incoming + Safety Stock
+            available_supply = available + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 
             # Don't report negative shortages

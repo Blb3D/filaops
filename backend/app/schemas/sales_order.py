@@ -177,6 +177,12 @@ class SalesOrderResponse(SalesOrderBase):
     # Line items (for line_item type orders)
     lines: List[SalesOrderLineResponse] = []
 
+    # Customer Information
+    customer_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    customer_email: Optional[str] = None
+    customer_phone: Optional[str] = None
+
     # Payment
     payment_method: Optional[str]
     payment_transaction_id: Optional[str]
