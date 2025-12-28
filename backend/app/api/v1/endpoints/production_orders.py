@@ -1235,6 +1235,10 @@ async def complete_production_order(
     # NOTE: Sales order advancement to ready_to_ship now happens after QC inspection passes
     # See POST /{order_id}/qc endpoint
 
+    # Sync fulfillment_status if all production orders are complete
+    from app.services.status_sync_service import sync_on_production_complete
+    sync_on_production_complete(db, order)
+
     db.commit()
     db.refresh(order)
 

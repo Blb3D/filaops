@@ -320,6 +320,19 @@ async def create_quote(
                 detail="Invalid customer_id - customer not found"
             )
 
+    # Validate material exists if both material_type and color provided
+    if request.material_type and request.color:
+        from app.services.material_service import get_material_product
+        material_product = get_material_product(db, request.material_type, request.color)
+        if not material_product:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Material not found: {request.material_type} in {request.color}. "
+                    f"Check available materials at /api/v1/materials/combinations"
+                )
+            )
+
     quote = Quote(
         quote_number=quote_number,
         user_id=current_user.id,
