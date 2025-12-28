@@ -17,8 +17,9 @@ from app.services.inventory_helpers import is_material
 from app.models.vendor import Vendor
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.product import Product
-from app.models.inventory import Inventory, InventoryTransaction
+from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.material_spool import MaterialSpool
+from app.models.traceability import MaterialLot
 from app.api.v1.endpoints.auth import get_current_user
 from app.api.v1.deps import get_pagination_params
 from app.models.user import User
@@ -599,7 +600,6 @@ async def receive_purchase_order(
     # Default location (get first warehouse or create default)
     location_id = request.location_id
     if not location_id:
-        from app.models.inventory import InventoryLocation
         default_loc = db.query(InventoryLocation).filter(
             InventoryLocation.type == "warehouse"
         ).first()
@@ -622,6 +622,7 @@ async def receive_purchase_order(
 
     transaction_ids = []
     spools_created = []  # Initialize spools list
+    material_lots_created = []  # Lot numbers for traceability
     total_received = Decimal("0")
     lines_received = 0
 
@@ -854,7 +855,54 @@ async def receive_purchase_order(
                 product.average_cost = (product.average_cost + cost_per_unit_for_inventory) / 2
             product.last_cost = cost_per_unit_for_inventory  # Store in product_unit
             product.updated_at = datetime.utcnow()
-        
+
+        # ============================================================================
+        # MaterialLot Creation (for traceability)
+        # ============================================================================
+        # Create MaterialLot for supply/component items to enable traceability
+        if product.item_type in ('supply', 'component') or product.material_type_id:
+            from sqlalchemy import extract
+            year = datetime.utcnow().year
+
+            # Count existing lots for this product this year to generate sequence
+            existing_count = db.query(MaterialLot).filter(
+                MaterialLot.product_id == product.id,
+                extract('year', MaterialLot.received_date) == year
+            ).count()
+
+            lot_number = f"{product.sku}-{year}-{existing_count + 1:04d}"
+
+            # Get location code for storage
+            location = db.query(InventoryLocation).filter(
+                InventoryLocation.id == location_id
+            ).first() if location_id else None
+
+            material_lot = MaterialLot(
+                lot_number=lot_number,
+                product_id=product.id,
+                vendor_id=po.vendor_id,
+                purchase_order_id=po.id,
+                vendor_lot_number=item.vendor_lot_number or item.lot_number,
+                quantity_received=transaction_quantity,
+                quantity_consumed=Decimal("0"),
+                quantity_scrapped=Decimal("0"),
+                quantity_adjusted=Decimal("0"),
+                status="active",
+                inspection_status="pending",
+                received_date=actual_received_date,
+                unit_cost=cost_per_unit_for_inventory,
+                location=location.code if location else "MAIN",
+            )
+            db.add(material_lot)
+            db.flush()
+            material_lots_created.append(lot_number)
+
+            logger.info(
+                f"Created MaterialLot {lot_number} for {product.sku}: "
+                f"{transaction_quantity} units @ ${cost_per_unit_for_inventory}/unit "
+                f"(vendor lot: {material_lot.vendor_lot_number or 'N/A'})"
+            )
+
         # ============================================================================
         # Spool Creation (if requested for material products)
         # ============================================================================
@@ -957,6 +1005,8 @@ async def receive_purchase_order(
     event_description = f"Received {total_received} units across {lines_received} line(s)"
     if spools_created:
         event_description += f". Created {len(spools_created)} spool(s)."
+    if material_lots_created:
+        event_description += f" Created {len(material_lots_created)} material lot(s) for traceability."
 
     record_purchasing_event(
         db=db,
@@ -995,6 +1045,7 @@ async def receive_purchase_order(
         inventory_updated=True,
         transactions_created=transaction_ids,
         spools_created=spools_created,
+        material_lots_created=material_lots_created,
     )
 
 

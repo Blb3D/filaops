@@ -279,6 +279,7 @@ class ReceiveLineItem(BaseModel):
     line_id: int
     quantity_received: Decimal = Field(..., gt=0)
     lot_number: Optional[str] = None
+    vendor_lot_number: Optional[str] = Field(None, description="Vendor's lot number for traceability")
     notes: Optional[str] = None
     create_spools: bool = Field(False, description="Whether to create material spools")
     spools: Optional[List[SpoolCreateData]] = Field(None, description="Individual spool data if creating spools")
@@ -303,3 +304,4 @@ class ReceivePOResponse(BaseModel):
     inventory_updated: bool
     transactions_created: List[int] = []  # IDs of inventory transactions
     spools_created: List[str] = []  # List of spool numbers created
+    material_lots_created: List[str] = []  # Lot numbers for traceability
