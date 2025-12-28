@@ -30,19 +30,56 @@ logger = get_logger(__name__)
 
 def get_effective_cost(product: "Product") -> "Optional[Decimal]":
     """
-    Get the effective cost for a product, using fallback logic.
+    Get the effective cost for a product based on its declared cost_method.
 
-    Priority order:
-    1. cost (legacy field, if set)
-    2. standard_cost (preferred for manufactured items)
-    3. average_cost (for purchased items with history)
-    4. last_cost (most recent purchase price)
+    Cost methods:
+    - 'standard': Use standard_cost (for manufactured items with set costs)
+    - 'average': Use weighted average cost (default, for purchased items)
+    - 'fifo': Use last_cost as approximation (full FIFO requires cost layers)
+    - 'last': Use most recent purchase price
 
     Returns None if no cost is available.
     """
-    # Use standard_cost first (primary cost field), then fallback to average/last cost
-    if product.standard_cost is not None:
-        return Decimal(str(product.standard_cost))
+    method = (product.cost_method or "average").lower()
+
+    if method == "standard":
+        if product.standard_cost is not None:
+            return Decimal(str(product.standard_cost))
+        # Fallback: warn and use average/last
+        logger.warning(
+            f"Product {product.sku} uses standard costing but has no standard_cost set. "
+            f"Falling back to average/last cost."
+        )
+        if product.average_cost is not None:
+            return Decimal(str(product.average_cost))
+        if product.last_cost is not None:
+            return Decimal(str(product.last_cost))
+        return None
+
+    elif method == "average":
+        if product.average_cost is not None:
+            return Decimal(str(product.average_cost))
+        # Fallback to last_cost for products without average yet
+        if product.last_cost is not None:
+            return Decimal(str(product.last_cost))
+        return None
+
+    elif method == "fifo":
+        # Full FIFO requires cost layer tracking (not yet implemented)
+        # For now, use last_cost as approximation
+        if product.last_cost is not None:
+            return Decimal(str(product.last_cost))
+        if product.average_cost is not None:
+            return Decimal(str(product.average_cost))
+        return None
+
+    elif method == "last":
+        if product.last_cost is not None:
+            return Decimal(str(product.last_cost))
+        return None
+
+    # Unknown method - default to average behavior
+    logger.warning(f"Unknown cost_method '{method}' for {product.sku}, using average")
     if product.average_cost is not None:
         return Decimal(str(product.average_cost))
     if product.last_cost is not None:

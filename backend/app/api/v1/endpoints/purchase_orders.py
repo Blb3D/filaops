@@ -844,16 +844,34 @@ async def receive_purchase_order(
         db.flush()
         transaction_ids.append(txn.id)
 
-        # Update product average cost (product already queried above)
-        # Use cost_per_unit_for_inventory which is already in product_unit terms
+        # Update product average cost using proper weighted average
+        # Formula: (old_qty × old_cost + new_qty × new_cost) / (old_qty + new_qty)
         if product:
-            # Simple weighted average update (using cost in product_unit)
-            if product.average_cost is None or product.average_cost == 0:
-                product.average_cost = cost_per_unit_for_inventory
-            else:
-                # Rough weighted average (simplified)
-                product.average_cost = (product.average_cost + cost_per_unit_for_inventory) / 2
-            product.last_cost = cost_per_unit_for_inventory  # Store in product_unit
+            # Get current on-hand quantity BEFORE this receipt
+            from sqlalchemy import func as sql_func
+            total_on_hand = db.query(sql_func.coalesce(
+                sql_func.sum(Inventory.on_hand_quantity), 0
+            )).filter(Inventory.product_id == product.id).scalar()
+
+            old_qty = Decimal(str(total_on_hand)) - transaction_quantity  # Subtract what we just added
+            old_cost = Decimal(str(product.average_cost or 0))
+            new_qty = transaction_quantity
+            new_cost = cost_per_unit_for_inventory
+
+            total_qty = old_qty + new_qty
+            if total_qty > 0:
+                weighted_avg = (old_qty * old_cost + new_qty * new_cost) / total_qty
+                product.average_cost = float(weighted_avg.quantize(Decimal("0.0001")))
+                logger.debug(
+                    f"Weighted avg for {product.sku}: "
+                    f"({old_qty}×${old_cost} + {new_qty}×${new_cost}) / {total_qty} = ${product.average_cost}"
+                )
+            elif new_qty > 0:
+                # First receipt - use new cost
+                product.average_cost = float(new_cost)
+
+            product.last_cost = float(cost_per_unit_for_inventory)
+            product.last_cost_date = datetime.utcnow()
             product.updated_at = datetime.utcnow()
 
         # ============================================================================
