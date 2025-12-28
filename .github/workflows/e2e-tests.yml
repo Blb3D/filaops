@@ -82,12 +82,12 @@ jobs:
           DB_PASSWORD: postgres
           SECRET_KEY: test-secret-key
         run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
 
       - name: Wait for backend
         run: |
-          timeout 60 bash -c 'until curl -f http://localhost:8001/docs; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:8000/docs; do sleep 2; done'
           
       - name: Install dependencies
         working-directory: frontend
@@ -202,12 +202,12 @@ jobs:
           DB_PASSWORD: postgres
           SECRET_KEY: test-secret-key
         run: |
-          uvicorn app.main:app --host 127.0.0.1 --port 8001 > /tmp/backend.log 2>&1 &
+          uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/backend.log 2>&1 &
           echo $! > /tmp/backend.pid
 
       - name: Wait for backend
         run: |
-          timeout 60 bash -c 'until curl -f http://localhost:8001/docs; do sleep 2; done'
+          timeout 60 bash -c 'until curl -f http://localhost:8000/docs; do sleep 2; done'
           
       - name: Install dependencies
         working-directory: frontend

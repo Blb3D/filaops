@@ -14,7 +14,7 @@ export const E2E_CONFIG = {
   name: 'E2E Test User',
   
   // API URLs
-  baseUrl: (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://127.0.0.1:8001',
+  baseUrl: (typeof process !== 'undefined' ? process.env.VITE_API_URL : undefined) || 'http://127.0.0.1:8000',
   
   // Timeouts
   defaultTimeout: 10000,
