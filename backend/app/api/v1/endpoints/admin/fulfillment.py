@@ -31,6 +31,7 @@ from app.models.product import Product
 from app.models.bom import BOM
 from app.models.printer import Printer
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
+from app.models.traceability import SerialNumber
 # MaterialInventory removed - using unified Inventory table (Phase 1.4)
 from app.services.shipping_service import shipping_service
 from app.api.v1.deps import get_current_staff_user
@@ -1876,6 +1877,29 @@ async def buy_shipping_label(
     order.status = "shipped"
     order.shipped_at = datetime.utcnow()
 
+    # =========================================================================
+    # SERIAL NUMBER TRACEABILITY - Link serials to this shipment
+    # =========================================================================
+    serials_updated = 0
+    serial_numbers_for_order = db.query(SerialNumber).filter(
+        SerialNumber.sales_order_id == sales_order_id,
+        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
+    ).all()
+
+    for serial in serial_numbers_for_order:
+        serial.tracking_number = result.tracking_number
+        serial.shipped_at = datetime.utcnow()
+        serial.status = "shipped"
+        serials_updated += 1
+
+    if serials_updated > 0:
+        from app.logging_config import get_logger
+        logger = get_logger(__name__)
+        logger.info(
+            f"Updated {serials_updated} serial number(s) with tracking {result.tracking_number} "
+            f"for order {order.order_number}"
+        )
+
     db.commit()
 
     return {
@@ -1886,6 +1910,7 @@ async def buy_shipping_label(
         "label_url": result.label_url,
         "shipping_cost": float(result.rate) if result.rate else None,
         "packaging_consumed": packaging_consumed,
+        "serials_updated": serials_updated,
         "message": f"Label created! Tracking: {result.tracking_number}",
     }
 
@@ -1914,17 +1939,31 @@ async def mark_order_shipped(
         order.shipping_cost = Decimal(str(request.shipping_cost))
     order.status = "shipped"
     order.shipped_at = datetime.utcnow()
-    
+
+    # Update serial numbers with tracking info for traceability
+    serials_updated = 0
+    serial_numbers_for_order = db.query(SerialNumber).filter(
+        SerialNumber.sales_order_id == sales_order_id,
+        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
+    ).all()
+
+    for serial in serial_numbers_for_order:
+        serial.tracking_number = request.tracking_number
+        serial.shipped_at = datetime.utcnow()
+        serial.status = "shipped"
+        serials_updated += 1
+
     db.commit()
-    
+
     # TODO: Send email notification if request.notify_customer
-    
+
     return {
         "success": True,
         "order_number": order.order_number,
         "status": order.status,
         "tracking_number": order.tracking_number,
         "carrier": order.carrier,
+        "serials_updated": serials_updated,
         "message": f"Order {order.order_number} marked as shipped!",
     }
 
