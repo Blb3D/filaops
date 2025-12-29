@@ -59,6 +59,10 @@ def create_tables(engine):
         PurchaseOrderLine, Vendor, InventoryLocation
     )
 
+    # Drop existing tables first to avoid schema conflicts with Alembic migrations
+    # This ensures tests use the current model schema, not outdated migration schema
+    drop_tables(engine)
+
     # Create all tables at once - handles foreign keys and self-references properly
     Base.metadata.create_all(bind=engine)
 
