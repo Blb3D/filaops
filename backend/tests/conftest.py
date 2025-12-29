@@ -10,7 +10,7 @@ import pytest
 from decimal import Decimal
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -65,8 +65,19 @@ def create_tables(engine):
 
 def drop_tables(engine):
     """Drop all tables after testing"""
-    # Drop all tables at once - handles dependencies properly
-    Base.metadata.drop_all(bind=engine)
+    if USE_POSTGRES:
+        # PostgreSQL requires CASCADE to drop tables with foreign key dependencies
+        with engine.connect() as conn:
+            # Get all table names from metadata
+            table_names = list(Base.metadata.tables.keys())
+            if table_names:
+                # Drop all tables with CASCADE
+                for table_name in table_names:
+                    conn.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))
+                conn.commit()
+    else:
+        # SQLite handles dependencies properly
+        Base.metadata.drop_all(bind=engine)
 
 
 @pytest.fixture
