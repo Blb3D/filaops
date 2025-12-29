@@ -62,6 +62,8 @@ from app.core.status_config import (
     validate_production_order_transition,
     StatusTransitionError,
 )
+from app.schemas.blocking_issues import ProductionOrderBlockingIssues
+from app.services.blocking_issues import get_production_order_blocking_issues
 
 logger = logging.getLogger(__name__)
 
@@ -570,9 +572,9 @@ async def get_status_transitions(
 
     # Return all statuses with their transitions
     transitions = {}
-    for status in ProductionOrderStatus:
-        allowed = get_allowed_production_order_transitions(status.value)
-        transitions[status.value] = {
+    for po_status in ProductionOrderStatus:
+        allowed = get_allowed_production_order_transitions(po_status.value)
+        transitions[po_status.value] = {
             "allowed_transitions": allowed,
             "is_terminal": len(allowed) == 0,
         }
@@ -760,9 +762,6 @@ async def check_material_availability(
 # =============================================================================
 # ENDPOINT: Blocking Issues Analysis (API-202)
 # =============================================================================
-
-from app.schemas.blocking_issues import ProductionOrderBlockingIssues
-from app.services.blocking_issues import get_production_order_blocking_issues
 
 
 @router.get("/{order_id}/blocking-issues", response_model=ProductionOrderBlockingIssues)

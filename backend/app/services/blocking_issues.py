@@ -22,8 +22,11 @@ from app.models.inventory import Inventory
 from app.models.user import User
 from app.schemas.blocking_issues import (
     SalesOrderBlockingIssues, StatusSummary, LineIssues,
-    BlockingIssue, ResolutionAction, IssueSeverity, IssueType
+    BlockingIssue, ResolutionAction, IssueSeverity, IssueType,
+    ProductionOrderBlockingIssues, POStatusSummary, MaterialIssue,
+    IncomingSupply, LinkedSalesOrderInfo
 )
+from app.models.vendor import Vendor
 
 
 def get_finished_goods_available(db: Session, product_id: int) -> Decimal:
@@ -444,18 +447,12 @@ def get_sales_order_blocking_issues(
 def get_production_order_blocking_issues(
     db: Session,
     production_order_id: int
-) -> Optional["ProductionOrderBlockingIssues"]:
+) -> Optional[ProductionOrderBlockingIssues]:
     """
     Get complete blocking issues analysis for a production order.
 
     Returns None if production order doesn't exist.
     """
-    from app.schemas.blocking_issues import (
-        ProductionOrderBlockingIssues, POStatusSummary, MaterialIssue,
-        IncomingSupply, LinkedSalesOrderInfo, OtherIssue
-    )
-    from app.models.vendor import Vendor
-
     # Get the production order
     wo = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
     if not wo:
@@ -592,10 +589,8 @@ def get_production_order_blocking_issues(
     )
 
 
-def generate_po_resolution_actions(material_issues: List["MaterialIssue"]) -> List[ResolutionAction]:
+def generate_po_resolution_actions(material_issues: List[MaterialIssue]) -> List[ResolutionAction]:
     """Generate prioritized resolution actions for production blocking issues."""
-    from app.schemas.blocking_issues import MaterialIssue
-
     actions: List[ResolutionAction] = []
     priority = 1
     seen_refs = set()  # Avoid duplicate actions

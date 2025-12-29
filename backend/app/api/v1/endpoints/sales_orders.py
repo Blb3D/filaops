@@ -56,6 +56,10 @@ from app.core.status_config import (
     PaymentStatus,
     get_allowed_sales_order_transitions,
 )
+from app.schemas.blocking_issues import SalesOrderBlockingIssues
+from app.services.blocking_issues import get_sales_order_blocking_issues
+from app.schemas.fulfillment_status import FulfillmentStatus
+from app.services.fulfillment_status import get_fulfillment_status
 
 logger = get_logger(__name__)
 
@@ -1057,11 +1061,6 @@ async def get_required_orders_for_sales_order(
 # ============================================================================
 # ENDPOINT: Get Blocking Issues Analysis (API-201)
 # ============================================================================
-
-from app.schemas.blocking_issues import SalesOrderBlockingIssues
-from app.services.blocking_issues import get_sales_order_blocking_issues
-from app.schemas.fulfillment_status import FulfillmentStatus
-from app.services.fulfillment_status import get_fulfillment_status
 
 
 @router.get("/{order_id}/blocking-issues", response_model=SalesOrderBlockingIssues)
