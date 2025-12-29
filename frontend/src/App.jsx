@@ -23,6 +23,7 @@ import AdminBOM from "./pages/admin/AdminBOM";
 import AdminItems from "./pages/admin/AdminItems";
 import AdminPurchasing from "./pages/admin/AdminPurchasing";
 import AdminProduction from "./pages/admin/AdminProduction";
+import ProductionOrderDetail from "./pages/admin/ProductionOrderDetail";
 import AdminShipping from "./pages/admin/AdminShipping";
 import AdminManufacturing from "./pages/admin/AdminManufacturing";
 import AdminPasswordResetApproval from "./pages/admin/AdminPasswordResetApproval";
@@ -110,6 +111,7 @@ export default function App() {
             <Route path="purchasing" element={<AdminPurchasing />} />
             <Route path="manufacturing" element={<AdminManufacturing />} />
             <Route path="production" element={<AdminProduction />} />
+            <Route path="production/:orderId" element={<ProductionOrderDetail />} />
             <Route path="shipping" element={<AdminShipping />} />
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="materials/import" element={<AdminMaterialImport />} />
