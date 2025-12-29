@@ -325,3 +325,188 @@ class TestBulkFulfillmentStatus:
         assert list_summary["fulfillment_percent"] == detail_summary["fulfillment_percent"]
         assert list_summary["can_ship_partial"] == detail_summary["can_ship_partial"]
         assert list_summary["can_ship_complete"] == detail_summary["can_ship_complete"]
+
+
+class TestEnhancedSOListFiltering:
+    """Tests for fulfillment state filtering and sorting (API-303)"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, db_session):
+        """Reset sequences before each test."""
+        reset_sequences()
+
+    def test_filter_by_ready_to_ship(self, client, db_session, admin_headers):
+        """Filter should return only ready_to_ship orders."""
+        # Arrange
+        user = create_test_user(db_session, account_type="admin")
+        product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
+
+        # Create ready_to_ship order (fully allocated)
+        ready_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        ready_order.lines[0].allocated_quantity = Decimal("10")
+
+        # Create blocked order (no allocation)
+        product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
+        blocked_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        # No allocation - stays blocked
+
+        db_session.commit()
+
+        # Act
+        response = client.get(
+            "/api/v1/sales-orders/?include_fulfillment=true&fulfillment_state=ready_to_ship",
+            headers=admin_headers
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        # Should only contain ready_to_ship orders
+        for order in data:
+            assert order["fulfillment"]["state"] == "ready_to_ship"
+        # Our ready order should be in results
+        order_ids = [o["id"] for o in data]
+        assert ready_order.id in order_ids
+        assert blocked_order.id not in order_ids
+
+    def test_filter_by_multiple_states(self, client, db_session, admin_headers):
+        """Filter by comma-separated states should return matching orders."""
+        # Arrange
+        user = create_test_user(db_session, account_type="admin")
+        product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
+
+        # Create ready_to_ship order
+        ready_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        ready_order.lines[0].allocated_quantity = Decimal("10")
+
+        # Create blocked order
+        product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
+        blocked_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        # No allocation - stays blocked
+
+        # Create shipped order
+        product3 = create_test_product(db_session, sku="FIL-TEST-003", name="Test Filament 3")
+        shipped_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product3, "quantity": 10, "unit_price": Decimal("25.00")}],
+            status="shipped"
+        )
+        shipped_order.lines[0].shipped_quantity = Decimal("10")
+
+        db_session.commit()
+
+        # Act - filter by ready_to_ship and blocked
+        response = client.get(
+            "/api/v1/sales-orders/?include_fulfillment=true&fulfillment_state=ready_to_ship,blocked",
+            headers=admin_headers
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        order_ids = [o["id"] for o in data]
+        # Ready and blocked should be in results
+        assert ready_order.id in order_ids
+        assert blocked_order.id in order_ids
+        # Shipped should NOT be in results
+        assert shipped_order.id not in order_ids
+
+    def test_sort_by_fulfillment_priority_asc(self, client, db_session, admin_headers):
+        """Sort by fulfillment_priority should order by actionability."""
+        # Arrange
+        user = create_test_user(db_session, account_type="admin")
+
+        # Create blocked order first
+        product1 = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament 1")
+        blocked_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product1, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        # No allocation - blocked
+
+        # Create ready_to_ship order second
+        product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
+        ready_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        ready_order.lines[0].allocated_quantity = Decimal("10")
+
+        # Create shipped order last
+        product3 = create_test_product(db_session, sku="FIL-TEST-003", name="Test Filament 3")
+        shipped_order = create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product3, "quantity": 10, "unit_price": Decimal("25.00")}],
+            status="shipped"
+        )
+        shipped_order.lines[0].shipped_quantity = Decimal("10")
+
+        db_session.commit()
+
+        # Act - sort by fulfillment_priority ascending (most actionable first)
+        response = client.get(
+            "/api/v1/sales-orders/?include_fulfillment=true&sort_by=fulfillment_priority&sort_order=asc",
+            headers=admin_headers
+        )
+
+        # Assert
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 3
+
+        # Find our orders in results
+        order_positions = {}
+        for idx, order in enumerate(data):
+            if order["id"] == ready_order.id:
+                order_positions["ready"] = idx
+            elif order["id"] == blocked_order.id:
+                order_positions["blocked"] = idx
+            elif order["id"] == shipped_order.id:
+                order_positions["shipped"] = idx
+
+        # Priority order: ready_to_ship(1) < blocked(3) < shipped(4)
+        assert order_positions["ready"] < order_positions["blocked"]
+        assert order_positions["blocked"] < order_positions["shipped"]
+
+    def test_invalid_state_returns_400(self, client, db_session, admin_headers):
+        """Invalid fulfillment state should return 400 error."""
+        # Arrange - create at least one order so the endpoint doesn't fail for other reasons
+        user = create_test_user(db_session, account_type="admin")
+        product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
+        create_test_sales_order(
+            db_session,
+            user=user,
+            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+        )
+        db_session.commit()
+
+        # Act
+        response = client.get(
+            "/api/v1/sales-orders/?fulfillment_state=invalid_state",
+            headers=admin_headers
+        )
+
+        # Assert
+        assert response.status_code == 400
+        data = response.json()
+        assert "invalid_state" in data["detail"].lower()

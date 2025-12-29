@@ -757,6 +757,19 @@ async def convert_quote_to_sales_order(
 # ENDPOINT: Get User's Sales Orders
 # ============================================================================
 
+# Valid fulfillment states for filtering
+VALID_FULFILLMENT_STATES = {"ready_to_ship", "partially_ready", "blocked", "shipped", "cancelled"}
+
+# Priority order for fulfillment_priority sorting (lower = more actionable)
+FULFILLMENT_PRIORITY = {
+    "ready_to_ship": 1,
+    "partially_ready": 2,
+    "blocked": 3,
+    "shipped": 4,
+    "cancelled": 5,
+}
+
+
 @router.get("/", response_model=List[SalesOrderListResponse])
 async def get_user_sales_orders(
     skip: int = 0,
@@ -764,6 +777,15 @@ async def get_user_sales_orders(
     status_filter: Optional[str] = None,
     status: Optional[List[str]] = Query(None),
     include_fulfillment: bool = Query(False, description="Include fulfillment status summary"),
+    fulfillment_state: Optional[str] = Query(
+        None,
+        description="Filter by fulfillment state(s), comma-separated (ready_to_ship,partially_ready,blocked,shipped,cancelled)"
+    ),
+    sort_by: str = Query(
+        "order_date",
+        description="Sort field: order_date, fulfillment_priority, fulfillment_percent, customer_name"
+    ),
+    sort_order: str = Query("desc", description="Sort order: asc or desc"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -776,6 +798,9 @@ async def get_user_sales_orders(
     - status_filter: Filter by single status (deprecated, use status instead)
     - status: Filter by status(es) - can be repeated for multiple values
     - include_fulfillment: Include fulfillment status summary for each order (default: false)
+    - fulfillment_state: Filter by fulfillment state(s), comma-separated
+    - sort_by: Sort field (order_date, fulfillment_priority, fulfillment_percent, customer_name)
+    - sort_order: Sort order (asc or desc)
 
     Returns:
         List of sales orders ordered by creation date (newest first)
@@ -784,6 +809,32 @@ async def get_user_sales_orders(
     """
     if limit > 100:
         limit = 100
+
+    # Validate sort_order
+    if sort_order not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=400,
+            detail="sort_order must be 'asc' or 'desc'"
+        )
+
+    # Validate sort_by
+    valid_sort_fields = {"order_date", "fulfillment_priority", "fulfillment_percent", "customer_name"}
+    if sort_by not in valid_sort_fields:
+        raise HTTPException(
+            status_code=400,
+            detail=f"sort_by must be one of: {', '.join(valid_sort_fields)}"
+        )
+
+    # Parse and validate fulfillment_state filter
+    requested_states = None
+    if fulfillment_state:
+        requested_states = set(s.strip().lower() for s in fulfillment_state.split(","))
+        invalid_states = requested_states - VALID_FULFILLMENT_STATES
+        if invalid_states:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid fulfillment_state value(s): {', '.join(invalid_states)}. Valid: {', '.join(VALID_FULFILLMENT_STATES)}"
+            )
 
     # OPTIMIZED: Use joinedload to eager load user relationship for better performance
     query = db.query(SalesOrder).options(
@@ -801,26 +852,75 @@ async def get_user_sales_orders(
     elif status_filter:
         query = query.filter(SalesOrder.status == status_filter)
 
-    orders = (
-        query
-        .order_by(desc(SalesOrder.created_at))
-        .offset(skip)
-        .limit(limit)
-        .all()
+    # Determine if we need fulfillment data for filtering or sorting
+    needs_fulfillment = (
+        include_fulfillment or
+        fulfillment_state is not None or
+        sort_by in ("fulfillment_priority", "fulfillment_percent")
     )
 
-    # If include_fulfillment is requested, compute fulfillment status for each order
-    if include_fulfillment:
-        result = []
-        for order in orders:
-            # Convert to dict for Pydantic model
+    if needs_fulfillment:
+        # Fetch all orders (we'll paginate after filtering/sorting)
+        all_orders = query.all()
+
+        # Compute fulfillment for each order
+        orders_with_fulfillment = []
+        for order in all_orders:
             order_dict = SalesOrderListResponse.model_validate(order).model_dump()
-            # Get fulfillment status
-            fulfillment_status = get_fulfillment_status(db, order.id)
-            if fulfillment_status:
-                order_dict["fulfillment"] = fulfillment_status.summary
-            result.append(SalesOrderListResponse(**order_dict))
-        return result
+            fulfillment_data = get_fulfillment_status(db, order.id)
+            if fulfillment_data:
+                order_dict["fulfillment"] = fulfillment_data.summary
+            orders_with_fulfillment.append(order_dict)
+
+        # Filter by fulfillment_state if requested
+        if requested_states:
+            orders_with_fulfillment = [
+                o for o in orders_with_fulfillment
+                if o.get("fulfillment") and o["fulfillment"].state.value in requested_states
+            ]
+
+        # Sort
+        reverse = sort_order == "desc"
+        if sort_by == "order_date":
+            orders_with_fulfillment.sort(key=lambda o: o.get("created_at") or "", reverse=reverse)
+        elif sort_by == "fulfillment_priority":
+            orders_with_fulfillment.sort(
+                key=lambda o: FULFILLMENT_PRIORITY.get(
+                    o["fulfillment"].state.value if o.get("fulfillment") else "cancelled", 5
+                ),
+                reverse=reverse
+            )
+        elif sort_by == "fulfillment_percent":
+            orders_with_fulfillment.sort(
+                key=lambda o: o["fulfillment"].fulfillment_percent if o.get("fulfillment") else 0,
+                reverse=reverse
+            )
+        elif sort_by == "customer_name":
+            orders_with_fulfillment.sort(
+                key=lambda o: (o.get("customer_name") or "").lower(),
+                reverse=reverse
+            )
+
+        # Paginate
+        paginated = orders_with_fulfillment[skip:skip + limit]
+
+        # Convert back to response models
+        return [SalesOrderListResponse(**o) for o in paginated]
+
+    # No fulfillment needed - use database sorting and pagination
+    if sort_by == "order_date":
+        order_column = SalesOrder.created_at
+    elif sort_by == "customer_name":
+        order_column = SalesOrder.customer_name
+    else:
+        order_column = SalesOrder.created_at
+
+    if sort_order == "desc":
+        query = query.order_by(desc(order_column))
+    else:
+        query = query.order_by(order_column)
+
+    orders = query.offset(skip).limit(limit).all()
 
     return orders
 
