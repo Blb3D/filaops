@@ -1,6 +1,6 @@
-﻿# Week 5: Operation-Level Production Tracking
+# Week 5: Operation-Level Production Tracking
 
-## Status: IN PROGRESS
+## Status: SPECS COMPLETE ✅
 
 ---
 
@@ -22,75 +22,104 @@ Transform FilaOps from single-step production orders to true multi-operation rou
 - 2-hour hardcoded duration ignores BOM/routing times
 
 **Real World Workflow:**
-`
+```
 PO: Make Gadget Pro (50 units)
 ├── Op 10: Print       → Printer-01, 4 hrs, consumes PLA
 ├── Op 20: Clean       → Finishing, 30 min
 ├── Op 30: Assemble    → Assembly, 1 hr, consumes hardware kit
 ├── Op 40: QC Inspect  → QC Station, 15 min
 └── Op 50: Pack/Ship   → Shipping, 10 min, consumes boxes
-`
+```
 
 **Key Insight:** Shipping boxes not received yet? **Start printing anyway** - they'll arrive by the time we get to Op 50.
 
 ---
 
-## Existing Data Model (Already Built!)
+## Week 5 Deliverables
 
-### Routing (Template) - `backend/app/models/manufacturing.py`
-| Model | Purpose |
-|-------|---------|
-| `Routing` | Linked to Product, defines HOW to make it |
-| `RoutingOperation` | Sequence, work_center, run_time_minutes, predecessor |
+### Backend (API-401 → API-404)
 
-### Production Order (Execution) - `backend/app/models/production_order.py`
-| Model | Purpose |
-|-------|---------|
-| `ProductionOrder` | The work order |
-| `ProductionOrderOperation` | Copied from routing, has status, times, resource assignment |
+| Ticket | File | Status | Description |
+|--------|------|--------|-------------|
+| **API-401** | `01-API-401-operation-status-transitions.md` | ✅ DONE | Start/complete/skip operations |
+| **API-402** | `02-API-402-operation-blocking-check.md` | 📝 Ready | Per-operation material blocking |
+| **API-403** | `03-API-403-double-booking-validation.md` | 📝 Ready | Resource scheduling conflicts |
+| **API-404** | `04-API-404-copy-routing-operations.md` | 📝 Ready | Auto-create ops from routing |
 
-### BOM Material Consumption - `backend/app/models/bom.py`
-| Field | Current Values | Extend To |
-|-------|---------------|-----------|
-| `BOMLine.consume_stage` | 'production', 'shipping' | Operation codes: 'PRINT', 'ASSEMBLE', 'PACK' |
+### Frontend (UI-401 → UI-404)
+
+| Ticket | File | Status | Description |
+|--------|------|--------|-------------|
+| **UI-401** | `05-UI-401-operations-list.md` | 📝 Ready | Operations list in PO detail |
+| **UI-402** | `06-UI-402-operation-scheduler.md` | 📝 Ready | Scheduler modal with conflicts |
+| **UI-403** | `07-UI-403-operation-actions.md` | 📝 Ready | Start/Complete/Skip buttons |
+| **UI-404** | `08-UI-404-operations-timeline.md` | 📝 Ready | Visual timeline/progress |
 
 ---
 
-## Week 5 Deliverables
+## Implementation Order
 
-| Ticket | Type | Description | Agent |
-|--------|------|-------------|-------|
-| API-401 | Backend | Operation status transitions (start/complete/skip) | Backend |
-| API-402 | Backend | Blocking check per operation (not whole PO) | Backend |
-| API-403 | Backend | Double-booking validation on schedule | Backend |
-| API-404 | Backend | Copy routing → PO operations on release | Backend |
-| UI-401 | Frontend | PO detail shows operation sequence | Frontend |
-| UI-402 | Frontend | Scheduler shows operations, not POs | Frontend |
-| UI-403 | Frontend | Progress bar (elapsed vs estimated) | Frontend |
-| UI-404 | Frontend | "Ready to Start" queue per work center | Frontend |
-| E2E-401 | Test | Operation flow E2E tests | Test |
+### Phase 1: Backend Foundation
+```
+API-401 ✅ → API-402 → API-403 → API-404
+```
+
+### Phase 2: Frontend Components
+```
+UI-401 → UI-402 → UI-403 → UI-404
+```
+
+### Phase 3: Integration Testing
+```
+E2E-401 (manual verification or Playwright)
+```
+
+---
+
+## Key Files Created/Modified
+
+### Backend
+| Path | Description |
+|------|-------------|
+| `backend/app/services/operation_status.py` | Status transition logic |
+| `backend/app/services/operation_blocking.py` | Material availability check |
+| `backend/app/services/resource_scheduling.py` | Conflict detection |
+| `backend/app/services/operation_generation.py` | Routing → PO ops copy |
+| `backend/app/api/v1/endpoints/operation_status.py` | API endpoints |
+| `backend/tests/api/test_operation_*.py` | Test suites |
+
+### Frontend
+| Path | Description |
+|------|-------------|
+| `frontend/src/components/production/OperationsPanel.jsx` | Main operations list |
+| `frontend/src/components/production/OperationRow.jsx` | Single operation row |
+| `frontend/src/components/production/OperationActions.jsx` | Action buttons |
+| `frontend/src/components/production/OperationSchedulerModal.jsx` | Scheduling modal |
+| `frontend/src/components/production/OperationsTimeline.jsx` | Visual timeline |
+| `frontend/src/hooks/useResources.js` | Resource data hook |
 
 ---
 
 ## Success Criteria
 
-1. Can define routing with 5 operations for a product
-2. Releasing PO creates 5 operation records  
-3. Starting Op 1 sets PO to in_progress
-4. Completing Op 1 auto-advances current to Op 2
-5. Materials for Op 3 don't block starting Op 1
-6. Cannot schedule two operations on same resource at same time
-7. Progress bar shows "2 hrs into 4 hr print"
-8. PO only complete when final operation complete
+1. ✅ Operations have status transitions (pending → running → complete)
+2. ⏳ Can define routing with 5 operations for a product
+3. ⏳ Releasing PO creates 5 operation records
+4. ⏳ Starting Op 1 sets PO to in_progress
+5. ⏳ Completing Op 1 auto-advances current to Op 2
+6. ⏳ Materials for Op 3 don't block starting Op 1
+7. ⏳ Cannot schedule two operations on same resource at same time
+8. ⏳ Progress bar shows operation status
+9. ⏳ PO only complete when final operation complete
 
 ---
 
 ## Operation Status Flow
-`
+```
 pending → queued → running → complete
                       ↓
-                   skipped (optional bypass)
-`
+                   skipped (with reason)
+```
 
 ## PO Status Derived from Operations
 
@@ -102,10 +131,29 @@ pending → queued → running → complete
 
 ---
 
+## Technical Notes
+
+### Consume Stage Mapping (API-402)
+| consume_stage | Operation Codes | Materials |
+|---------------|-----------------|-----------|
+| `production` | PRINT, EXTRUDE | Filament, raw materials |
+| `assembly` | ASSEMBLE, BUILD | Hardware, subassemblies |
+| `shipping` | PACK, SHIP | Boxes, labels, packaging |
+
+### Conflict Detection (API-403)
+```python
+# Two operations conflict if:
+# - Same resource_id
+# - Time ranges overlap: (start1 < end2) AND (start2 < end1)
+# - Neither is in terminal state (complete, skipped, cancelled)
+```
+
+---
+
 ## Out of Scope (Future)
 
 - Parallel operations (print two parts simultaneously)
-- Operation-level labor time tracking  
+- Operation-level labor time tracking
 - Automated Bambu status sync to operation progress
 - Rework routing (failed QC → back to earlier op)
 - Gantt drag-drop rescheduling
@@ -114,7 +162,6 @@ pending → queued → running → complete
 
 ## Dependencies
 
-- Routing data exists for test products
-- Work centers configured with resources
-- UOM table seeded (completed Week 4)
-
+- ✅ Routing data exists for test products
+- ✅ Work centers configured with resources
+- ✅ UOM table seeded (completed Week 4)

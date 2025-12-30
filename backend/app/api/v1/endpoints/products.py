@@ -10,6 +10,12 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.product import Product
 from app.logging_config import get_logger
+from app.api.v1.deps import get_current_user
+from app.services.operation_generation import get_product_routing_details
+from app.schemas.routing_operations import (
+    ProductRoutingResponse,
+    RoutingOperationInfo,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -252,3 +258,44 @@ async def update_product(
         db.rollback()
         logger.error(f"Failed to update product: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Product Routing Endpoint (API-404)
+# =============================================================================
+
+
+@router.get(
+    "/{product_id}/routing",
+    response_model=ProductRoutingResponse,
+    summary="Get routing for a product"
+)
+def get_product_routing(
+    product_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """Get routing details for a product."""
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    routing_info = get_product_routing_details(db, product_id)
+
+    if not routing_info:
+        return ProductRoutingResponse(
+            product_id=product_id,
+            routing_id=None,
+            operations=[]
+        )
+
+    return ProductRoutingResponse(
+        product_id=product_id,
+        routing_id=routing_info['routing_id'],
+        routing_code=routing_info['routing_code'],
+        routing_name=routing_info['routing_name'],
+        is_active=routing_info['is_active'],
+        operations=[
+            RoutingOperationInfo(**op) for op in routing_info['operations']
+        ]
+    )

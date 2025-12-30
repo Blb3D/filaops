@@ -33,6 +33,7 @@ from app.models.work_center import WorkCenter
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
 from app.services.inventory_service import process_production_completion, reserve_production_materials, release_production_reservations
 from app.services.uom_service import UOMConversionError
+from app.services.operation_generation import get_active_routing, generate_operations_from_routing
 from app.schemas.production_order import (
     ProductionOrderCreate,
     ProductionOrderUpdate,
@@ -1015,13 +1016,19 @@ async def schedule_production_order(
 # Status Transitions
 # ============================================================================
 
-@router.post("/{order_id}/release", response_model=ProductionOrderResponse)
+@router.post("/{order_id}/release")
 async def release_production_order(
     order_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> ProductionOrderResponse:
-    """Release a draft order for production"""
+):
+    """
+    Release a draft order for production.
+
+    - Changes status from draft to released
+    - Generates operations from product's active routing (API-404)
+    - If no routing, releases without operations
+    """
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Production order not found")
@@ -1032,18 +1039,41 @@ async def release_production_order(
     except StatusTransitionError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Generate operations from routing if none exist (API-404)
+    existing_ops = db.query(ProductionOrderOperation).filter(
+        ProductionOrderOperation.production_order_id == order_id
+    ).count()
+
+    operations_created = 0
+    if existing_ops == 0:
+        routing = get_active_routing(db, order.product_id)
+        if routing:
+            created_ops = generate_operations_from_routing(db, order, routing)
+            operations_created = len(created_ops)
+
     order.status = "released"  # type: ignore[assignment]
     order.released_at = datetime.utcnow()  # type: ignore[assignment]
     order.updated_at = datetime.utcnow()  # type: ignore[assignment]
 
-    first_op = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == order_id).order_by(ProductionOrderOperation.sequence).first()
+    # Queue the first operation
+    first_op = db.query(ProductionOrderOperation).filter(
+        ProductionOrderOperation.production_order_id == order_id
+    ).order_by(ProductionOrderOperation.sequence).first()
     if first_op:
         first_op.status = "queued"  # type: ignore[assignment]
 
     db.commit()
     db.refresh(order)
 
-    return build_production_order_response(order, db)
+    # Return response with additional fields for API-404
+    return {
+        "success": True,
+        "production_order_id": order.id,
+        "status": order.status,
+        "operations_created": operations_created,
+        "message": f"Production order released with {operations_created} operations",
+        **build_production_order_response(order, db).model_dump()
+    }
 
 
 @router.post("/{order_id}/start", response_model=ProductionOrderResponse)

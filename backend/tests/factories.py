@@ -145,7 +145,8 @@ def create_test_product(
     db: Session,
     sku: Optional[str] = None,
     name: Optional[str] = None,
-    item_type: str = "finished_good",
+    item_type: str = None,
+    product_type: str = None,  # Alias for item_type
     procurement_type: str = "make",
     **overrides
 ) -> "Product":
@@ -157,6 +158,7 @@ def create_test_product(
         sku: Product SKU (auto-generated if not provided)
         name: Product name (auto-generated if not provided)
         item_type: 'finished_good', 'component', 'supply', 'service'
+        product_type: Alias for item_type (material -> supply)
         procurement_type: 'make', 'buy', 'make_or_buy'
         **overrides: Additional field overrides
 
@@ -167,12 +169,25 @@ def create_test_product(
 
     seq = _next("product")
 
+    # Handle product_type as alias for item_type
+    # Map common aliases: material -> supply
+    resolved_item_type = item_type
+    if resolved_item_type is None:
+        if product_type == "material":
+            resolved_item_type = "supply"
+        elif product_type == "service":
+            resolved_item_type = "service"
+        elif product_type:
+            resolved_item_type = product_type
+        else:
+            resolved_item_type = "finished_good"
+
     product = Product(
         sku=sku or f"PROD-{seq:04d}",
         name=name or f"Test Product {seq}",
         description=overrides.pop("description", f"Test product {seq}"),
         unit=overrides.pop("unit", "EA"),
-        item_type=item_type,
+        item_type=resolved_item_type,
         procurement_type=procurement_type,
         standard_cost=overrides.pop("standard_cost", Decimal("10.00")),
         selling_price=overrides.pop("selling_price", Decimal("25.00")),
@@ -284,6 +299,59 @@ def create_test_bom(
         db.flush()
 
     return bom
+
+
+def create_test_bom_line(
+    db: Session,
+    bom: "BOM",
+    component: "Product",
+    quantity: Decimal = Decimal("1"),
+    unit: str = "EA",
+    sequence: int = None,
+    consume_stage: str = "production",
+    is_cost_only: bool = False,
+    scrap_factor: Decimal = Decimal("0"),
+    **overrides
+) -> "BOMLine":
+    """
+    Create a test BOM line.
+
+    Args:
+        db: Database session
+        bom: BOM this line belongs to
+        component: Component product
+        quantity: Quantity per unit
+        unit: Unit of measure
+        sequence: Line sequence (auto-generated if not provided)
+        consume_stage: When material is consumed (production, assembly, shipping, any)
+        is_cost_only: If True, line is for costing only, not inventory
+        scrap_factor: Scrap percentage
+        **overrides: Additional field overrides
+
+    Returns:
+        Created BOMLine instance
+    """
+    from app.models.bom import BOMLine
+
+    if sequence is None:
+        # Auto-increment sequence
+        existing = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).count()
+        sequence = (existing + 1) * 10
+
+    line = BOMLine(
+        bom_id=bom.id,
+        component_id=component.id,
+        sequence=sequence,
+        quantity=quantity,
+        unit=unit,
+        consume_stage=consume_stage,
+        is_cost_only=is_cost_only,
+        scrap_factor=scrap_factor,
+        **overrides
+    )
+    db.add(line)
+    db.flush()
+    return line
 
 
 # =============================================================================
@@ -535,6 +603,26 @@ def get_or_create_default_location(db: Session) -> "InventoryLocation":
     return location
 
 
+# Alias for create_test_location
+def create_test_inventory_location(
+    db: Session,
+    code: Optional[str] = None,
+    name: str = "Test Location",
+    location_type: str = "warehouse",
+    active: bool = True,
+    **overrides
+) -> "InventoryLocation":
+    """Alias for create_test_location with different parameter names."""
+    return create_test_location(
+        db,
+        name=name,
+        code=code,
+        type=location_type,
+        active=active,
+        **overrides
+    )
+
+
 # =============================================================================
 # INVENTORY FACTORY
 # =============================================================================
@@ -542,8 +630,10 @@ def get_or_create_default_location(db: Session) -> "InventoryLocation":
 def create_test_inventory(
     db: Session,
     product: "Product",
-    quantity: Decimal = Decimal("100"),
+    quantity: Decimal = None,
     location: Optional["InventoryLocation"] = None,
+    on_hand: Decimal = None,
+    allocated: Decimal = None,
     **overrides
 ) -> "Inventory":
     """
@@ -552,8 +642,10 @@ def create_test_inventory(
     Args:
         db: Database session
         product: Product to add inventory for
-        quantity: Quantity on hand
+        quantity: Quantity on hand (legacy, use on_hand instead)
         location: Inventory location (default location created if not provided)
+        on_hand: On hand quantity (alternative to quantity)
+        allocated: Allocated quantity
         **overrides: Additional field overrides
 
     Returns:
@@ -565,6 +657,10 @@ def create_test_inventory(
     if location is None:
         location = get_or_create_default_location(db)
 
+    # Handle on_hand/quantity parameter (on_hand takes precedence)
+    on_hand_qty = on_hand if on_hand is not None else (quantity if quantity is not None else Decimal("100"))
+    allocated_qty = allocated if allocated is not None else overrides.pop("allocated_quantity", Decimal("0"))
+
     # Check if inventory record already exists for this product/location
     inv = db.query(Inventory).filter_by(
         product_id=product.id,
@@ -572,15 +668,14 @@ def create_test_inventory(
     ).first()
 
     if inv:
-        inv.on_hand_quantity = quantity
-        # allocated_quantity stays as is, available_quantity is computed
+        inv.on_hand_quantity = on_hand_qty
+        inv.allocated_quantity = allocated_qty
     else:
         inv = Inventory(
             product_id=product.id,
             location_id=location.id,
-            on_hand_quantity=quantity,
-            allocated_quantity=overrides.pop("allocated_quantity", Decimal("0")),
-            # available_quantity is a computed column, don't set it
+            on_hand_quantity=on_hand_qty,
+            allocated_quantity=allocated_qty,
             **overrides
         )
         db.add(inv)
@@ -732,7 +827,9 @@ def create_test_po_operation(
     planned_run_minutes: int = 60,
     resource: Optional["Machine"] = None,
     actual_start: Optional[datetime] = None,
-    actual_end: Optional[datetime] = None
+    actual_end: Optional[datetime] = None,
+    scheduled_start: Optional[datetime] = None,
+    scheduled_end: Optional[datetime] = None
 ) -> "ProductionOrderOperation":
     """
     Create a test production order operation.
@@ -749,6 +846,8 @@ def create_test_po_operation(
         resource: Specific resource/machine assigned
         actual_start: Actual start time
         actual_end: Actual end time
+        scheduled_start: Scheduled start time
+        scheduled_end: Scheduled end time
 
     Returns:
         Created ProductionOrderOperation instance
@@ -766,8 +865,96 @@ def create_test_po_operation(
         planned_setup_minutes=Decimal("0"),
         planned_run_minutes=Decimal(str(planned_run_minutes)),
         actual_start=actual_start,
-        actual_end=actual_end
+        actual_end=actual_end,
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end
     )
     db.add(op)
     db.flush()
     return op
+
+
+# =============================================================================
+# ROUTING FACTORY
+# =============================================================================
+
+def create_test_routing(
+    db: Session,
+    product: "Product",
+    code: Optional[str] = None,
+    name: str = "Test Routing",
+    is_active: bool = True
+) -> "Routing":
+    """
+    Create a test routing.
+
+    Args:
+        db: Database session
+        product: Product this routing is for
+        code: Routing code (auto-generated if not provided)
+        name: Routing name
+        is_active: Whether routing is active
+
+    Returns:
+        Created Routing instance
+    """
+    from app.models.manufacturing import Routing
+
+    if code is None:
+        code = f"RTG-{datetime.now().strftime('%H%M%S%f')}"
+
+    routing = Routing(
+        product_id=product.id,
+        code=code,
+        name=name,
+        is_active=is_active
+    )
+    db.add(routing)
+    db.flush()
+    return routing
+
+
+# =============================================================================
+# ROUTING OPERATION FACTORY
+# =============================================================================
+
+def create_test_routing_operation(
+    db: Session,
+    routing: "Routing",
+    work_center: "WorkCenter",
+    sequence: int = 10,
+    operation_code: str = "PRINT",
+    operation_name: str = "Test Operation",
+    setup_time_minutes: float = 5,
+    run_time_minutes: float = 30
+) -> "RoutingOperation":
+    """
+    Create a test routing operation.
+
+    Args:
+        db: Database session
+        routing: Parent routing
+        work_center: Work center for this operation
+        sequence: Operation sequence number
+        operation_code: Short code for operation
+        operation_name: Display name for operation
+        setup_time_minutes: Setup time in minutes
+        run_time_minutes: Run time per unit in minutes
+
+    Returns:
+        Created RoutingOperation instance
+    """
+    from app.models.manufacturing import RoutingOperation
+
+    routing_op = RoutingOperation(
+        routing_id=routing.id,
+        work_center_id=work_center.id,
+        sequence=sequence,
+        operation_code=operation_code,
+        operation_name=operation_name,
+        setup_time_minutes=Decimal(str(setup_time_minutes)),
+        run_time_minutes=Decimal(str(run_time_minutes))
+    )
+    db.add(routing_op)
+    db.flush()
+    return routing_op

@@ -15,6 +15,10 @@ from app.schemas.operation_status import (
     ProductionOrderSummary,
     NextOperationInfo,
 )
+from app.schemas.operation_blocking import (
+    CanStartResponse,
+    OperationBlockingResponse,
+)
 from app.services.operation_status import (
     OperationError,
     start_operation,
@@ -23,7 +27,27 @@ from app.services.operation_status import (
     list_operations,
     get_next_operation,
 )
-from app.models.production_order import ProductionOrder
+from app.services.operation_blocking import (
+    OperationBlockingError,
+    can_operation_start,
+    check_operation_blocking,
+)
+from app.services.resource_scheduling import (
+    schedule_operation as schedule_operation_service,
+)
+from app.services.operation_generation import (
+    generate_operations_manual,
+)
+from app.schemas.resource_scheduling import (
+    ScheduleOperationRequest,
+    ScheduleOperationResponse,
+)
+from app.schemas.routing_operations import (
+    GenerateOperationsRequest,
+    GenerateOperationsResponse,
+)
+from app.models.production_order import ProductionOrder, ProductionOrderOperation
+from app.models.work_center import Machine
 
 
 router = APIRouter()
@@ -236,3 +260,159 @@ def skip_operation_endpoint(
     next_op = get_next_operation(db, po, op)
 
     return build_operation_response(op, po, next_op)
+
+
+# =============================================================================
+# Operation Blocking Check Endpoints (API-402)
+# =============================================================================
+
+@router.get(
+    "/{po_id}/operations/{op_id}/can-start",
+    response_model=CanStartResponse,
+    summary="Check if operation can start"
+)
+def check_can_start(
+    po_id: int,
+    op_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Quick check if an operation can start based on material availability.
+
+    Only checks materials for THIS operation's consume stage.
+    For example, PRINT only checks production materials, not shipping materials.
+    """
+    try:
+        result = can_operation_start(db, po_id, op_id)
+        return result
+    except OperationBlockingError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+@router.get(
+    "/{po_id}/operations/{op_id}/blocking-issues",
+    response_model=OperationBlockingResponse,
+    summary="Get detailed blocking issues for operation"
+)
+def get_blocking_issues(
+    po_id: int,
+    op_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Get detailed blocking issues for an operation.
+
+    Returns all material checks, not just blocking ones.
+    Useful for showing full material requirements and availability.
+    """
+    try:
+        result = check_operation_blocking(db, po_id, op_id)
+        return result
+    except OperationBlockingError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+
+
+# =============================================================================
+# Resource Scheduling Endpoints (API-403)
+# =============================================================================
+
+@router.post(
+    "/{po_id}/operations/{op_id}/schedule",
+    response_model=ScheduleOperationResponse,
+    summary="Schedule an operation on a resource"
+)
+def schedule_operation_endpoint(
+    po_id: int,
+    op_id: int,
+    request: ScheduleOperationRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Schedule an operation on a resource with time slot validation.
+
+    Validates:
+    - Resource exists
+    - Operation exists and belongs to this PO
+    - No time conflicts with existing scheduled operations
+
+    Returns 409 Conflict if scheduling would create a conflict.
+    """
+    # Validate PO exists
+    po = db.get(ProductionOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    # Validate operation exists and belongs to PO
+    op = db.get(ProductionOrderOperation, op_id)
+    if not op:
+        raise HTTPException(status_code=404, detail="Operation not found")
+    if op.production_order_id != po_id:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Operation {op_id} does not belong to production order {po_id}"
+        )
+
+    # Validate resource exists
+    resource = db.get(Machine, request.resource_id)
+    if not resource:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    # Attempt to schedule
+    success, conflicts = schedule_operation_service(
+        db=db,
+        operation=op,
+        resource_id=request.resource_id,
+        scheduled_start=request.scheduled_start,
+        scheduled_end=request.scheduled_end,
+    )
+
+    if not success:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Scheduling conflict with {len(conflicts)} existing operation(s)"
+        )
+
+    db.commit()
+
+    return ScheduleOperationResponse(success=True)
+
+
+# =============================================================================
+# Operation Generation Endpoint (API-404)
+# =============================================================================
+
+@router.post(
+    "/{po_id}/operations/generate",
+    response_model=GenerateOperationsResponse,
+    summary="Generate operations from routing"
+)
+def generate_operations(
+    po_id: int,
+    request: GenerateOperationsRequest = GenerateOperationsRequest(),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Manually generate operations from routing.
+
+    - Use force=True to replace existing operations
+    - Without force, fails if operations already exist
+    """
+    po = db.get(ProductionOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
+    try:
+        created_ops = generate_operations_manual(db, po, force=request.force)
+        db.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return GenerateOperationsResponse(
+        success=True,
+        operations_created=len(created_ops),
+        message=f"Generated {len(created_ops)} operations from routing"
+    )

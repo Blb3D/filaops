@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.models.production_order import ProductionOrder, ProductionOrderOperation
 from app.models.work_center import Machine
+from app.services.operation_blocking import check_operation_blocking
+from app.services.resource_scheduling import check_resource_available_now
 
 
 class OperationError(Exception):
@@ -156,13 +158,28 @@ def start_operation(
             400
         )
 
+    # Check material availability for this operation (API-402)
+    blocking_result = check_operation_blocking(db, po_id, op_id)
+    if not blocking_result["can_start"]:
+        short_materials = [m["product_sku"] for m in blocking_result["blocking_issues"]]
+        raise OperationError(
+            f"Operation blocked by material shortages: {', '.join(short_materials)}",
+            400
+        )
+
     # Validate resource if provided
     if resource_id:
         resource = db.get(Machine, resource_id)
         if not resource:
             raise OperationError(f"Resource {resource_id} not found", 404)
 
-        # TODO: Check for double-booking (API-403)
+        # Check for double-booking (API-403)
+        is_available, blocking_op = check_resource_available_now(db, resource_id)
+        if not is_available:
+            raise OperationError(
+                f"Resource is busy with another running operation (operation {blocking_op.id})",
+                409
+            )
         op.resource_id = resource_id
 
     # Update operation

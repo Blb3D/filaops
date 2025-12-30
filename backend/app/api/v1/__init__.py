@@ -17,6 +17,7 @@ from app.api.v1.endpoints import (
     purchase_orders,
     amazon_import,
     work_centers,
+    resources,
     routings,
     mrp,
     features,
@@ -121,6 +122,13 @@ router.include_router(
 router.include_router(
     work_centers.router,
     prefix="/work-centers",
+    tags=["manufacturing"]
+)
+
+# Resources (scheduling and conflicts)
+router.include_router(
+    resources.router,
+    prefix="/resources",
     tags=["manufacturing"]
 )
 
