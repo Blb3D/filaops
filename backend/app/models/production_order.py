@@ -207,7 +207,7 @@ class ProductionOrderOperation(Base):
     production_order_id = Column(Integer, ForeignKey('production_orders.id', ondelete='CASCADE'), nullable=False)
     routing_operation_id = Column(Integer, ForeignKey('routing_operations.id'), nullable=True)
     work_center_id = Column(Integer, ForeignKey('work_centers.id'), nullable=False)
-    resource_id = Column(Integer, ForeignKey('machines.id'), nullable=True)  # Specific machine assigned
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='SET NULL'), nullable=True)  # Specific printer/resource assigned
 
     # Sequence and identification
     sequence = Column(Integer, nullable=False)
@@ -220,6 +220,7 @@ class ProductionOrderOperation(Base):
     # Quantities
     quantity_completed = Column(Numeric(18, 4), default=0, nullable=False)
     quantity_scrapped = Column(Numeric(18, 4), default=0, nullable=False)
+    scrap_reason = Column(String(100), nullable=True)  # adhesion, layer_shift, stringing, warping, nozzle_clog, other
 
     # Planned times (minutes) - copied from routing
     planned_setup_minutes = Column(Numeric(10, 2), default=0, nullable=False)
@@ -254,7 +255,9 @@ class ProductionOrderOperation(Base):
     production_order = relationship("ProductionOrder", back_populates="operations")
     routing_operation = relationship("RoutingOperation")
     work_center = relationship("WorkCenter")
-    resource = relationship("Machine", foreign_keys=[resource_id])
+    resource = relationship("Resource", foreign_keys=[resource_id])
+    materials = relationship("ProductionOrderOperationMaterial", back_populates="operation",
+                            cascade="all, delete-orphan", order_by="ProductionOrderOperationMaterial.id")
 
     def __repr__(self):
         return f"<ProductionOrderOperation {self.sequence}: {self.operation_name} ({self.status})>"
@@ -314,3 +317,84 @@ class ProductionOrderMaterial(Base):
     
     def __repr__(self):
         return f"<ProductionOrderMaterial PO#{self.production_order_id}: {self.original_product_id} → {self.substitute_product_id}>"
+
+
+class ProductionOrderOperationMaterial(Base):
+    """
+    Material consumption tracking for a specific production order operation.
+    
+    This is the INSTANCE - tracks actual consumption with lot numbers.
+    Created when a PO is released by copying from RoutingOperationMaterial.
+    
+    Lifecycle:
+    1. Created with status='pending' when PO released
+    2. status='allocated' when inventory reserved at op start
+    3. status='consumed' when operation completes
+    4. status='returned' if excess returned to inventory
+    
+    Examples:
+    - PO-001 OP-10: Black PLA 370g required, Lot #L2024-001, 370g consumed
+    - PO-001 OP-50: 6x6x6 Box 10 EA required, 10 EA consumed
+    """
+    __tablename__ = "production_order_operation_materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    production_order_operation_id = Column(Integer, 
+                                           ForeignKey('production_order_operations.id', ondelete='CASCADE'), 
+                                           nullable=False, index=True)
+    component_id = Column(Integer, ForeignKey('products.id'), nullable=False, index=True)
+    routing_operation_material_id = Column(Integer, 
+                                           ForeignKey('routing_operation_materials.id', ondelete='SET NULL'),
+                                           nullable=True)  # Link back to template
+    
+    # Planned quantities (calculated from routing × PO qty)
+    quantity_required = Column(Numeric(18, 6), nullable=False)
+    unit = Column(String(20), default="EA", nullable=False)
+    
+    # Actual consumption tracking
+    quantity_allocated = Column(Numeric(18, 6), default=0, nullable=False)
+    quantity_consumed = Column(Numeric(18, 6), default=0, nullable=False)
+    
+    # Lot tracking (for traceability)
+    lot_number = Column(String(100), nullable=True)
+    inventory_transaction_id = Column(Integer, ForeignKey('inventory_transactions.id'), nullable=True)
+    
+    # Status: pending, allocated, consumed, returned
+    status = Column(String(20), default="pending", nullable=False)
+    
+    # Metadata
+    consumed_at = Column(DateTime, nullable=True)
+    consumed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    operation = relationship("ProductionOrderOperation", back_populates="materials")
+    component = relationship("Product", foreign_keys=[component_id])
+    routing_material = relationship("RoutingOperationMaterial")
+    transaction = relationship("InventoryTransaction")
+    consumed_by_user = relationship("User", foreign_keys=[consumed_by])
+
+    def __repr__(self):
+        return f"<POOpMaterial {self.component.sku if self.component else 'N/A'}: {self.quantity_required} {self.unit} ({self.status})>"
+
+    @property
+    def quantity_remaining(self):
+        """Quantity still to be consumed"""
+        return float(self.quantity_required or 0) - float(self.quantity_consumed or 0)
+
+    @property
+    def is_fully_consumed(self):
+        """True if all required quantity has been consumed"""
+        return self.quantity_remaining <= 0
+
+    @property
+    def is_allocated(self):
+        """True if inventory has been allocated"""
+        return self.status in ('allocated', 'consumed')
+
+    @property
+    def shortage_quantity(self):
+        """Quantity short (if allocated < required)"""
+        shortfall = float(self.quantity_required or 0) - float(self.quantity_allocated or 0)
+        return max(0, shortfall)

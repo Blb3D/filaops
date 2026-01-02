@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import ProductionSchedulingModal from "../../components/ProductionSchedulingModal";
-import ProductionScheduler from "../../components/ProductionScheduler";
+import ProductionOrderModal from "../../components/production/ProductionOrderModal";
+import ProductionQueueList from "../../components/production/ProductionQueueList";
 import SplitOrderModal from "../../components/SplitOrderModal";
 import ScrapOrderModal from "../../components/ScrapOrderModal";
 import CompleteOrderModal from "../../components/CompleteOrderModal";
@@ -241,7 +241,7 @@ export default function AdminProduction() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
-    status: "all",
+    status: "active",  // Default to active orders (excludes complete/short)
     search: searchParams.get("search") || "",
   });
 
@@ -278,9 +278,6 @@ export default function AdminProduction() {
   // QC Inspection modal state
   const [showQCModal, setShowQCModal] = useState(false);
   const [selectedOrderForQC, setSelectedOrderForQC] = useState(null);
-
-  // View mode: kanban or scheduler
-  const [viewMode, setViewMode] = useState("kanban"); // kanban or scheduler
 
   // Trend chart state
   const [productionTrend, setProductionTrend] = useState(null);
@@ -489,36 +486,12 @@ export default function AdminProduction() {
             Track print jobs and production orders
           </p>
         </div>
-        <div className="flex gap-3">
-          <div className="flex bg-gray-800 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode("kanban")}
-              className={`px-4 py-2 rounded text-sm transition-colors ${
-                viewMode === "kanban"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Kanban
-            </button>
-            <button
-              onClick={() => setViewMode("scheduler")}
-              className={`px-4 py-2 rounded text-sm transition-colors ${
-                viewMode === "scheduler"
-                  ? "bg-blue-600 text-white"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Scheduler
-            </button>
-          </div>
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500"
-          >
-            + Create Production Order
-          </button>
-        </div>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="px-4 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-500 hover:to-purple-500"
+        >
+          + Create Production Order
+        </button>
       </div>
 
       {/* Production Trend Chart */}
@@ -531,47 +504,7 @@ export default function AdminProduction() {
         />
       </div>
 
-      {/* Scheduler View */}
-      {viewMode === "scheduler" && (
-        <ProductionScheduler onScheduleUpdate={fetchProductionOrders} />
-      )}
-
-      {/* Kanban View */}
-      {viewMode === "kanban" && (
-        <>
-          {/* Filters */}
-          <div className="flex gap-4 bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Search by PO code, product, or sales order..."
-                value={filters.search}
-                onChange={(e) =>
-                  setFilters({ ...filters, search: e.target.value })
-                }
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-500"
-              />
-            </div>
-            <select
-              value={filters.status}
-              onChange={(e) =>
-                setFilters({ ...filters, status: e.target.value })
-              }
-              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
-            >
-              <option value="all">All Status</option>
-              <option value="draft">Draft</option>
-              <option value="released">Released</option>
-              <option value="in_progress">In Progress</option>
-              <option value="complete">Complete</option>
-              <option value="scrapped">Scrapped</option>
-              <option value="on_hold">On Hold</option>
-              <option value="split">Split (Parent)</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
-          {/* Stats */}
+      {/* Stats */}
           <div className="grid grid-cols-6 gap-4">
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
               <p className="text-gray-400 text-sm">Draft</p>
@@ -642,335 +575,27 @@ export default function AdminProduction() {
             </div>
           )}
 
-          {/* Kanban Board */}
-          {!loading && (
-            <div className="grid grid-cols-4 gap-4">
-              {/* Draft Column */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
-                  <h3 className="font-medium text-white">Draft</h3>
-                  <span className="text-gray-500 text-sm">
-                    ({groupedOrders.draft.length})
-                  </span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {groupedOrders.draft.map((order) => (
-                    <div
-                      key={order.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-4 cursor-pointer hover:border-gray-600 transition-colors"
-                      onClick={() => navigate(`/admin/production/${order.id}`)}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white font-medium">
-                          {order.code}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {order.quantity_ordered} units
-                        </span>
-                      </div>
-                      <div className="mb-2">
-                        <SoLinkBadge order={order} />
-                      </div>
-                      <p className="text-sm text-gray-400 mb-3">
-                        {order.product_name || "N/A"}
-                      </p>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleStatusUpdate(order.id, "released"); }}
-                        className="w-full py-1.5 bg-blue-600/20 text-blue-400 rounded text-sm hover:bg-blue-600/30"
-                      >
-                        Release
-                      </button>
-                    </div>
-                  ))}
-                  {groupedOrders.draft.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-8">
-                      No draft orders
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Released Column */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                  <h3 className="font-medium text-white">Released</h3>
-                  <span className="text-gray-500 text-sm">
-                    ({groupedOrders.released.length})
-                  </span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {groupedOrders.released.map((order) => (
-                    <div
-                      key={order.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-4 cursor-pointer hover:border-gray-600 transition-colors"
-                      onClick={() => navigate(`/admin/production/${order.id}`)}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white font-medium">
-                          {order.code}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {order.quantity_ordered} units
-                        </span>
-                      </div>
-                      <div className="mb-2">
-                        <SoLinkBadge order={order} />
-                      </div>
-                      <p className="text-sm text-gray-400 mb-2">
-                        {order.product_name || "N/A"}
-                      </p>
-                      {order.scheduled_start && (
-                        <p className="text-xs text-gray-500 mb-2">
-                          📅 {new Date(order.scheduled_start).toLocaleString()}
-                        </p>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForScheduling(order);
-                            setShowSchedulingModal(true);
-                          }}
-                          className="flex-1 py-1.5 bg-blue-600/20 text-blue-400 rounded text-sm hover:bg-blue-600/30"
-                          title="Schedule to specific machine"
-                        >
-                          Schedule
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleStatusUpdate(order.id, "in_progress");
-                          }}
-                          className="flex-1 py-1.5 bg-purple-600/20 text-purple-400 rounded text-sm hover:bg-purple-600/30"
-                          title="Start immediately without scheduling"
-                        >
-                          Start Now
-                        </button>
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        {order.quantity_ordered > 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedOrderForSplit(order);
-                              setShowSplitModal(true);
-                            }}
-                            className="flex-1 py-1.5 bg-gray-700/50 text-gray-300 rounded text-sm hover:bg-gray-700 flex items-center justify-center gap-1"
-                            title="Split order across multiple machines"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                              />
-                            </svg>
-                            Split
-                          </button>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForScrap(order);
-                            setShowScrapModal(true);
-                          }}
-                          className={`${
-                            order.quantity_ordered > 1 ? "flex-1" : "w-full"
-                          } py-1.5 bg-red-600/10 text-red-400/80 rounded text-sm hover:bg-red-600/20`}
-                          title="Mark as scrap if setup failed"
-                        >
-                          Scrap
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {groupedOrders.released.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-8">
-                      No released orders
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* In Progress Column */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                  <h3 className="font-medium text-white">In Progress</h3>
-                  <span className="text-gray-500 text-sm">
-                    ({groupedOrders.in_progress.length})
-                  </span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {groupedOrders.in_progress.map((order) => (
-                    <div
-                      key={order.id}
-                      className="bg-gray-800 border border-gray-700 rounded-lg p-4 cursor-pointer hover:border-gray-600 transition-colors"
-                      onClick={() => navigate(`/admin/production/${order.id}`)}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white font-medium">
-                          {order.code}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {order.quantity_completed}/{order.quantity_ordered}
-                        </span>
-                      </div>
-                      <div className="mb-2">
-                        <SoLinkBadge order={order} />
-                      </div>
-                      <p className="text-sm text-gray-400 mb-2">
-                        {order.product_name || "N/A"}
-                      </p>
-                      {order.completion_percent > 0 && (
-                        <div className="w-full bg-gray-700 rounded-full h-1.5 mb-3">
-                          <div
-                            className="bg-purple-500 h-1.5 rounded-full"
-                            style={{ width: `${order.completion_percent}%` }}
-                          ></div>
-                        </div>
-                      )}
-                      <div className="flex gap-2">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForComplete(order);
-                            setShowCompleteModal(true);
-                          }}
-                          className="flex-1 py-1.5 bg-green-600/20 text-green-400 rounded text-sm hover:bg-green-600/30"
-                        >
-                          Complete
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForScrap(order);
-                            setShowScrapModal(true);
-                          }}
-                          className="flex-1 py-1.5 bg-red-600/20 text-red-400 rounded text-sm hover:bg-red-600/30"
-                          title="Print failed - scrap and optionally remake"
-                        >
-                          Scrap
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {groupedOrders.in_progress.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-8">
-                      No active production
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Completed Column */}
-              <div className="bg-gray-900/50 border border-gray-800 rounded-xl">
-                <div className="px-4 py-3 border-b border-gray-800 flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                  <h3 className="font-medium text-white">Complete</h3>
-                  <span className="text-gray-500 text-sm">
-                    ({groupedOrders.complete.length})
-                  </span>
-                </div>
-                <div className="p-4 space-y-3 max-h-[500px] overflow-y-auto">
-                  {groupedOrders.complete.slice(0, 10).map((order) => (
-                    <div
-                      key={order.id}
-                      className={`bg-gray-800 border rounded-lg p-4 cursor-pointer hover:border-gray-600 transition-colors ${
-                        order.qc_status === "pending"
-                          ? "border-yellow-500/50"
-                          : order.qc_status === "passed"
-                          ? "border-green-500/30 opacity-75"
-                          : order.qc_status === "failed"
-                          ? "border-red-500/50"
-                          : "border-gray-700 opacity-75"
-                      }`}
-                      onClick={() => navigate(`/admin/production/${order.id}`)}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="text-white font-medium">
-                          {order.code}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          {/* QC Status Badge */}
-                          {order.qc_status === "pending" && (
-                            <span className="px-1.5 py-0.5 text-xs bg-yellow-500/20 text-yellow-400 rounded">
-                              QC Pending
-                            </span>
-                          )}
-                          {order.qc_status === "passed" && (
-                            <span className="px-1.5 py-0.5 text-xs bg-green-500/20 text-green-400 rounded">
-                              QC Passed
-                            </span>
-                          )}
-                          {order.qc_status === "failed" && (
-                            <span className="px-1.5 py-0.5 text-xs bg-red-500/20 text-red-400 rounded">
-                              QC Failed
-                            </span>
-                          )}
-                          <span className="text-xs text-gray-500">
-                            {order.quantity_completed}/{order.quantity_ordered}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mb-2">
-                        <SoLinkBadge order={order} />
-                      </div>
-                      <p className="text-sm text-gray-400">
-                        {order.product_name || "N/A"}
-                      </p>
-                      {order.completed_at && (
-                        <p className="text-xs text-gray-500 mt-2">
-                          {new Date(order.completed_at).toLocaleDateString()}
-                        </p>
-                      )}
-                      {/* QC Action Button */}
-                      {(order.qc_status === "pending" ||
-                        order.qc_status === "failed") && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedOrderForQC(order);
-                            setShowQCModal(true);
-                          }}
-                          className="w-full mt-3 py-1.5 bg-yellow-600/20 text-yellow-400 rounded text-sm hover:bg-yellow-600/30"
-                        >
-                          {order.qc_status === "pending"
-                            ? "Perform QC Inspection"
-                            : "Re-inspect"}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  {groupedOrders.complete.length === 0 && (
-                    <p className="text-gray-500 text-sm text-center py-8">
-                      No completed orders
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+      {/* Production Queue List */}
+      <ProductionQueueList
+        orders={productionOrders}
+        loading={loading}
+        filters={filters}
+        onFiltersChange={setFilters}
+        onOrderClick={(order) => {
+          setSelectedOrderForScheduling(order);
+          setShowSchedulingModal(true);
+        }}
+      />
 
       {/* Scheduling Modal */}
       {showSchedulingModal && selectedOrderForScheduling && (
-        <ProductionSchedulingModal
+        <ProductionOrderModal
           productionOrder={selectedOrderForScheduling}
           onClose={() => {
             setShowSchedulingModal(false);
             setSelectedOrderForScheduling(null);
           }}
-          onSchedule={() => {
+          onUpdated={() => {
             fetchProductionOrders();
             setShowSchedulingModal(false);
             setSelectedOrderForScheduling(null);

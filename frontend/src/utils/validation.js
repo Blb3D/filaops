@@ -207,12 +207,13 @@ export function validateQuantity(quantity, fieldName = 'Quantity', requireIntege
 }
 
 /**
- * Validates price/cost (non-negative number with max 2 decimal places)
+ * Validates price/cost (non-negative number with configurable decimal places)
  * @param {string|number} price - Price to validate
  * @param {string} fieldName - Human-readable field name
+ * @param {number} maxDecimals - Maximum decimal places allowed (default: 6 for per-unit costs)
  * @returns {string|null} Error message or null if valid
  */
-export function validatePrice(price, fieldName) {
+export function validatePrice(price, fieldName, maxDecimals = 6) {
   if (price === '' || price === null || price === undefined) {
     return null; // Use validateRequired separately
   }
@@ -227,10 +228,10 @@ export function validatePrice(price, fieldName) {
     return `${fieldName} cannot be negative`;
   }
 
-  // Check for more than 2 decimal places
+  // Check decimal places
   const decimalPart = price.toString().split('.')[1];
-  if (decimalPart && decimalPart.length > 2) {
-    return `${fieldName} can have at most 2 decimal places`;
+  if (decimalPart && decimalPart.length > maxDecimals) {
+    return `${fieldName} can have at most ${maxDecimals} decimal places`;
   }
 
   return null;

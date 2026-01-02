@@ -343,13 +343,13 @@ async def create_production_order(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    # Find default BOM if not specified - use most recently updated active BOM
+    # Find default BOM if not specified - use most recently created active BOM
     bom_id = request.bom_id
     if not bom_id:
         default_bom = db.query(BOM).filter(
             BOM.product_id == request.product_id,
             BOM.active == True  # noqa: E712
-        ).order_by(desc(BOM.updated_at)).first()
+        ).order_by(desc(BOM.created_at)).first()
         if default_bom:
             bom_id = default_bom.id
 

@@ -279,73 +279,108 @@ export default function OrderDetail() {
   const explodeBOM = async (productId, quantity) => {
     setExploding(true);
     try {
-      // Use the MRP requirements endpoint which handles BOM explosion and netting
-      const res = await fetch(
-        `${API_URL}/api/v1/mrp/requirements?product_id=${productId}`,
+      // PRIMARY: Use the new material-requirements endpoint (routing-first approach)
+      // This uses routing operation materials if available, falling back to legacy BOM
+      const matReqRes = await fetch(
+        `${API_URL}/api/v1/sales-orders/${orderId}/material-requirements`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
 
-      if (res.ok) {
-        const data = await res.json();
+      if (matReqRes.ok) {
+        const matReqData = await matReqRes.json();
 
-        // The endpoint returns requirements for quantity=1, so scale by order quantity
-        // IMPORTANT: Calculate net_shortage AFTER scaling, not before
-        const scaled = (data.requirements || []).map((req) => {
-          const gross_qty = parseFloat(req.gross_quantity || 0) * quantity;
-          const available_qty = parseFloat(req.available_quantity || 0);
-          const incoming_qty = parseFloat(req.incoming_quantity || 0) || 0;
-          const safety_stock = parseFloat(req.safety_stock || 0) || 0;
-
-          // Recalculate net_shortage for scaled quantity
-          const available_supply = available_qty + incoming_qty;
-          let net_shortage = gross_qty - available_supply + safety_stock;
-
-          if (net_shortage < 0) {
-            net_shortage = 0;
-          }
-
-          return {
-            product_id: req.product_id,
-            product_sku: req.product_sku || "",
-            product_name: req.product_name || "",
-            gross_quantity: gross_qty,
-            net_shortage: net_shortage,
-            on_hand_quantity: parseFloat(req.on_hand_quantity || 0),
-            available_quantity: available_qty,
-            unit_cost: parseFloat(req.unit_cost || 0),
-            has_bom: req.has_bom || false, // Make vs Buy indicator
-          };
-        });
-        setMaterialRequirements(scaled);
+        // Convert to display format
+        const requirements = (matReqData.requirements || []).map((req) => ({
+          product_id: req.product_id,
+          product_sku: req.product_sku || "",
+          product_name: req.product_name || "",
+          gross_quantity: parseFloat(req.quantity_required || 0),
+          net_shortage: parseFloat(req.quantity_short || 0),
+          on_hand_quantity: parseFloat(req.quantity_available || 0),
+          available_quantity: parseFloat(req.quantity_available || 0),
+          unit_cost: 0, // Not included in new endpoint yet
+          has_bom: req.has_bom || false,
+          operation_code: req.operation_code || null,
+          material_source: req.material_source || "bom",
+          has_incoming_supply: req.has_incoming_supply || false,
+          incoming_supply_details: req.incoming_supply_details || null,
+        }));
+        setMaterialRequirements(requirements);
+        setMaterialAvailability(matReqData.summary);
       } else {
-        // If MRP endpoint fails, try BOM explosion directly
-        const bomRes = await fetch(
-          `${API_URL}/api/v1/mrp/explode-bom/${productId}?quantity=${quantity}`,
+        // FALLBACK: Use the MRP requirements endpoint
+        const res = await fetch(
+          `${API_URL}/api/v1/mrp/requirements?product_id=${productId}`,
           {
             headers: { Authorization: `Bearer ${token}` },
           }
         );
 
-        if (bomRes.ok) {
-          const bomData = await bomRes.json();
+        if (res.ok) {
+          const data = await res.json();
 
-          // Convert to requirements format (without inventory netting)
-          const requirements = (bomData.components || []).map((comp) => ({
-            product_id: comp.product_id,
-            product_sku: comp.product_sku,
-            product_name: comp.product_name,
-            gross_quantity: parseFloat(comp.gross_quantity || 0),
-            net_shortage: parseFloat(comp.gross_quantity || 0),
-            on_hand_quantity: 0,
-            available_quantity: 0,
-            unit_cost: 0,
-            has_bom: comp.has_bom || false, // Make vs Buy indicator
-          }));
-          setMaterialRequirements(requirements);
+          // The endpoint returns requirements for quantity=1, so scale by order quantity
+          const scaled = (data.requirements || []).map((req) => {
+            const gross_qty = parseFloat(req.gross_quantity || 0) * quantity;
+            const available_qty = parseFloat(req.available_quantity || 0);
+            const incoming_qty = parseFloat(req.incoming_quantity || 0) || 0;
+            const safety_stock = parseFloat(req.safety_stock || 0) || 0;
+
+            // Recalculate net_shortage for scaled quantity
+            const available_supply = available_qty + incoming_qty;
+            let net_shortage = gross_qty - available_supply + safety_stock;
+
+            if (net_shortage < 0) {
+              net_shortage = 0;
+            }
+
+            return {
+              product_id: req.product_id,
+              product_sku: req.product_sku || "",
+              product_name: req.product_name || "",
+              gross_quantity: gross_qty,
+              net_shortage: net_shortage,
+              on_hand_quantity: parseFloat(req.on_hand_quantity || 0),
+              available_quantity: available_qty,
+              unit_cost: parseFloat(req.unit_cost || 0),
+              has_bom: req.has_bom || false,
+              operation_code: null,
+              material_source: "bom",
+            };
+          });
+          setMaterialRequirements(scaled);
         } else {
-          // BOM explosion failure - material requirements will be empty
+          // If MRP endpoint fails, try BOM explosion directly
+          const bomRes = await fetch(
+            `${API_URL}/api/v1/mrp/explode-bom/${productId}?quantity=${quantity}`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          if (bomRes.ok) {
+            const bomData = await bomRes.json();
+
+            // Convert to requirements format (without inventory netting)
+            const requirements = (bomData.components || []).map((comp) => ({
+              product_id: comp.product_id,
+              product_sku: comp.product_sku,
+              product_name: comp.product_name,
+              gross_quantity: parseFloat(comp.gross_quantity || 0),
+              net_shortage: parseFloat(comp.gross_quantity || 0),
+              on_hand_quantity: 0,
+              available_quantity: 0,
+              unit_cost: 0,
+              has_bom: comp.has_bom || false,
+              operation_code: null,
+              material_source: "bom",
+            }));
+            setMaterialRequirements(requirements);
+          } else {
+            // BOM explosion failure - material requirements will be empty
+          }
         }
       }
 
@@ -439,9 +474,8 @@ export default function OrderDetail() {
         },
         body: JSON.stringify({
           product_id: materialReq.product_id,
-          quantity_ordered: Math.ceil(materialReq.net_shortage),
+          quantity_ordered: Math.ceil(materialReq.net_shortage || 1),
           sales_order_id: parseInt(orderId),
-          status: "draft",
           notes: `Created from SO ${order.order_number} for sub-assembly`,
         }),
       });
@@ -737,9 +771,17 @@ export default function OrderDetail() {
           // Navigate based on action reference type
           if (action.reference_type === 'purchase_order') {
             navigate(`/admin/purchasing?po_id=${action.reference_id}`);
+          } else if (action.reference_type === 'make_product') {
+            // Product needs manufacturing - create production order
+            const qty = parseFloat(action.impact?.match(/Need\s+([\d.]+)/)?.[1] || 0);
+            console.log('Creating production order:', { product_id: action.reference_id, qty, action });
+            handleCreateWorkOrder({
+              product_id: action.reference_id,
+              product_name: action.action.replace('Create production order for ', ''),
+              net_shortage: qty
+            });
           } else if (action.reference_type === 'product') {
-            // Navigate to purchasing with product pre-selected for new PO
-            // Extract quantity from action impact (e.g., "Need 7 units")
+            // Product needs purchasing - navigate to purchasing
             const quantityMatch = action.impact?.match(/Need\s+([\d.]+)/);
             const quantity = quantityMatch ? quantityMatch[1] : '';
             navigate(`/admin/purchasing?create_po=true&product_id=${action.reference_id}${quantity ? `&quantity=${quantity}` : ''}`);
@@ -1040,11 +1082,10 @@ export default function OrderDetail() {
               <thead>
                 <tr className="border-b border-gray-700">
                   <th className="text-left p-2 text-gray-400">Component</th>
+                  <th className="text-left p-2 text-gray-400">Operation</th>
                   <th className="text-right p-2 text-gray-400">Required</th>
-                  <th className="text-right p-2 text-gray-400">On Hand</th>
                   <th className="text-right p-2 text-gray-400">Available</th>
                   <th className="text-right p-2 text-gray-400">Shortage</th>
-                  <th className="text-right p-2 text-gray-400">Cost</th>
                   <th className="text-center p-2 text-gray-400">Actions</th>
                 </tr>
               </thead>
@@ -1056,14 +1097,28 @@ export default function OrderDetail() {
                       req.net_shortage > 0 ? "bg-red-900/20" : ""
                     }`}
                   >
-                    <td className="p-2 text-white">
-                      {req.product_sku} - {req.product_name}
+                    <td className="p-2">
+                      <div className="text-white">{req.product_sku} - {req.product_name}</div>
+                      {req.material_source === "routing" && (
+                        <span className="text-xs text-blue-400">via routing</span>
+                      )}
+                      {req.has_incoming_supply && (
+                        <span className="text-xs text-amber-400 ml-2" title={req.incoming_supply_details?.expected_date ? `Expected: ${req.incoming_supply_details.expected_date}` : ""}>
+                          PO pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="p-2 text-left">
+                      {req.operation_code ? (
+                        <span className="px-2 py-0.5 bg-purple-500/20 text-purple-300 text-xs rounded-full">
+                          {req.operation_code}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 text-xs">-</span>
+                      )}
                     </td>
                     <td className="p-2 text-right text-white">
                       {req.gross_quantity?.toFixed(2) || "0.00"}
-                    </td>
-                    <td className="p-2 text-right text-gray-300">
-                      {req.on_hand_quantity?.toFixed(2) || "0.00"}
                     </td>
                     <td className="p-2 text-right text-gray-300">
                       {req.available_quantity?.toFixed(2) || "0.00"}
@@ -1078,12 +1133,6 @@ export default function OrderDetail() {
                       >
                         {req.net_shortage?.toFixed(2) || "0.00"}
                       </span>
-                    </td>
-                    <td className="p-2 text-right text-gray-300">
-                      $
-                      {(
-                        (req.gross_quantity || 0) * (req.unit_cost || 0)
-                      ).toFixed(2)}
                     </td>
                     <td className="p-2 text-center">
                       {req.net_shortage > 0 &&
@@ -1108,11 +1157,17 @@ export default function OrderDetail() {
               </tbody>
               <tfoot>
                 <tr className="bg-gray-800 font-semibold">
-                  <td colSpan="5" className="p-2 text-right text-white">
-                    Total Material Cost:
+                  <td colSpan="4" className="p-2 text-right text-white">
+                    {materialAvailability?.has_shortages ? (
+                      <span className="text-red-400">
+                        {materialAvailability.materials_short} of {materialAvailability.total_materials} materials short
+                      </span>
+                    ) : (
+                      <span className="text-green-400">All materials available</span>
+                    )}
                   </td>
                   <td className="p-2 text-right text-white">
-                    ${totalMaterialCost.toFixed(2)}
+                    Est: ${totalMaterialCost.toFixed(2)}
                   </td>
                   <td className="p-2"></td>
                 </tr>

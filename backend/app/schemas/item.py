@@ -122,8 +122,8 @@ class ItemBase(BaseModel):
 
     # Costing
     cost_method: CostMethod = Field(CostMethod.AVERAGE, description="Costing method")
-    standard_cost: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
-    selling_price: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
+    standard_cost: Optional[Decimal] = Field(None, ge=0, decimal_places=6)
+    selling_price: Optional[Decimal] = Field(None, ge=0, decimal_places=4)
 
     # Physical dimensions
     weight_oz: Optional[Decimal] = Field(None, ge=0, decimal_places=2)

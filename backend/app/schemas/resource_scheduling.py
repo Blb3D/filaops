@@ -11,6 +11,7 @@ class ScheduleOperationRequest(BaseModel):
     resource_id: int
     scheduled_start: datetime
     scheduled_end: datetime
+    is_printer: bool = False  # True if resource_id refers to a printer, not a resource
 
 
 class ScheduledOperationInfo(BaseModel):
@@ -61,3 +62,17 @@ class ScheduleOperationResponse(BaseModel):
     message: Optional[str] = None
     operation_id: Optional[int] = None
     conflicts: List[ConflictInfo] = []
+
+
+class NextAvailableSlotRequest(BaseModel):
+    """Request to find next available time slot."""
+    resource_id: int
+    duration_minutes: int
+    is_printer: bool = False
+    after: Optional[datetime] = None  # Start searching after this time
+
+
+class NextAvailableSlotResponse(BaseModel):
+    """Response with next available time slot."""
+    next_available: datetime
+    suggested_end: datetime  # Based on requested duration

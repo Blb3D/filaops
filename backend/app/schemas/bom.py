@@ -1,10 +1,29 @@
 """
 Bill of Materials Pydantic Schemas
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Literal
 from datetime import datetime, date
 from decimal import Decimal
+
+
+# Valid UOM codes - should match uom_service.INLINE_UOM_CONVERSIONS
+VALID_UOM_CODES = ['EA', 'G', 'KG', 'LB', 'OZ', 'M', 'MM', 'CM', 'IN', 'FT', 'L', 'ML', 'PK', 'BOX', 'ROLL', 'HR']
+
+
+def validate_uom_code(value: Optional[str]) -> Optional[str]:
+    """
+    Validate and normalize a UOM code.
+    Returns None if input is None/empty, otherwise normalizes to uppercase.
+    Raises ValueError if the unit is not in the allowed list.
+    """
+    if value is None or value.strip() == '':
+        return None
+
+    normalized = value.upper().strip()
+    if normalized not in VALID_UOM_CODES:
+        raise ValueError(f"Invalid unit '{value}'. Must be one of: {', '.join(VALID_UOM_CODES)}")
+    return normalized
 
 
 # ============================================================================
@@ -22,6 +41,12 @@ class BOMLineBase(BaseModel):
     scrap_factor: Optional[Decimal] = Field(0, ge=0, le=100, description="Scrap percentage")
     notes: Optional[str] = Field(None, max_length=1000)
 
+    @field_validator('unit')
+    @classmethod
+    def validate_unit(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize the unit of measure."""
+        return validate_uom_code(v)
+
 
 class BOMLineCreate(BOMLineBase):
     """Create a new BOM line"""
@@ -38,6 +63,12 @@ class BOMLineUpdate(BaseModel):
     is_cost_only: Optional[bool] = None
     scrap_factor: Optional[Decimal] = Field(None, ge=0, le=100)
     notes: Optional[str] = Field(None, max_length=1000)
+
+    @field_validator('unit')
+    @classmethod
+    def validate_unit(cls, v: Optional[str]) -> Optional[str]:
+        """Validate and normalize the unit of measure."""
+        return validate_uom_code(v)
 
 
 class BOMLineResponse(BOMLineBase):

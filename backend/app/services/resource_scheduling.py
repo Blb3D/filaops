@@ -8,7 +8,6 @@ from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 
 from app.models.production_order import ProductionOrderOperation
-from app.models.work_center import Machine
 
 # Terminal statuses don't block scheduling
 TERMINAL_STATUSES = ['complete', 'skipped', 'cancelled']
@@ -135,12 +134,77 @@ def check_resource_available_now(
     return True, None
 
 
+def find_next_available_slot(
+    db: Session,
+    resource_id: int,
+    duration_minutes: int,
+    after: datetime = None
+) -> datetime:
+    """
+    Find the next available time slot on a resource.
+
+    Looks at scheduled operations and finds the first gap of sufficient duration.
+
+    Args:
+        db: Database session
+        resource_id: Resource to check (already in stored format: negative for printers)
+        duration_minutes: Required duration in minutes
+        after: Start searching after this time (defaults to now)
+
+    Returns:
+        datetime: Start time of next available slot
+    """
+    from datetime import timedelta
+
+    if after is None:
+        after = datetime.utcnow()
+
+    # Get all scheduled ops on this resource starting from 'after'
+    scheduled_ops = db.query(ProductionOrderOperation).filter(
+        ProductionOrderOperation.resource_id == resource_id,
+        ProductionOrderOperation.status.notin_(TERMINAL_STATUSES),
+        ProductionOrderOperation.scheduled_end.isnot(None),
+        ProductionOrderOperation.scheduled_end > after
+    ).order_by(ProductionOrderOperation.scheduled_start).all()
+
+    if not scheduled_ops:
+        # No scheduled ops - can start immediately
+        return after
+
+    # Check if there's a gap before the first scheduled op
+    first_op = scheduled_ops[0]
+    if first_op.scheduled_start:
+        gap_before_first = (first_op.scheduled_start - after).total_seconds() / 60
+        if gap_before_first >= duration_minutes:
+            return after
+
+    # Look for gaps between scheduled operations
+    for i in range(len(scheduled_ops) - 1):
+        current_op = scheduled_ops[i]
+        next_op = scheduled_ops[i + 1]
+
+        if current_op.scheduled_end and next_op.scheduled_start:
+            gap_start = current_op.scheduled_end
+            gap_duration = (next_op.scheduled_start - gap_start).total_seconds() / 60
+            if gap_duration >= duration_minutes:
+                return max(gap_start, after)
+
+    # No gap found - schedule after the last operation
+    last_op = scheduled_ops[-1]
+    if last_op.scheduled_end:
+        return max(last_op.scheduled_end, after)
+
+    # Fallback: start 1 hour from now
+    return after + timedelta(hours=1)
+
+
 def schedule_operation(
     db: Session,
     operation: ProductionOrderOperation,
     resource_id: int,
     scheduled_start: datetime,
-    scheduled_end: datetime
+    scheduled_end: datetime,
+    is_printer: bool = False
 ) -> Tuple[bool, List[ProductionOrderOperation]]:
     """
     Schedule an operation on a resource with conflict validation.
@@ -148,18 +212,23 @@ def schedule_operation(
     Args:
         db: Database session
         operation: Operation to schedule
-        resource_id: Target resource
+        resource_id: Target resource/printer ID
         scheduled_start: Start time
         scheduled_end: End time
+        is_printer: True if resource_id refers to a printer
 
     Returns:
         Tuple of (success, conflicts)
         - If success=True, operation was scheduled
         - If success=False, conflicts contains blocking operations
     """
-    # Check for conflicts
+    # For printers, we store as negative ID to distinguish from resources
+    # This avoids ID collision between resources and printers tables
+    stored_resource_id = -resource_id if is_printer else resource_id
+
+    # Check for conflicts using the stored ID format
     conflicts = find_conflicts(
-        db, resource_id, scheduled_start, scheduled_end,
+        db, stored_resource_id, scheduled_start, scheduled_end,
         exclude_operation_id=operation.id
     )
 
@@ -167,7 +236,7 @@ def schedule_operation(
         return False, conflicts
 
     # Schedule the operation
-    operation.resource_id = resource_id
+    operation.resource_id = stored_resource_id
     operation.scheduled_start = scheduled_start
     operation.scheduled_end = scheduled_end
     operation.status = 'queued'  # Move from pending to queued

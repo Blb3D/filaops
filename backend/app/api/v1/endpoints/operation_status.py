@@ -12,6 +12,7 @@ from app.schemas.operation_status import (
     OperationSkipRequest,
     OperationResponse,
     OperationListItem,
+    OperationMaterial,
     ProductionOrderSummary,
     NextOperationInfo,
 )
@@ -26,6 +27,7 @@ from app.services.operation_status import (
     skip_operation,
     list_operations,
     get_next_operation,
+    get_operation_max_quantity,
 )
 from app.services.operation_blocking import (
     OperationBlockingError,
@@ -34,6 +36,7 @@ from app.services.operation_blocking import (
 )
 from app.services.resource_scheduling import (
     schedule_operation as schedule_operation_service,
+    find_next_available_slot,
 )
 from app.services.operation_generation import (
     generate_operations_manual,
@@ -41,6 +44,8 @@ from app.services.operation_generation import (
 from app.schemas.resource_scheduling import (
     ScheduleOperationRequest,
     ScheduleOperationResponse,
+    NextAvailableSlotRequest,
+    NextAvailableSlotResponse,
 )
 from app.schemas.routing_operations import (
     GenerateOperationsRequest,
@@ -48,6 +53,7 @@ from app.schemas.routing_operations import (
 )
 from app.models.production_order import ProductionOrder, ProductionOrderOperation
 from app.models.work_center import Machine
+from app.models.printer import Printer
 
 
 router = APIRouter()
@@ -78,6 +84,16 @@ def build_operation_response(op, po, next_op=None) -> OperationResponse:
             work_center_name=next_op.work_center.name if next_op.work_center else None,
         )
 
+    # Calculate shortage info
+    qty_ordered = po.quantity_ordered or 0
+    qty_completed = po.quantity_completed or 0
+    qty_short = max(0, qty_ordered - qty_completed) if po.status == 'short' else 0
+
+    # Get sales order code if linked
+    sales_order_code = None
+    if po.sales_order:
+        sales_order_code = po.sales_order.code
+
     return OperationResponse(
         id=op.id,
         sequence=op.sequence,
@@ -92,12 +108,18 @@ def build_operation_response(op, po, next_op=None) -> OperationResponse:
         actual_run_minutes=op.actual_run_minutes,
         quantity_completed=op.quantity_completed,
         quantity_scrapped=op.quantity_scrapped,
+        scrap_reason=op.scrap_reason,
         notes=op.notes,
         production_order=ProductionOrderSummary(
             id=po.id,
             code=po.code,
             status=po.status,
             current_operation_sequence=current_seq,
+            quantity_ordered=qty_ordered,
+            quantity_completed=qty_completed,
+            quantity_short=qty_short,
+            sales_order_id=po.sales_order_id,
+            sales_order_code=sales_order_code,
         ),
         next_operation=next_op_info,
     )
@@ -115,7 +137,17 @@ def get_operations(
 ):
     """
     Get all operations for a production order, ordered by sequence.
+
+    Each operation includes:
+    - quantity_input: max allowed qty (from previous op or order qty)
+    - quantity_completed: good parts completed
+    - quantity_scrapped: bad parts scrapped
     """
+    # Get PO for quantity calculations
+    po = db.get(ProductionOrder, po_id)
+    if not po:
+        raise HTTPException(status_code=404, detail="Production order not found")
+
     try:
         ops = list_operations(db, po_id)
     except OperationError as e:
@@ -123,6 +155,39 @@ def get_operations(
 
     result = []
     for op in ops:
+        # Calculate max quantity allowed for this operation
+        qty_input = get_operation_max_quantity(po, op)
+
+        # Build materials list for this operation
+        op_materials = []
+        for mat in op.materials:
+            op_materials.append(OperationMaterial(
+                id=mat.id,
+                component_id=mat.component_id,
+                component_sku=mat.component.sku if mat.component else None,
+                component_name=mat.component.name if mat.component else None,
+                quantity_required=mat.quantity_required,
+                quantity_consumed=mat.quantity_consumed,
+                unit=mat.unit,
+                status=mat.status,
+            ))
+
+        # Resolve resource name - handle negative IDs (printers) vs positive (resources)
+        resource_code = None
+        resource_name = None
+        if op.resource_id:
+            if op.resource_id < 0:
+                # Negative ID = printer ID (stored as -printer_id)
+                printer = db.get(Printer, abs(op.resource_id))
+                if printer:
+                    resource_code = printer.code
+                    resource_name = printer.name
+            else:
+                # Positive ID = resource
+                if op.resource:
+                    resource_code = op.resource.code
+                    resource_name = op.resource.name
+
         result.append(OperationListItem(
             id=op.id,
             sequence=op.sequence,
@@ -133,13 +198,17 @@ def get_operations(
             work_center_code=op.work_center.code if op.work_center else None,
             work_center_name=op.work_center.name if op.work_center else None,
             resource_id=op.resource_id,
-            resource_code=op.resource.code if op.resource else None,
+            resource_code=resource_code,
+            resource_name=resource_name,
             planned_setup_minutes=op.planned_setup_minutes,
             planned_run_minutes=op.planned_run_minutes,
             actual_start=op.actual_start,
             actual_end=op.actual_end,
+            quantity_input=qty_input,
             quantity_completed=op.quantity_completed,
             quantity_scrapped=op.quantity_scrapped,
+            scrap_reason=op.scrap_reason,
+            materials=op_materials,
         ))
 
     return result
@@ -213,6 +282,7 @@ def complete_operation_endpoint(
             op_id=op_id,
             quantity_completed=request.quantity_completed,
             quantity_scrapped=request.quantity_scrapped,
+            scrap_reason=request.scrap_reason,
             actual_run_minutes=request.actual_run_minutes,
             notes=request.notes,
         )
@@ -355,10 +425,15 @@ def schedule_operation_endpoint(
             detail=f"Operation {op_id} does not belong to production order {po_id}"
         )
 
-    # Validate resource exists
-    resource = db.get(Machine, request.resource_id)
-    if not resource:
-        raise HTTPException(status_code=404, detail="Resource not found")
+    # Validate resource/printer exists
+    if request.is_printer:
+        printer = db.get(Printer, request.resource_id)
+        if not printer:
+            raise HTTPException(status_code=404, detail="Printer not found")
+    else:
+        resource = db.get(Machine, request.resource_id)
+        if not resource:
+            raise HTTPException(status_code=404, detail="Resource not found")
 
     # Attempt to schedule
     success, conflicts = schedule_operation_service(
@@ -367,6 +442,7 @@ def schedule_operation_endpoint(
         resource_id=request.resource_id,
         scheduled_start=request.scheduled_start,
         scheduled_end=request.scheduled_end,
+        is_printer=request.is_printer,
     )
 
     if not success:
@@ -378,6 +454,53 @@ def schedule_operation_endpoint(
     db.commit()
 
     return ScheduleOperationResponse(success=True)
+
+
+@router.post(
+    "/resources/next-available",
+    response_model=NextAvailableSlotResponse,
+    summary="Find next available time slot on a resource"
+)
+def get_next_available_slot(
+    request: NextAvailableSlotRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Find the next available time slot on a resource.
+
+    Useful for suggesting alternative times when scheduling conflicts occur.
+    Returns the earliest available start time and suggested end time.
+    """
+    from datetime import timedelta
+
+    # Validate resource exists
+    if request.is_printer:
+        printer = db.get(Printer, request.resource_id)
+        if not printer:
+            raise HTTPException(status_code=404, detail="Printer not found")
+        stored_resource_id = -request.resource_id
+    else:
+        resource = db.get(Machine, request.resource_id)
+        if not resource:
+            raise HTTPException(status_code=404, detail="Resource not found")
+        stored_resource_id = request.resource_id
+
+    # Find next available slot
+    next_start = find_next_available_slot(
+        db=db,
+        resource_id=stored_resource_id,
+        duration_minutes=request.duration_minutes,
+        after=request.after
+    )
+
+    # Calculate suggested end time
+    suggested_end = next_start + timedelta(minutes=request.duration_minutes)
+
+    return NextAvailableSlotResponse(
+        next_available=next_start,
+        suggested_end=suggested_end
+    )
 
 
 # =============================================================================

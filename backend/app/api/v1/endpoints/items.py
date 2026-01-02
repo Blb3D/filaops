@@ -1725,7 +1725,8 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
       1. Recalculate BOM cost from component standard_costs
       2. Add Routing process cost
     For purchased items (no BOM):
-      Use average_cost or last_cost from purchases
+      - If standard_cost already set, keep it (don't overwrite with potentially unconverted values)
+      - Otherwise, use average_cost or last_cost from purchases
 
     Returns a dict with breakdown.
     """
@@ -1761,9 +1762,14 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
 
         total_cost = bom_cost + routing_cost
     else:
-        # Purchased item: use average_cost, fall back to last_cost
+        # Purchased item: preserve existing standard_cost if set
+        # This prevents overwriting manually-set per-unit costs with
+        # potentially unconverted average_cost/last_cost values
         cost_source = "purchased"
-        if item.average_cost:
+        if item.standard_cost and item.standard_cost > 0:
+            # Keep existing standard_cost - don't overwrite
+            purchase_cost = float(item.standard_cost)
+        elif item.average_cost:
             purchase_cost = float(item.average_cost)
         elif item.last_cost:
             purchase_cost = float(item.last_cost)

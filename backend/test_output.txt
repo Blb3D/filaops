@@ -1,0 +1,112 @@
+STDOUT:
+============================= test session starts =============================
+platform win32 -- Python 3.11.9, pytest-9.0.2, pluggy-1.6.0 -- C:\repos\filaops\backend\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\repos\filaops\backend
+configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+plugins: anyio-3.7.1, asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 5 items
+
+tests/api/test_operation_status.py::TestQuantityValidation::test_complete_qty_exceeds_order_qty PASSED [ 20%]
+tests/api/test_operation_status.py::TestQuantityValidation::test_complete_qty_with_scrap_exceeds_max PASSED [ 40%]
+tests/api/test_operation_status.py::TestQuantityValidation::test_complete_second_op_limited_by_first_op PASSED [ 60%]
+tests/api/test_operation_status.py::TestQuantityValidation::test_complete_second_op_with_valid_qty PASSED [ 80%]
+tests/api/test_operation_status.py::TestQuantityValidation::test_operations_list_includes_quantity_input PASSED [100%]
+
+============================== warnings summary ===============================
+venv\Lib\site-packages\starlette\formparsers.py:10
+  C:\repos\filaops\backend\venv\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+venv\Lib\site-packages\pydantic\main.py:214
+  C:\repos\filaops\backend\venv\Lib\site-packages\pydantic\main.py:214: UserWarning: WARNING: Using default SECRET_KEY. Do not use this in production.
+    validated_self = self.__pydantic_validator__.validate_python(data, self_instance=self)
+
+tests\api\test_operation_status.py:23
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:23: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:62
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:62: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:75
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:75: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:107
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:107: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:136
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:136: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:161
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:161: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:195
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:195: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:225
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:225: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:250
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:250: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:283
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:283: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:324
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:324: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:357
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:357: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:385
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:385: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:410
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:410: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:435
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:435: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:465
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:465: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:496
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:496: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:534
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:534: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+tests\api\test_operation_status.py:548
+  C:\repos\filaops\backend\tests\api\test_operation_status.py:548: PytestUnknownMarkWarning: Unknown pytest.mark.api - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.api
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+======================= 5 passed, 21 warnings in 5.86s ========================
+
+
+STDERR:
+Sentry is attempting to send 2 pending events
+Waiting up to 2 seconds
+Press Ctrl-Break to quit
+
+
+Return code: 0

@@ -17,7 +17,8 @@ from app.db.session import get_db
 from app.models.user import User
 from app.models.quote import Quote
 from app.models.sales_order import SalesOrder, SalesOrderLine
-from app.models.production_order import ProductionOrder
+from app.models.production_order import ProductionOrder, ProductionOrderOperation
+from app.models.manufacturing import RoutingOperation
 from app.models.product import Product
 from app.models.bom import BOM, BOMLine
 from app.models.inventory import Inventory
@@ -64,6 +65,44 @@ from app.services.fulfillment_status import get_fulfillment_status
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/sales-orders", tags=["Sales Orders"])
+
+
+# ============================================================================
+# HELPER: Copy Routing Operations to Production Order
+# ============================================================================
+
+def _copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: int) -> List[ProductionOrderOperation]:
+    """
+    Copy routing operations to production order operations.
+    
+    This creates the individual operation records that track progress through
+    the manufacturing process (Print, Finishing, QC, Pack, etc.).
+    """
+    routing_ops = (
+        db.query(RoutingOperation)
+        .filter(RoutingOperation.routing_id == routing_id)
+        .order_by(RoutingOperation.sequence)
+        .all()
+    )
+
+    operations = []
+    for rop in routing_ops:
+        op = ProductionOrderOperation(
+            production_order_id=order.id,
+            routing_operation_id=rop.id,
+            work_center_id=rop.work_center_id,
+            resource_id=None,  # Resource assigned during scheduling
+            sequence=rop.sequence,
+            operation_code=rop.operation_code,
+            operation_name=rop.operation_name,
+            planned_setup_minutes=rop.setup_time_minutes or 0,
+            planned_run_minutes=float(rop.run_time_minutes or 0) * float(order.quantity_ordered),
+            status="pending",
+        )
+        db.add(op)
+        operations.append(op)
+
+    return operations
 
 
 # ============================================================================
@@ -157,6 +196,11 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                     )
                     db.add(production_order)
                     db.flush()  # Flush to detect unique constraint violations
+                    
+                    # Copy routing operations to production order
+                    if routing:
+                        _copy_routing_to_operations(db, production_order, routing.id)
+                    
                     created_orders.append(po_code)
                     break  # Success, exit retry loop
                 except IntegrityError as e:
@@ -214,6 +258,11 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                     )
                     db.add(production_order)
                     db.flush()  # Flush to detect unique constraint violations
+                    
+                    # Copy routing operations to production order
+                    if routing:
+                        _copy_routing_to_operations(db, production_order, routing.id)
+                    
                     created_orders.append(po_code)
                     break  # Success, exit retry loop
                 except IntegrityError as e:
@@ -653,6 +702,7 @@ async def convert_quote_to_sales_order(
         product_name=quote.product_name,
         quantity=quote.quantity,
         material_type=quote.material_type,
+        color=quote.color,
         finish=quote.finish,
         unit_price=quote.unit_price,
         total_price=quote.total_price,
@@ -691,6 +741,12 @@ async def convert_quote_to_sales_order(
         BOM.active.is_(True)
     ).first()
 
+    # Find the routing for this product
+    routing = db.query(Routing).filter(
+        Routing.product_id == quote.product_id,
+        Routing.is_active.is_(True)
+    ).first()
+
     # Generate production order code
     last_po = (
         db.query(ProductionOrder)
@@ -715,8 +771,9 @@ async def convert_quote_to_sales_order(
         code=po_code,
         product_id=quote.product_id,
         bom_id=bom.id if bom else None,
+        routing_id=routing.id if routing else None,
         sales_order_id=sales_order.id,  # Link to sales order for transaction tracking
-        quantity=quote.quantity,
+        quantity_ordered=quote.quantity,
         status="scheduled",  # Ready for production
         priority="normal" if quote.rush_level == "standard" else "high",
         estimated_time_minutes=estimated_time_minutes,
@@ -725,6 +782,11 @@ async def convert_quote_to_sales_order(
     )
 
     db.add(production_order)
+    db.flush()  # Get ID for routing operations
+
+    # Copy routing operations to production order
+    if routing:
+        _copy_routing_to_operations(db, production_order, routing.id)
 
     # Log the creation
     logger.info(
@@ -1239,6 +1301,310 @@ async def get_order_fulfillment_status(
     if not result:
         raise HTTPException(status_code=404, detail="Sales order not found")
     return result
+
+
+# ============================================================================
+# ENDPOINT: Material Requirements (Phase 2)
+# ============================================================================
+
+class MaterialRequirementItem(BaseModel):
+    """Single material requirement for a sales order"""
+    product_id: int
+    product_sku: str
+    product_name: str
+    unit: str
+    quantity_required: Decimal
+    quantity_available: Decimal
+    quantity_short: Decimal
+    operation_code: Optional[str] = None  # Which operation consumes this
+    material_source: str  # 'routing' or 'bom'
+    has_incoming_supply: bool = False
+    incoming_supply_details: Optional[dict] = None
+
+
+class MaterialRequirementsResponse(BaseModel):
+    """Material requirements for a sales order"""
+    sales_order_id: int
+    order_number: str
+    requirements: List[MaterialRequirementItem]
+    summary: dict
+
+
+@router.get("/{order_id}/material-requirements")
+async def get_material_requirements(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get material requirements for a sales order.
+
+    Uses the routing-first approach:
+    1. PRIMARY: Check RoutingOperationMaterial records for operation-level materials
+    2. FALLBACK: Check legacy BOM lines if no routing materials exist
+
+    This endpoint shows what materials are needed to fulfill the order,
+    current availability, and any shortages.
+
+    Returns:
+        - requirements: List of materials needed with availability info
+        - summary: Overall counts and shortage status
+    """
+    from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial
+    from app.services.blocking_issues import get_material_available, get_pending_purchase_orders
+
+    # Verify order exists and user has access
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sales order not found"
+        )
+
+    is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
+    if order.user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this order"
+        )
+
+    requirements = []
+    seen_products = {}  # Track products to aggregate duplicates
+
+    def add_requirement(
+        component: Product,
+        qty_required: Decimal,
+        unit: str,
+        operation_code: Optional[str],
+        material_source: str
+    ):
+        """Add a material requirement, aggregating duplicates."""
+        key = component.id
+        qty_available = get_material_available(db, component.id)
+        qty_short = max(Decimal("0"), qty_required - qty_available)
+
+        # Check for incoming supply
+        pending_pos = get_pending_purchase_orders(db, component.id)
+        has_incoming = len(pending_pos) > 0
+        incoming_details = None
+        if has_incoming:
+            po, po_qty = pending_pos[0]
+            incoming_details = {
+                "purchase_order_id": po.id,
+                "purchase_order_code": po.po_number,
+                "quantity": float(po_qty),
+                "expected_date": po.expected_date.isoformat() if po.expected_date else None
+            }
+
+        # Check if component has an active BOM or Routing (is a sub-assembly that can be manufactured)
+        has_bom = db.query(BOM).filter(
+            BOM.product_id == component.id,
+            BOM.active.is_(True)
+        ).first() is not None
+
+        # Also check for routing (new manufacturing system)
+        has_routing = db.query(Routing).filter(
+            Routing.product_id == component.id,
+            Routing.is_active.is_(True)
+        ).first() is not None
+
+        # Can manufacture if has either BOM or Routing
+        has_bom = has_bom or has_routing
+
+        if key in seen_products:
+            # Aggregate quantities
+            existing = seen_products[key]
+            existing["quantity_required"] += qty_required
+            existing["quantity_short"] = max(Decimal("0"), existing["quantity_required"] - qty_available)
+        else:
+            seen_products[key] = {
+                "product_id": component.id,
+                "product_sku": component.sku,
+                "product_name": component.name,
+                "unit": unit or component.unit or "EA",
+                "quantity_required": qty_required,
+                "quantity_available": qty_available,
+                "quantity_short": qty_short,
+                "operation_code": operation_code,
+                "material_source": material_source,
+                "has_incoming_supply": has_incoming,
+                "incoming_supply_details": incoming_details,
+                "has_bom": has_bom
+            }
+
+    def process_product(product_id: int, quantity: Decimal):
+        """Process material requirements for a product."""
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            return
+
+        # Check for routing with materials (PRIMARY source)
+        has_routing_materials = False
+        routing = None
+
+        try:
+            routing = db.query(Routing).filter(
+                Routing.product_id == product_id,
+                Routing.is_active.is_(True)
+            ).first()
+
+            if routing:
+                # Get all operation materials
+                routing_materials = db.query(
+                    RoutingOperationMaterial,
+                    RoutingOperation
+                ).join(
+                    RoutingOperation,
+                    RoutingOperationMaterial.routing_operation_id == RoutingOperation.id
+                ).filter(
+                    RoutingOperation.routing_id == routing.id,
+                    RoutingOperationMaterial.is_cost_only.is_(False)
+                ).all()
+
+                if routing_materials:
+                    has_routing_materials = True
+                    for mat, op in routing_materials:
+                        component = db.query(Product).filter(Product.id == mat.component_id).first()
+                        if not component:
+                            continue
+
+                        # Calculate required quantity (convert float to Decimal)
+                        qty_required = Decimal(str(mat.calculate_required_quantity(int(quantity))))
+
+                        add_requirement(
+                            component=component,
+                            qty_required=qty_required,
+                            unit=mat.unit or component.unit,
+                            operation_code=op.operation_code,
+                            material_source="routing"
+                        )
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"Error processing routing materials for product {product_id}: {e}")
+            # Fall back to BOM
+
+        # FALLBACK: Use legacy BOM if no routing materials
+        if not has_routing_materials:
+            bom = db.query(BOM).filter(
+                BOM.product_id == product_id,
+                BOM.active.is_(True)
+            ).first()
+
+            if bom:
+                for line in bom.lines:
+                    if line.is_cost_only:
+                        continue
+
+                    component = db.query(Product).filter(Product.id == line.component_id).first()
+                    if not component:
+                        continue
+
+                    # Calculate with scrap factor
+                    scrap_factor = Decimal(str(line.scrap_factor or 0)) / 100
+                    qty_required = line.quantity * quantity * (1 + scrap_factor)
+
+                    add_requirement(
+                        component=component,
+                        qty_required=qty_required,
+                        unit=line.unit or component.unit,
+                        operation_code=line.consume_stage,  # 'production' or 'shipping'
+                        material_source="bom"
+                    )
+
+    # Process based on order type
+    if order.order_type == "line_item":
+        lines = db.query(SalesOrderLine).filter(
+            SalesOrderLine.sales_order_id == order_id
+        ).all()
+
+        for line in lines:
+            if line.product_id:
+                qty = Decimal(str(line.quantity or 1))
+                process_product(line.product_id, qty)
+
+    elif order.order_type == "quote_based" and order.product_id:
+        qty = Decimal(str(order.quantity or 1))
+        process_product(order.product_id, qty)
+
+    # Convert to list and format response
+    requirements = list(seen_products.values())
+
+    # Calculate summary
+    total_materials = len(requirements)
+    materials_short = sum(1 for r in requirements if r["quantity_short"] > 0)
+    materials_with_incoming = sum(1 for r in requirements if r["has_incoming_supply"])
+
+    return {
+        "sales_order_id": order.id,
+        "order_number": order.order_number,
+        "requirements": requirements,
+        "summary": {
+            "total_materials": total_materials,
+            "materials_available": total_materials - materials_short,
+            "materials_short": materials_short,
+            "materials_with_incoming_supply": materials_with_incoming,
+            "can_fulfill": materials_short == 0,
+            "has_shortages": materials_short > 0
+        }
+    }
+
+
+@router.post("/{order_id}/pre-flight-check")
+async def pre_flight_check(
+    order_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Pre-flight check before confirming a sales order.
+
+    Quick validation to check if all materials are available for production.
+    Use this before changing order status to 'confirmed' to avoid
+    creating production orders that can't be started.
+
+    Returns:
+        - can_proceed: bool - True if all materials available
+        - shortages: List of materials that are short
+        - warnings: List of non-blocking warnings
+    """
+    # Get material requirements using the endpoint above
+    mat_req_result = await get_material_requirements(order_id, current_user, db)
+
+    shortages = [
+        {
+            "product_sku": r["product_sku"],
+            "product_name": r["product_name"],
+            "quantity_required": float(r["quantity_required"]),
+            "quantity_available": float(r["quantity_available"]),
+            "quantity_short": float(r["quantity_short"]),
+            "has_incoming_supply": r["has_incoming_supply"],
+            "incoming_supply_details": r["incoming_supply_details"]
+        }
+        for r in mat_req_result["requirements"]
+        if r["quantity_short"] > 0
+    ]
+
+    warnings = []
+
+    # Add warning for materials with incoming supply
+    for shortage in shortages:
+        if shortage["has_incoming_supply"]:
+            details = shortage["incoming_supply_details"]
+            expected = details.get("expected_date", "unknown") if details else "unknown"
+            warnings.append({
+                "type": "incoming_supply",
+                "message": f"{shortage['product_sku']} has pending PO, expected {expected}",
+                "product_sku": shortage["product_sku"]
+            })
+
+    return {
+        "sales_order_id": order_id,
+        "order_number": mat_req_result["order_number"],
+        "can_proceed": len(shortages) == 0,
+        "shortages": shortages,
+        "warnings": warnings,
+        "summary": mat_req_result["summary"]
+    }
 
 
 # ============================================================================
@@ -1966,6 +2332,10 @@ async def generate_production_orders(
             db.add(production_order)
             db.flush()  # Get the ID for the next PO code lookup
 
+            # Copy routing operations to production order
+            if routing:
+                _copy_routing_to_operations(db, production_order, routing.id)
+
             # Allocate materials for this production order
             reserve_production_materials(
                 db=db,
@@ -2015,6 +2385,10 @@ async def generate_production_orders(
 
                 db.add(production_order)
                 db.flush()  # Get the ID for allocation
+
+                # Copy routing operations to production order
+                if routing:
+                    _copy_routing_to_operations(db, production_order, routing.id)
 
                 # Allocate materials for this production order
                 reserve_production_materials(

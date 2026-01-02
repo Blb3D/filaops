@@ -1,8 +1,8 @@
 # FilaOps Redesign: Incremental Development Plan
 ## Test-Driven, Stackable Implementation
 
-**Last Updated:** 2025-12-29 (Week 4 Complete)
-**Current Status:** Week 4 complete! v2.2.0-fulfillment-status released
+**Last Updated:** 2025-12-30 (Week 5 Complete!)
+**Current Status:** Week 5 complete - All operation-level production tracking done. Week 6 next.
 
 ---
 
@@ -15,7 +15,7 @@ Week 1: Foundation                    ✅ COMPLETE
 Week 2: Demand Pegging               ✅ COMPLETE (API-101, UI-101, UI-102, E2E-101)
 Week 3: Blocking Issues              ✅ COMPLETE (API-201/202, UI-201/202/203/204, E2E-201)
 Week 4: Sales Order Fulfillment      ✅ COMPLETE (API-301/302/303, UI-301/302/303, E2E-301)
-Week 5: Smart Production Queue       ⏳ Not started
+Week 5: Operation-Level Production   ✅ COMPLETE (API-401/402/403/404, UI-401/402/403/404)
 Week 6: Command Center               ⏳ Not started
 Week 7: Integration & Polish         ⏳ Not started
 ```
@@ -35,22 +35,23 @@ Week 7: Integration & Polish         ⏳ Not started
 
 **Current Execution:**
 ```
-Phase 1: Backend APIs ✅ DONE (Weeks 2-4)
+Phase 1: Backend APIs ✅ DONE (Weeks 2-5)
 ├── Week 2 APIs ✅ (API-101: Item Demand Summary)
 ├── Week 3 APIs ✅ (API-201 + API-202: Blocking Issues)
 ├── Week 4 APIs ✅ (API-301/302/303: Fulfillment Status)
-└── Week 5 APIs ⏳
+└── Week 5 APIs ✅ (API-401/402/403/404: Operation Status/Blocking/Scheduling/Generation)
 
-Phase 2: UI Components ✅ DONE (Weeks 2-4)
+Phase 2: UI Components 🔄 (Weeks 2-5)
 ├── Week 2 UI ✅ (ItemCard built + integrated)
 ├── Week 3 UI ✅ (BlockingIssuesPanel)
 ├── Week 4 UI ✅ (SalesOrderCard + FulfillmentProgress + OrderFilters)
-└── Week 5 UI ⏳
+└── Week 5 UI 🔄 (OperationsPanel ✅, OperationActions ✅, SchedulerModal ⏳, Timeline ⏳)
 
 Phase 3: E2E Tests ✅ (Weeks 2-4)
 ├── E2E-101 ✅ (7 tests)
 ├── E2E-201 ✅ (5 tests)
-└── E2E-301 ✅ (8 tests)
+├── E2E-301 ✅ (8 tests)
+└── E2E-401 ⏳ (Week 5 operations E2E tests)
 
 Phase 4: Command Center & Polish
 ├── Week 6 features ⏳
@@ -180,16 +181,65 @@ Tests: 4 passing
 
 ---
 
-### Week 5: Smart Production Queue ⏳ PENDING
+### Week 5: Operation-Level Production ✅ COMPLETE
+
+> **Renamed:** "Smart Production Queue" → "Operation-Level Production" to better reflect actual implementation (multi-step operations per PO)
 
 | Ticket | Description | Status | Notes |
 |--------|-------------|--------|-------|
-| API-401 | Production queue with readiness | ⏳ | |
-| UI-401 | SmartProductionQueue component | ⏳ | |
-| UI-402 | Replace kanban default | ⏳ | |
-| E2E-401 | Update production tests | ⏳ | |
+| API-401 | Operation status transitions | ✅ | Start/complete/skip operations, commit `a7c429d` |
+| API-402 | Operation blocking check | ✅ | Per-op material availability, `can-start` endpoint |
+| API-403 | Double-booking validation | ✅ | Resource scheduling conflicts, `schedule` endpoint |
+| API-404 | Copy routing to PO ops | ✅ | Auto-create ops on release, commit `7f60180` |
+| UI-401 | OperationsPanel component | ✅ | `OperationsPanel.jsx`, `OperationRow.jsx` |
+| UI-402 | OperationSchedulerModal | ✅ | Schedule with conflict detection |
+| UI-403 | OperationActions component | ✅ | `OperationActions.jsx`, `SkipOperationModal.jsx` |
+| UI-404 | OperationsTimeline component | ✅ | Timeline with progress bar |
+| E2E-401 | Operations flow tests | ⏳ | Optional |
 
-**Checkpoint:** Prioritized, actionable production queue ⏳
+**Checkpoint:** Multi-step operations per PO with status transitions ✅
+
+**APIs Built:**
+```
+GET /api/v1/production-orders/{po_id}/operations
+Returns: operations[] with status, timing, materials
+
+POST /api/v1/production-orders/{po_id}/operations/{op_id}/start
+POST /api/v1/production-orders/{po_id}/operations/{op_id}/complete
+POST /api/v1/production-orders/{po_id}/operations/{op_id}/skip
+
+GET /api/v1/production-orders/{po_id}/operations/{op_id}/can-start
+Returns: can_start, blocking_issues[]
+
+POST /api/v1/production-orders/{po_id}/operations/{op_id}/schedule
+Returns: success, conflicts[]
+
+POST /api/v1/production-orders/{po_id}/operations/generate
+Creates operations from routing on manual trigger
+```
+
+**Files Created:**
+```
+Backend:
+  app/api/v1/endpoints/operation_status.py     # API endpoints
+  app/services/operation_status.py             # Status transition logic
+  app/services/operation_blocking.py           # Material availability check
+  app/services/resource_scheduling.py          # Conflict detection
+  app/services/operation_generation.py         # Routing → PO ops copy
+  app/schemas/operation_status.py              # Pydantic schemas
+  app/schemas/operation_blocking.py            # Blocking response schemas
+  tests/api/test_operation_status.py           # 14+ tests
+
+Frontend:
+  src/hooks/useResources.js                         # Resources + conflicts hooks
+  src/components/production/OperationsPanel.jsx     # Operations list container
+  src/components/production/OperationRow.jsx        # Single operation row
+  src/components/production/OperationActions.jsx    # Start/Complete/Skip buttons
+  src/components/production/SkipOperationModal.jsx  # Skip reason modal
+  src/components/production/OperationSchedulerModal.jsx  # Schedule with conflicts
+  src/components/production/OperationsTimeline.jsx  # Visual timeline
+  src/components/production/OperationsProgressBar.jsx  # Compact progress bar
+```
 
 ---
 
@@ -245,6 +295,16 @@ Tests: 4 passing
 | `week4/05-UI-302-detail-status.md` | Detail page integration | ✅ Done |
 | `week4/06-UI-303-list-integration.md` | List page integration | ✅ Done |
 | `week4/07-E2E-301-fulfillment-tests.md` | Fulfillment E2E tests | ✅ Done |
+| `week5/00-epic-overview.md` | Week 5 overview - Operation tracking | Reference |
+| `week5/01-API-401-operation-status-transitions.md` | Operation start/complete/skip | ✅ Done |
+| `week5/02-API-402-operation-blocking-check.md` | Per-op material blocking | ✅ Done |
+| `week5/03-API-403-double-booking-validation.md` | Resource scheduling conflicts | ✅ Done |
+| `week5/04-API-404-copy-routing-operations.md` | Routing → PO operations | ✅ Done |
+| `week5/05-UI-401-operations-list.md` | OperationsPanel component | ✅ Done |
+| `week5/06-UI-402-operation-scheduler.md` | OperationSchedulerModal | ⏳ Pending |
+| `week5/07-UI-403-operation-actions.md` | OperationActions component | ✅ Done |
+| `week5/08-UI-404-operations-timeline.md` | OperationsTimeline | ⏳ Pending |
+| `week5/HANDOFF.md` | Week 5 handoff notes | Reference |
 
 ---
 
@@ -265,6 +325,8 @@ Tests: 4 passing
 | TBD | API-201 | SO blocking issues (7 tests) |
 | TBD | API-202 | PO blocking issues (8 tests) |
 | 407586e | UI-201 | BlockingIssuesPanel component |
+| `a7c429d` | API-401 | Operation status transitions with start/complete/skip |
+| `7f60180` | API-404 | Copy routing to PO operations on release |
 
 ---
 
@@ -281,7 +343,11 @@ Tests: 4 passing
 | API-302 | 3 passing | ✅ |
 | API-303 | 4 passing | ✅ |
 | E2E-301 | 8 passing | ✅ |
-| **Total** | **58 passing** | |
+| API-401 | 14 passing | ✅ |
+| API-402 | ~10 passing | ✅ |
+| API-403 | ~11 passing | ✅ |
+| API-404 | ~11 passing | ✅ |
+| **Total** | **~104 passing** | |
 
 ---
 

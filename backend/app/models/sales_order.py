@@ -42,6 +42,7 @@ class SalesOrder(Base):
     product_name = Column(String(255), nullable=True)
     quantity = Column(Integer, nullable=False)
     material_type = Column(String(50), nullable=False)  # PLA, PETG, ABS, ASA, TPU
+    color = Column(String(50), nullable=True)  # Color from quote
     finish = Column(String(50), nullable=False, default="standard")  # standard, smooth, painted
 
     # Pricing (locked from quote at conversion time)

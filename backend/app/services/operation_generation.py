@@ -3,11 +3,16 @@ Operation generation service.
 
 Copies routing operations to production order operations on release.
 """
+import logging
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 
-from app.models.manufacturing import Routing, RoutingOperation
-from app.models.production_order import ProductionOrder, ProductionOrderOperation
+from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial
+from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
+from app.models.product import Product
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_active_routing(db: Session, product_id: int) -> Optional[Routing]:
@@ -94,7 +99,94 @@ def generate_operations_from_routing(
     for op in created_ops:
         db.refresh(op)
 
+    # Generate materials for each operation
+    for po_op in created_ops:
+        generate_operation_materials(
+            db=db,
+            po_operation=po_op,
+            order_quantity=production_order.quantity_ordered or 1
+        )
+
     return created_ops
+
+
+def generate_operation_materials(
+    db: Session,
+    po_operation: ProductionOrderOperation,
+    order_quantity: int
+) -> List[ProductionOrderOperationMaterial]:
+    """
+    Generate PO operation materials from routing operation material templates.
+
+    For each material in the routing operation:
+    - Calculate required quantity based on PO quantity
+    - Apply scrap factor
+    - Validate and convert UOM if needed
+    - Create ProductionOrderOperationMaterial record
+
+    Args:
+        db: Database session
+        po_operation: The PO operation to create materials for
+        order_quantity: Number of units being produced
+
+    Returns:
+        List of created ProductionOrderOperationMaterial records
+    """
+    from app.services.uom_service import convert_quantity_safe
+
+    if not po_operation.routing_operation_id:
+        return []
+
+    # Get materials from routing operation template
+    routing_materials = db.query(RoutingOperationMaterial).filter(
+        RoutingOperationMaterial.routing_operation_id == po_operation.routing_operation_id
+    ).all()
+
+    created_materials = []
+
+    for routing_mat in routing_materials:
+        # Calculate required quantity
+        qty_required = routing_mat.calculate_required_quantity(order_quantity)
+
+        # Get the component to validate UOM
+        component = db.query(Product).get(routing_mat.component_id)
+        mat_unit = (routing_mat.unit or 'EA').upper().strip()
+        component_unit = ((component.unit if component else None) or 'EA').upper().strip()
+
+        # Validate and convert UOM if needed
+        if mat_unit != component_unit:
+            converted_qty, success = convert_quantity_safe(db, qty_required, mat_unit, component_unit)
+            if success:
+                qty_required = converted_qty
+                mat_unit = component_unit
+                logger.info(
+                    f"Converted material {routing_mat.component_id} from {routing_mat.unit} to {component_unit}"
+                )
+            else:
+                # Units incompatible - log warning but keep original
+                logger.warning(
+                    f"UOM mismatch for material {routing_mat.component_id}: "
+                    f"routing uses {mat_unit}, component uses {component_unit}. "
+                    f"Keeping routing unit."
+                )
+
+        po_mat = ProductionOrderOperationMaterial(
+            production_order_operation_id=po_operation.id,
+            component_id=routing_mat.component_id,
+            routing_operation_material_id=routing_mat.id,
+            quantity_required=qty_required,
+            unit=mat_unit,
+            quantity_allocated=0,
+            quantity_consumed=0,
+            status='pending'
+        )
+        db.add(po_mat)
+        created_materials.append(po_mat)
+
+    if created_materials:
+        db.flush()
+
+    return created_materials
 
 
 def release_production_order(

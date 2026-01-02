@@ -154,7 +154,7 @@ def analyze_line_issues(
                     type=IssueType.PRODUCTION_MISSING,
                     severity=IssueSeverity.BLOCKING,
                     message=f"No production order exists for {product.sku}",
-                    reference_type="product",
+                    reference_type="make_product",  # Use make_product to distinguish from buy_product
                     reference_id=product.id,
                     reference_code=product.sku,
                     details={

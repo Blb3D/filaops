@@ -257,7 +257,8 @@ class TestCompleteOperation:
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
             db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete"  # Already done
+            sequence=10, operation_code="PRINT", status="complete",  # Already done
+            quantity_completed=Decimal("10")  # Must set completed qty for next op validation
         )
         op2 = create_test_po_operation(
             db, production_order=po, work_center=wc,
@@ -377,6 +378,155 @@ class TestSkipOperation:
 
         # Verify
         assert response.status_code == 422  # Validation error
+
+
+class TestQuantityValidation:
+    """Tests for quantity validation on complete."""
+
+    @pytest.mark.api
+    def test_complete_qty_exceeds_order_qty(self, client, db, admin_token):
+        """Cannot complete with qty > order quantity for first op."""
+        # Setup
+        product = create_test_product(db, sku="TEST-QTY-001")
+        wc = create_test_work_center(db, code="WC-QTY-1", name="Print Station")
+
+        po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
+        op = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=10, operation_code="PRINT", status="running"
+        )
+        db.commit()
+
+        # Execute - try to complete with 15 (exceeds order qty of 10)
+        response = client.post(
+            f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"quantity_completed": 15, "quantity_scrapped": 0}
+        )
+
+        # Verify
+        assert response.status_code == 400
+        assert "exceeds maximum" in response.json()["detail"].lower()
+
+    @pytest.mark.api
+    def test_complete_qty_with_scrap_exceeds_max(self, client, db, admin_token):
+        """Cannot complete with good + bad > max quantity."""
+        # Setup
+        product = create_test_product(db, sku="TEST-QTY-002")
+        wc = create_test_work_center(db, code="WC-QTY-2", name="Print Station")
+
+        po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
+        op = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=10, operation_code="PRINT", status="running"
+        )
+        db.commit()
+
+        # Execute - 8 good + 5 bad = 13 > 10
+        response = client.post(
+            f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"quantity_completed": 8, "quantity_scrapped": 5}
+        )
+
+        # Verify
+        assert response.status_code == 400
+        assert "exceeds maximum" in response.json()["detail"].lower()
+
+    @pytest.mark.api
+    def test_complete_second_op_limited_by_first_op(self, client, db, admin_token):
+        """Second operation max qty = first op's qty_completed."""
+        # Setup
+        product = create_test_product(db, sku="TEST-QTY-003")
+        wc = create_test_work_center(db, code="WC-QTY-3", name="Print Station")
+
+        po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
+        op1 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=10, operation_code="PRINT", status="complete",
+            quantity_completed=Decimal("8"), quantity_scrapped=Decimal("2")
+        )
+        op2 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=20, operation_code="CLEAN", status="running"
+        )
+        db.commit()
+
+        # Execute - try to complete with 10 (but only 8 came from op1)
+        response = client.post(
+            f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"quantity_completed": 10, "quantity_scrapped": 0}
+        )
+
+        # Verify
+        assert response.status_code == 400
+        assert "exceeds maximum" in response.json()["detail"].lower()
+
+    @pytest.mark.api
+    def test_complete_second_op_with_valid_qty(self, client, db, admin_token):
+        """Second operation can complete with qty <= first op's qty_completed."""
+        # Setup
+        product = create_test_product(db, sku="TEST-QTY-004")
+        wc = create_test_work_center(db, code="WC-QTY-4", name="Print Station")
+
+        po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
+        op1 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=10, operation_code="PRINT", status="complete",
+            quantity_completed=Decimal("8"), quantity_scrapped=Decimal("2")
+        )
+        op2 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=20, operation_code="CLEAN", status="running"
+        )
+        db.commit()
+
+        # Execute - complete with 8 (matches op1's good qty)
+        response = client.post(
+            f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
+            headers={"Authorization": f"Bearer {admin_token}"},
+            json={"quantity_completed": 7, "quantity_scrapped": 1}
+        )
+
+        # Verify - 7 + 1 = 8 which equals op1's qty_completed
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "complete"
+
+    @pytest.mark.api
+    def test_operations_list_includes_quantity_input(self, client, db, admin_token):
+        """Operations list includes quantity_input field."""
+        # Setup
+        product = create_test_product(db, sku="TEST-QTY-005")
+        wc = create_test_work_center(db, code="WC-QTY-5", name="Print Station")
+
+        po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
+        op1 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=10, operation_code="PRINT", status="complete",
+            quantity_completed=Decimal("8")
+        )
+        op2 = create_test_po_operation(
+            db, production_order=po, work_center=wc,
+            sequence=20, operation_code="CLEAN", status="pending"
+        )
+        db.commit()
+
+        # Execute
+        response = client.get(
+            f"/api/v1/production-orders/{po.id}/operations",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+
+        # Verify
+        assert response.status_code == 200
+        data = response.json()
+
+        # First op should show order qty (10)
+        assert Decimal(data[0]["quantity_input"]) == Decimal("10")
+        # Second op should show first op's qty_completed (8)
+        assert Decimal(data[1]["quantity_input"]) == Decimal("8")
 
 
 class TestOperationNotFound:

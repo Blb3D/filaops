@@ -364,6 +364,13 @@ class MRPService:
         Recursively explode a BOM to get all component requirements.
 
         Handles multi-level BOMs and detects circular references.
+        
+        ARCHITECTURE: Materials come from TWO sources:
+        1. bom_lines - legacy BOM components (sub-assemblies, etc.)
+        2. routing_operation_materials - operation-level materials (filament, packaging, etc.)
+        
+        The routing_operation_materials is the PRIMARY source for 3D printing operations
+        where materials are consumed at specific operations (Print, Ship, etc.).
 
         Args:
             product_id: Product to explode
@@ -394,59 +401,163 @@ class MRPService:
             BOM.active.is_(True)
         ).first()
 
-        if not bom:
-            # No BOM = no components needed
-            visited.discard(product_id)
-            return requirements
+        # =====================================================================
+        # PRECEDENCE CHECK: Routing Operation Materials take priority over BOM
+        # If a product has an active routing with materials defined, use ONLY
+        # those materials. Fall back to legacy BOM lines only if no routing
+        # materials exist. This prevents double-counting materials.
+        # =====================================================================
+        has_routing_materials = False
+        routing = None
 
-        # Process each BOM line
-        for line in bom.lines:
-            component = line.component
+        try:
+            from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial
 
-            # Calculate quantity with scrap factor
-            scrap_factor = Decimal(str(line.scrap_factor or 0))
-            
-            # Get BOM line quantity in BOM's unit (e.g., 50 G)
-            bom_qty = Decimal(str(line.quantity))
-            bom_unit = line.unit or 'EA'
-            
-            # Get component's base unit (e.g., KG)
-            component_unit = component.unit or 'EA'
-            
-            # Convert BOM quantity to component's base unit
-            # e.g., 50 G -> 0.05 KG
-            converted_qty = convert_uom(bom_qty, bom_unit, component_unit)
-            
-            # Apply parent quantity and scrap factor
-            adjusted_qty = quantity * converted_qty * (1 + scrap_factor / 100)
+            # Check if routing has materials (this is the PRIMARY source)
+            routing = self.db.query(Routing).filter(
+                Routing.product_id == product_id,
+                Routing.is_active.is_(True)
+            ).first()
 
-            req = ComponentRequirement(
-                product_id=component.id,
-                product_sku=component.sku,
-                product_name=component.name,
-                bom_level=level,
-                gross_quantity=adjusted_qty,
-                scrap_factor=scrap_factor,
-                parent_product_id=parent_product_id or product_id,
-                source_demand_type=source_demand_type,
-                source_demand_id=source_demand_id,
-                due_date=due_date
-            )
-            requirements.append(req)
+            if routing:
+                # Check if any operations have materials defined
+                routing_material_count = self.db.query(RoutingOperationMaterial).join(
+                    RoutingOperation
+                ).filter(
+                    RoutingOperation.routing_id == routing.id,
+                    RoutingOperationMaterial.is_cost_only.is_(False)
+                ).count()
+                has_routing_materials = routing_material_count > 0
+        except Exception:
+            # If routing tables don't exist (e.g., in unit tests), fall back to BOM
+            pass
 
-            # Recursively explode if component has a BOM
-            if component.has_bom:
-                sub_requirements = self.explode_bom(
+        # =====================================================================
+        # SOURCE 1 (FALLBACK): BOM Lines (legacy bom_lines table)
+        # Used ONLY if no routing materials are defined.
+        # This maintains backward compatibility with products that haven't
+        # been migrated to operation-level materials.
+        # =====================================================================
+        if bom and not has_routing_materials:
+            for line in bom.lines:
+                component = line.component
+
+                # Calculate quantity with scrap factor
+                scrap_factor = Decimal(str(line.scrap_factor or 0))
+
+                # Get BOM line quantity in BOM's unit (e.g., 50 G)
+                bom_qty = Decimal(str(line.quantity))
+                bom_unit = line.unit or 'EA'
+
+                # Get component's base unit (e.g., KG)
+                component_unit = component.unit or 'EA'
+
+                # Convert BOM quantity to component's base unit
+                # e.g., 50 G -> 0.05 KG
+                converted_qty = convert_uom(bom_qty, bom_unit, component_unit)
+
+                # Apply parent quantity and scrap factor
+                adjusted_qty = quantity * converted_qty * (1 + scrap_factor / 100)
+
+                req = ComponentRequirement(
                     product_id=component.id,
-                    quantity=adjusted_qty,
+                    product_sku=component.sku,
+                    product_name=component.name,
+                    bom_level=level,
+                    gross_quantity=adjusted_qty,
+                    scrap_factor=scrap_factor,
+                    parent_product_id=parent_product_id or product_id,
                     source_demand_type=source_demand_type,
                     source_demand_id=source_demand_id,
-                    due_date=due_date,
-                    level=level + 1,
-                    parent_product_id=product_id,
-                    visited=visited.copy()
+                    due_date=due_date
                 )
-                requirements.extend(sub_requirements)
+                requirements.append(req)
+
+                # Recursively explode if component has a BOM
+                if component.has_bom:
+                    sub_requirements = self.explode_bom(
+                        product_id=component.id,
+                        quantity=adjusted_qty,
+                        source_demand_type=source_demand_type,
+                        source_demand_id=source_demand_id,
+                        due_date=due_date,
+                        level=level + 1,
+                        parent_product_id=product_id,
+                        visited=visited.copy()
+                    )
+                    requirements.extend(sub_requirements)
+
+        # =====================================================================
+        # SOURCE 2 (PRIMARY): Routing Operation Materials
+        # This is the preferred source for 3D printing - materials consumed
+        # at each operation. Examples: filament at Print op, boxes at Ship op.
+        # Only used if routing has materials defined.
+        # =====================================================================
+        if routing and has_routing_materials:
+            # Get all operations for this routing
+            operations = self.db.query(RoutingOperation).filter(
+                RoutingOperation.routing_id == routing.id
+            ).all()
+
+            operation_ids = [op.id for op in operations]
+
+            if operation_ids:
+                # Get all materials for these operations
+                op_materials = self.db.query(RoutingOperationMaterial).filter(
+                    RoutingOperationMaterial.routing_operation_id.in_(operation_ids),
+                    RoutingOperationMaterial.is_cost_only.is_(False)  # Skip cost-only entries
+                ).all()
+
+                for mat in op_materials:
+                    # Get the component product
+                    component = self.db.query(Product).get(mat.component_id)
+                    if not component:
+                        continue
+
+                    # Calculate quantity with scrap factor
+                    # routing_operation_materials uses: quantity, unit, scrap_factor
+                    scrap_factor = Decimal(str(mat.scrap_factor or 0))
+
+                    # Get material quantity in material's unit (e.g., 35 G)
+                    mat_qty = Decimal(str(mat.quantity or 0))
+                    mat_unit = (mat.unit or 'EA').upper().strip()
+
+                    # Get component's base unit (e.g., G for filament)
+                    component_unit = (component.unit or 'EA').upper().strip()
+
+                    # Convert material quantity to component's base unit
+                    converted_qty = convert_uom(mat_qty, mat_unit, component_unit)
+
+                    # Apply parent quantity and scrap factor
+                    adjusted_qty = quantity * converted_qty * (1 + scrap_factor / 100)
+
+                    req = ComponentRequirement(
+                        product_id=component.id,
+                        product_sku=component.sku,
+                        product_name=component.name,
+                        bom_level=level,
+                        gross_quantity=adjusted_qty,
+                        scrap_factor=scrap_factor,
+                        parent_product_id=parent_product_id or product_id,
+                        source_demand_type=source_demand_type,
+                        source_demand_id=source_demand_id,
+                        due_date=due_date
+                    )
+                    requirements.append(req)
+
+                    # Recursively explode if component has a BOM (sub-assembly)
+                    if component.has_bom:
+                        sub_requirements = self.explode_bom(
+                            product_id=component.id,
+                            quantity=adjusted_qty,
+                            source_demand_type=source_demand_type,
+                            source_demand_id=source_demand_id,
+                            due_date=due_date,
+                            level=level + 1,
+                            parent_product_id=product_id,
+                            visited=visited.copy()
+                        )
+                        requirements.extend(sub_requirements)
 
         visited.discard(product_id)
         return requirements
@@ -550,20 +661,19 @@ class MRPService:
                 net_shortage = Decimal("0")
 
             # Get cost for costing display
-            # NOTE: For materials (filament), last_cost is stored as $/KG (industry standard)
-            # but inventory and BOM quantities are in grams. Need to convert for display.
-            # Non-materials have cost in their product.unit already.
+            # NOTE: For materials (filament), last_cost is stored per reference unit ($/KG)
+            # but inventory and BOM quantities may be in different units (grams).
+            # Use uom_service to properly convert costs.
             raw_cost = Decimal(str(product.standard_cost or product.last_cost or 0))
             product_unit = (product.unit or 'EA').upper().strip()
 
-            # Check if this is a material (filament) - costs are stored as $/KG
-            is_material = product.material_type_id is not None
-            if is_material and product_unit == 'G':
-                # Materials: cost is stored as $/KG, convert to $/g for costing
-                # e.g., $13/KG * 0.001 = $0.013/g
-                unit_cost = raw_cost * Decimal('0.001')
-            else:
-                unit_cost = raw_cost
+            # Get the reference unit that costs are stored in (e.g., KG for mass)
+            # and convert to the product's tracking unit
+            from app.services.uom_service import get_cost_reference_unit, convert_cost_for_unit
+            cost_ref_unit = get_cost_reference_unit(product_unit)
+            unit_cost = convert_cost_for_unit(raw_cost, cost_ref_unit, product_unit)
+            if unit_cost is None:
+                unit_cost = raw_cost  # Fallback if conversion fails
 
             net_req = NetRequirement(
                 product_id=req.product_id,

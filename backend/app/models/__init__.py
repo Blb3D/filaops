@@ -1,7 +1,7 @@
 """Database models"""
 from app.models.item_category import ItemCategory
 from app.models.product import Product
-from app.models.production_order import ProductionOrder, ProductionOrderOperation
+from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
 from app.models.print_job import PrintJob
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.sales_order import SalesOrder, SalesOrderLine
@@ -14,7 +14,7 @@ from app.models.material import MaterialType, Color, MaterialColor, MaterialInve
 from app.models.vendor import Vendor
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.work_center import WorkCenter, Machine
-from app.models.manufacturing import Routing, RoutingOperation, Resource
+from app.models.manufacturing import Routing, RoutingOperation, Resource, RoutingOperationMaterial
 from app.models.mrp import MRPRun, PlannedOrder
 from app.models.traceability import (
     SerialNumber, MaterialLot, ProductionLotConsumption, CustomerTraceabilityProfile
@@ -72,6 +72,8 @@ __all__ = [
     "Resource",
     "Routing",
     "RoutingOperation",
+    "RoutingOperationMaterial",
+    "ProductionOrderOperationMaterial",
     # MRP
     "MRPRun",
     "PlannedOrder",

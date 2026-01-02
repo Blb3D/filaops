@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import ItemForm from "../../components/ItemForm";
 import MaterialForm from "../../components/MaterialForm";
-import BOMEditor from "../../components/BOMEditor";
 import RoutingEditor from "../../components/RoutingEditor";
 import StatCard from "../../components/StatCard";
 import { ItemCard } from "../../components/inventory/ItemCard";
@@ -512,6 +512,7 @@ function CategoryModal({ category, categories, onSave, onClose }) {
 }
 
 export default function AdminItems() {
+  const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -538,9 +539,7 @@ export default function AdminItems() {
   const [showItemModal, setShowItemModal] = useState(false);
   const [showMaterialModal, setShowMaterialModal] = useState(false);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
-  const [showBOMEditor, setShowBOMEditor] = useState(false);
   const [showRoutingEditor, setShowRoutingEditor] = useState(false);
-  const [selectedItemForBOM, setSelectedItemForBOM] = useState(null);
   const [selectedItemForRouting, setSelectedItemForRouting] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [editingCategory, setEditingCategory] = useState(null);
@@ -1523,10 +1522,7 @@ export default function AdminItems() {
                           item.procurement_type === "make_or_buy") && (
                           <>
                             <button
-                              onClick={() => {
-                                setSelectedItemForBOM(item);
-                                setShowBOMEditor(true);
-                              }}
+                              onClick={() => navigate(`/admin/bom?product=${item.id}`)}
                               className="text-purple-400 hover:text-purple-300 text-sm"
                               title="Edit BOM"
                             >
@@ -1658,21 +1654,6 @@ export default function AdminItems() {
           } else {
             fetchItems();
           }
-        }}
-      />
-
-      {/* BOM Editor */}
-      <BOMEditor
-        isOpen={showBOMEditor}
-        onClose={() => {
-          setShowBOMEditor(false);
-          setSelectedItemForBOM(null);
-        }}
-        productId={selectedItemForBOM?.id}
-        onSuccess={() => {
-          setShowBOMEditor(false);
-          setSelectedItemForBOM(null);
-          fetchItems(); // Refresh to show updated BOM status
         }}
       />
 

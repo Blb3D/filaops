@@ -774,7 +774,7 @@ def create_test_resource(
     code: Optional[str] = None,
     name: str = "Test Resource",
     status: str = "available",
-    active: bool = True
+    is_active: bool = True
 ) -> "Machine":
     """
     Create a test resource/machine.
@@ -785,7 +785,7 @@ def create_test_resource(
         code: Resource code (auto-generated if not provided)
         name: Resource name
         status: Resource status (available, busy, maintenance, offline)
-        active: Whether resource is active
+        is_active: Whether resource is active
 
     Returns:
         Created or existing Machine instance
@@ -805,7 +805,7 @@ def create_test_resource(
         code=code,
         name=name,
         status=status,
-        active=active
+        is_active=is_active
     )
     db.add(resource)
     db.flush()
@@ -829,7 +829,9 @@ def create_test_po_operation(
     actual_start: Optional[datetime] = None,
     actual_end: Optional[datetime] = None,
     scheduled_start: Optional[datetime] = None,
-    scheduled_end: Optional[datetime] = None
+    scheduled_end: Optional[datetime] = None,
+    quantity_completed: Optional[Decimal] = None,
+    quantity_scrapped: Optional[Decimal] = None
 ) -> "ProductionOrderOperation":
     """
     Create a test production order operation.
@@ -848,6 +850,8 @@ def create_test_po_operation(
         actual_end: Actual end time
         scheduled_start: Scheduled start time
         scheduled_end: Scheduled end time
+        quantity_completed: Good quantity completed
+        quantity_scrapped: Bad quantity scrapped
 
     Returns:
         Created ProductionOrderOperation instance
@@ -867,7 +871,9 @@ def create_test_po_operation(
         actual_start=actual_start,
         actual_end=actual_end,
         scheduled_start=scheduled_start,
-        scheduled_end=scheduled_end
+        scheduled_end=scheduled_end,
+        quantity_completed=quantity_completed or Decimal("0"),
+        quantity_scrapped=quantity_scrapped or Decimal("0")
     )
     db.add(op)
     db.flush()

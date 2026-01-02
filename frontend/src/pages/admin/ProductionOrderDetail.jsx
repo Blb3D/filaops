@@ -12,6 +12,42 @@ import { useParams, useNavigate } from "react-router-dom";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 import BlockingIssuesPanel from "../../components/orders/BlockingIssuesPanel";
+import {
+  OperationsPanel,
+  OperationSchedulerModal,
+  OperationsTimeline
+} from "../../components/production";
+
+/**
+ * Wrapper to fetch operations for timeline
+ */
+function OperationsTimelineWrapper({ productionOrderId }) {
+  const [operations, setOperations] = useState([]);
+  const token = localStorage.getItem('adminToken');
+
+  useEffect(() => {
+    const fetchOps = async () => {
+      if (!token || !productionOrderId) return;
+      try {
+        const res = await fetch(
+          `${API_URL}/api/v1/production-orders/${productionOrderId}/operations`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setOperations(Array.isArray(data) ? data : data.operations || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch operations for timeline:', err);
+      }
+    };
+    fetchOps();
+  }, [productionOrderId, token]);
+
+  if (operations.length === 0) return null;
+
+  return <OperationsTimeline operations={operations} />;
+}
 
 export default function ProductionOrderDetail() {
   const { orderId } = useParams();
@@ -23,6 +59,8 @@ export default function ProductionOrderDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [updating, setUpdating] = useState(false);
+  const [schedulerOpen, setSchedulerOpen] = useState(false);
+  const [selectedOperation, setSelectedOperation] = useState(null);
 
   useEffect(() => {
     if (orderId) {
@@ -241,6 +279,23 @@ export default function ProductionOrderDetail() {
         </div>
       </div>
 
+      {/* Operations Timeline (visual overview) */}
+      {order.status !== 'draft' && (
+        <OperationsTimelineWrapper productionOrderId={order.id} />
+      )}
+
+      {/* Operations Panel */}
+      <OperationsPanel
+        productionOrderId={order.id}
+        orderStatus={order.status}
+        onOperationClick={(operation) => {
+          if (operation.status === 'pending') {
+            setSelectedOperation(operation);
+            setSchedulerOpen(true);
+          }
+        }}
+      />
+
       {/* Blocking Issues Panel */}
       <BlockingIssuesPanel
         orderType="production"
@@ -287,6 +342,21 @@ export default function ProductionOrderDetail() {
           <p className="text-gray-300">{order.notes}</p>
         </div>
       )}
+
+      {/* Operation Scheduler Modal */}
+      <OperationSchedulerModal
+        isOpen={schedulerOpen}
+        onClose={() => {
+          setSchedulerOpen(false);
+          setSelectedOperation(null);
+        }}
+        operation={selectedOperation}
+        productionOrder={order}
+        onScheduled={() => {
+          toast.success('Operation scheduled successfully');
+          fetchOrder();
+        }}
+      />
     </div>
   );
 }

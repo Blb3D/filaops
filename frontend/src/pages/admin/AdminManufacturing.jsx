@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import RoutingEditor from "../../components/RoutingEditor";
+import ManufacturingBOMEditor from "../../components/ManufacturingBOMEditor";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 
@@ -37,6 +38,8 @@ export default function AdminManufacturing() {
   const [editingRouting, setEditingRouting] = useState(null);
   const [routingProductId, setRoutingProductId] = useState(null);
   const [selectedWorkCenter, setSelectedWorkCenter] = useState(null);
+  const [showBOMModal, setShowBOMModal] = useState(false);
+  const [bomProductId, setBomProductId] = useState(null);
 
   const token = localStorage.getItem("adminToken");
 

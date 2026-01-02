@@ -15,7 +15,7 @@ from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.logging_config import get_logger
-from app.models.manufacturing import Routing, RoutingOperation
+from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial
 from app.models.work_center import WorkCenter
 from app.models.product import Product
 from app.api.v1.endpoints.auth import get_current_user
@@ -30,6 +30,11 @@ from app.schemas.manufacturing import (
     RoutingOperationResponse,
     ApplyTemplateRequest,
     ApplyTemplateResponse,
+    RoutingOperationMaterialCreate,
+    RoutingOperationMaterialUpdate,
+    RoutingOperationMaterialResponse,
+    RoutingOperationWithMaterialsResponse,
+    ManufacturingBOMResponse,
 )
 
 router = APIRouter()
@@ -784,6 +789,158 @@ async def delete_routing_operation(
 
 
 # ============================================================================
+# Routing Operation Materials CRUD (Manufacturing BOM)
+# ============================================================================
+
+@router.get("/operations/{operation_id}/materials", response_model=List[RoutingOperationMaterialResponse])
+async def list_operation_materials(
+    operation_id: int,
+    db: Session = Depends(get_db),
+):
+    """List all materials for a routing operation."""
+    operation = db.query(RoutingOperation).filter(RoutingOperation.id == operation_id).first()
+    if not operation:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    materials = db.query(RoutingOperationMaterial).options(
+        joinedload(RoutingOperationMaterial.component)
+    ).filter(
+        RoutingOperationMaterial.routing_operation_id == operation_id
+    ).all()
+
+    return [_build_material_response(m) for m in materials]
+
+
+@router.post("/operations/{operation_id}/materials", response_model=RoutingOperationMaterialResponse, status_code=status.HTTP_201_CREATED)
+async def add_operation_material(
+    operation_id: int,
+    data: RoutingOperationMaterialCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a material to a routing operation."""
+    operation = db.query(RoutingOperation).filter(RoutingOperation.id == operation_id).first()
+    if not operation:
+        raise HTTPException(status_code=404, detail="Operation not found")
+
+    # Verify component exists
+    component = db.query(Product).filter(Product.id == data.component_id).first()
+    if not component:
+        raise HTTPException(status_code=400, detail="Component product not found")
+
+    material = RoutingOperationMaterial(
+        routing_operation_id=operation_id,
+        component_id=data.component_id,
+        quantity=data.quantity,
+        quantity_per=data.quantity_per.value,
+        unit=data.unit,
+        scrap_factor=data.scrap_factor,
+        is_cost_only=data.is_cost_only,
+        is_optional=data.is_optional,
+        notes=data.notes,
+    )
+    db.add(material)
+    db.commit()
+    db.refresh(material)
+
+    logger.info(f"Added material {component.sku} to operation {operation_id}")
+
+    return _build_material_response(material)
+
+
+@router.put("/materials/{material_id}", response_model=RoutingOperationMaterialResponse)
+async def update_operation_material(
+    material_id: int,
+    data: RoutingOperationMaterialUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a routing operation material."""
+    material = db.query(RoutingOperationMaterial).filter(
+        RoutingOperationMaterial.id == material_id
+    ).first()
+
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    # Verify component if changing
+    if data.component_id:
+        component = db.query(Product).filter(Product.id == data.component_id).first()
+        if not component:
+            raise HTTPException(status_code=400, detail="Component product not found")
+
+    # Update fields
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        if field == "quantity_per" and value:
+            value = value.value
+        setattr(material, field, value)
+
+    material.updated_at = datetime.utcnow()  # type: ignore[assignment]
+    db.commit()
+    db.refresh(material)
+
+    logger.info(f"Updated material {material_id}")
+
+    return _build_material_response(material)
+
+
+@router.delete("/materials/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_operation_material(
+    material_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a routing operation material."""
+    material = db.query(RoutingOperationMaterial).filter(
+        RoutingOperationMaterial.id == material_id
+    ).first()
+
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+
+    db.delete(material)
+    db.commit()
+
+    logger.info(f"Deleted material {material_id}")
+
+
+# ============================================================================
+# Manufacturing BOM View (unified routing + materials)
+# ============================================================================
+
+@router.get("/manufacturing-bom/{product_id}", response_model=ManufacturingBOMResponse)
+async def get_manufacturing_bom(
+    product_id: int,
+    db: Session = Depends(get_db),
+):
+    """
+    Get the complete Manufacturing BOM for a product.
+    
+    Returns the active routing with all operations and their materials,
+    providing a unified view of the manufacturing process.
+    """
+    # Get product
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # Get active routing
+    routing = db.query(Routing).options(
+        joinedload(Routing.operations).joinedload(RoutingOperation.work_center),
+        joinedload(Routing.operations).joinedload(RoutingOperation.materials).joinedload(RoutingOperationMaterial.component)
+    ).filter(
+        Routing.product_id == product_id,
+        Routing.is_active.is_(True)
+    ).order_by(desc(Routing.version)).first()
+
+    if not routing:
+        raise HTTPException(status_code=404, detail="No active routing found for product")
+
+    return _build_manufacturing_bom_response(routing, product, db)
+
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
@@ -901,4 +1058,86 @@ def _build_operation_response(op: RoutingOperation) -> RoutingOperationResponse:
         calculated_cost=calculated_cost,
         created_at=op.created_at,
         updated_at=op.updated_at,
+    )
+
+
+def _build_material_response(material: RoutingOperationMaterial) -> RoutingOperationMaterialResponse:
+    """Build a routing operation material response."""
+    component = material.component
+    
+    return RoutingOperationMaterialResponse(  # type: ignore[arg-type]
+        id=material.id,
+        routing_operation_id=material.routing_operation_id,
+        component_id=material.component_id,
+        component_sku=component.sku if component else None,
+        component_name=component.name if component else None,
+        quantity=material.quantity,
+        quantity_per=material.quantity_per,
+        unit=material.unit,
+        scrap_factor=material.scrap_factor,
+        is_cost_only=material.is_cost_only,
+        is_optional=material.is_optional,
+        notes=material.notes,
+        unit_cost=material.unit_cost or Decimal("0"),
+        extended_cost=material.extended_cost or Decimal("0"),
+        created_at=material.created_at,
+        updated_at=material.updated_at,
+    )
+
+
+def _build_operation_with_materials_response(
+    op: RoutingOperation,
+    db: Session
+) -> RoutingOperationWithMaterialsResponse:
+    """Build a routing operation response with materials."""
+    base = _build_operation_response(op)
+    
+    # Get materials for this operation
+    materials = [_build_material_response(m) for m in (op.materials or [])]
+    
+    # Calculate material cost
+    material_cost = sum(m.extended_cost for m in materials)
+    total_cost_with_materials = base.calculated_cost + material_cost
+    
+    return RoutingOperationWithMaterialsResponse(
+        **base.model_dump(),
+        materials=materials,
+        material_cost=material_cost,
+        total_cost_with_materials=total_cost_with_materials,
+    )
+
+
+def _build_manufacturing_bom_response(
+    routing: Routing,
+    product: Product,
+    db: Session
+) -> ManufacturingBOMResponse:
+    """Build a complete Manufacturing BOM response."""
+    operations = []
+    total_labor_cost = Decimal("0")
+    total_material_cost = Decimal("0")
+    
+    for op in sorted(routing.operations, key=lambda x: x.sequence):
+        if op.is_active:
+            op_response = _build_operation_with_materials_response(op, db)
+            operations.append(op_response)
+            total_labor_cost += op_response.calculated_cost
+            total_material_cost += op_response.material_cost
+    
+    return ManufacturingBOMResponse(  # type: ignore[arg-type]
+        routing_id=routing.id,
+        routing_code=routing.code,
+        routing_name=routing.name,
+        product_id=product.id,
+        product_sku=product.sku,
+        product_name=product.name,
+        version=routing.version,
+        revision=routing.revision,
+        is_active=routing.is_active,
+        operations=operations,
+        total_labor_cost=total_labor_cost,
+        total_material_cost=total_material_cost,
+        total_cost=total_labor_cost + total_material_cost,
+        created_at=routing.created_at,
+        updated_at=routing.updated_at,
     )

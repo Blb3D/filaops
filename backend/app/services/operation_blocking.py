@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.models.product import Product
 from app.models.bom import BOMLine
-from app.models.production_order import ProductionOrder, ProductionOrderOperation
+from app.models.production_order import (
+    ProductionOrder,
+    ProductionOrderOperation,
+    ProductionOrderOperationMaterial
+)
 from app.models.inventory import Inventory
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.services.operation_material_mapping import get_consume_stages_for_operation
@@ -132,8 +136,12 @@ def check_operation_blocking(
     """
     Check if an operation is blocked by material shortages.
 
-    Only checks materials for THIS operation's consume stage,
-    not all materials for the entire PO.
+    Uses a two-tier approach:
+    1. PRIMARY: Check ProductionOrderOperationMaterial records (routing-based)
+    2. FALLBACK: Check BOM lines via consume_stage (legacy)
+
+    This matches the MRP precedence logic - if routing materials exist,
+    use those; otherwise fall back to legacy BOM.
 
     Args:
         db: Database session
@@ -147,6 +155,7 @@ def check_operation_blocking(
         - can_start: bool
         - blocking_issues: list of material shortage issues
         - material_issues: list of all material checks (for detailed view)
+        - material_source: 'routing' or 'bom' indicating which source was used
 
     Raises:
         OperationBlockingError: If PO or operation not found
@@ -160,17 +169,90 @@ def check_operation_blocking(
         "can_start": True,
         "blocking_issues": [],
         "material_issues": [],
+        "material_source": None,
     }
 
-    # If no BOM, nothing to check
+    # =========================================================================
+    # PRIMARY: Check PO Operation Materials (routing-based)
+    # These are created when the PO is released from routing materials
+    # =========================================================================
+    po_op_materials = db.query(ProductionOrderOperationMaterial).filter(
+        ProductionOrderOperationMaterial.production_order_operation_id == op_id
+    ).all()
+
+    # Filter to only non-cost-only, non-optional materials that aren't consumed
+    active_materials = [
+        m for m in po_op_materials
+        if m.status != 'consumed'
+    ]
+
+    if active_materials:
+        result["material_source"] = "routing"
+
+        for mat in active_materials:
+            component = db.get(Product, mat.component_id)
+            if not component:
+                continue
+
+            # Quantity required is already calculated when the material was created
+            qty_required = mat.quantity_required or Decimal("0")
+            qty_allocated = mat.quantity_allocated or Decimal("0")
+
+            # Get available inventory (not already allocated)
+            qty_available = get_material_available(db, component.id)
+
+            # Short = required - allocated - available
+            qty_needed = qty_required - qty_allocated
+            qty_short = max(Decimal("0"), qty_needed - qty_available)
+
+            # Check for incoming supply
+            incoming_supply = None
+            pending_pos = get_pending_purchase_orders(db, component.id)
+            if pending_pos:
+                po_incoming, po_qty = pending_pos[0]
+                incoming_supply = {
+                    "purchase_order_id": po_incoming.id,
+                    "purchase_order_code": po_incoming.po_number,
+                    "quantity": float(po_qty),
+                    "expected_date": po_incoming.expected_date.isoformat() if po_incoming.expected_date else None
+                }
+
+            material_issue = {
+                "product_id": component.id,
+                "product_sku": component.sku,
+                "product_name": component.name,
+                "quantity_required": float(qty_required),
+                "quantity_allocated": float(qty_allocated),
+                "quantity_available": float(max(Decimal("0"), qty_available)),
+                "quantity_short": float(qty_short),
+                "unit": mat.unit,
+                "po_operation_material_id": mat.id,
+                "status": mat.status,
+                "incoming_supply": incoming_supply,
+            }
+
+            result["material_issues"].append(material_issue)
+
+            # If short, add to blocking issues
+            if qty_short > 0:
+                result["can_start"] = False
+                result["blocking_issues"].append(material_issue)
+
+        return result
+
+    # =========================================================================
+    # FALLBACK: Check BOM lines via consume_stage (legacy)
+    # Used when PO doesn't have operation materials (pre-routing products)
+    # =========================================================================
     if not po.bom_id:
         return result
 
-    # Get BOM lines for this operation
     bom_lines = get_bom_lines_for_operation(db, po.bom_id, op.operation_code)
 
     if not bom_lines:
         return result
+
+    result["material_source"] = "bom"
 
     # Calculate quantity to produce (remaining)
     qty_to_produce = (po.quantity_ordered or Decimal("0")) - (po.quantity_completed or Decimal("0"))

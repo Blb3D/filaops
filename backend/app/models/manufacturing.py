@@ -29,6 +29,11 @@ class Resource(Base):
     machine_type = Column(String(100), nullable=True)  # 'X1C', 'P1S', 'A1'
     serial_number = Column(String(100), nullable=True)
 
+    # Printer capabilities (for scheduling/filtering)
+    # 'open' = open frame printer (A1, A1 Mini)
+    # 'enclosed' = enclosed printer (P1S, P1P, X1C) - required for ABS/ASA/PC
+    printer_class = Column(String(20), default="open", nullable=True)
+
     # Bambu Integration
     bambu_device_id = Column(String(100), nullable=True)
     bambu_ip_address = Column(String(50), nullable=True)
@@ -44,9 +49,25 @@ class Resource(Base):
 
     # Relationships
     work_center = relationship("WorkCenter", back_populates="resources")
+    operations = relationship("ProductionOrderOperation", back_populates="resource")
 
     def __repr__(self):
         return f"<Resource {self.code}: {self.name} ({self.status})>"
+
+    @property
+    def is_available(self):
+        """True if resource is available for scheduling"""
+        return self.is_active and self.status == "available"
+
+    @property
+    def is_enclosed(self):
+        """True if this is an enclosed printer (required for ABS/ASA/PC)"""
+        return self.printer_class == "enclosed"
+
+    @property
+    def is_open(self):
+        """True if this is an open frame printer"""
+        return self.printer_class == "open" or self.printer_class is None
 
 
 class Routing(Base):
@@ -167,6 +188,8 @@ class RoutingOperation(Base):
     routing = relationship("Routing", back_populates="operations")
     work_center = relationship("WorkCenter", back_populates="routing_operations")
     predecessor = relationship("RoutingOperation", remote_side=[id], foreign_keys=[predecessor_operation_id])
+    materials = relationship("RoutingOperationMaterial", back_populates="routing_operation",
+                            cascade="all, delete-orphan", order_by="RoutingOperationMaterial.id")
 
     def __repr__(self):
         return f"<RoutingOperation {self.sequence}: {self.operation_name}>"
@@ -190,3 +213,100 @@ class RoutingOperation(Base):
         if not rate and self.work_center:
             rate = self.work_center.total_rate_per_hour
         return hours * float(rate or 0)
+
+    @property
+    def material_cost(self):
+        """Total material cost for this operation"""
+        total = 0
+        for mat in self.materials:
+            total += mat.extended_cost
+        return total
+
+
+class RoutingOperationMaterial(Base):
+    """
+    Material required for a specific routing operation.
+    
+    This is the TEMPLATE - defines what materials are needed per unit.
+    When a Production Order is released, these are copied to 
+    ProductionOrderOperationMaterial with calculated quantities.
+    
+    Examples:
+    - OP-10 Print: Black PLA 37g per unit
+    - OP-40 Pack: Part Label 1 EA per unit
+    - OP-50 Ship: 6x6x6 Box 1 EA per unit
+    """
+    __tablename__ = "routing_operation_materials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    routing_operation_id = Column(Integer, ForeignKey("routing_operations.id", ondelete="CASCADE"), 
+                                  nullable=False, index=True)
+    component_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    
+    # Quantity per unit/batch/order
+    quantity = Column(Numeric(18, 6), nullable=False)
+    quantity_per = Column(String(20), default="unit", nullable=False)  # unit, batch, order
+    unit = Column(String(20), default="EA", nullable=False)
+    
+    # Scrap/waste allowance (percentage)
+    scrap_factor = Column(Numeric(5, 2), default=0, nullable=True)
+    
+    # Flags
+    is_cost_only = Column(Boolean, default=False, nullable=False)  # Don't consume inventory
+    is_optional = Column(Boolean, default=False, nullable=False)   # Not required to complete op
+    
+    # Notes
+    notes = Column(Text, nullable=True)
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Relationships
+    routing_operation = relationship("RoutingOperation", back_populates="materials")
+    component = relationship("Product", foreign_keys=[component_id])
+
+    def __repr__(self):
+        return f"<RoutingOperationMaterial {self.component.sku if self.component else 'N/A'}: {self.quantity} {self.unit}>"
+
+    @property
+    def unit_cost(self):
+        """
+        Cost per unit of this material.
+        
+        Component costs are stored per USAGE unit (e.g., $/G for filament).
+        All UOM conversion happens at PO receiving, so no conversion needed here.
+        """
+        if not self.component:
+            return 0
+        # Use standard_cost, average_cost, or last_cost based on availability
+        cost = self.component.standard_cost or self.component.average_cost or self.component.last_cost
+        return float(cost) if cost else 0
+
+    @property
+    def extended_cost(self):
+        """Total cost for this material line (quantity × unit_cost)"""
+        qty = float(self.quantity or 0)
+        scrap = float(self.scrap_factor or 0) / 100
+        qty_with_scrap = qty * (1 + scrap)
+        return qty_with_scrap * self.unit_cost
+
+    def calculate_required_quantity(self, order_quantity: int) -> float:
+        """
+        Calculate total quantity required for a production order.
+        
+        Args:
+            order_quantity: Number of units being produced
+            
+        Returns:
+            Total quantity needed including scrap allowance
+        """
+        base_qty = float(self.quantity or 0)
+        scrap = float(self.scrap_factor or 0) / 100
+        
+        if self.quantity_per == 'unit':
+            gross_qty = base_qty * order_quantity
+        else:  # batch or order
+            gross_qty = base_qty
+        
+        return gross_qty * (1 + scrap)
