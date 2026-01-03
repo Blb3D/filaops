@@ -113,7 +113,13 @@ class ItemBase(BaseModel):
     sku: Optional[str] = Field(None, max_length=50, description="Unique SKU (auto-generated if not provided)")
     name: str = Field(..., min_length=1, max_length=255, description="Item name")
     description: Optional[str] = None
-    unit: Optional[str] = Field("EA", max_length=20)
+    
+    # Unit of Measure - Two fields for proper cost handling
+    # - unit: Storage/inventory unit (G for filament, EA for hardware)
+    # - purchase_uom: Purchasing unit (KG for filament, EA for hardware)
+    # Costs (standard_cost, etc.) are per PURCHASE unit
+    unit: Optional[str] = Field("EA", max_length=20, description="Storage/inventory unit (G, EA, etc.)")
+    purchase_uom: Optional[str] = Field("EA", max_length=20, description="Purchase unit - costs are per this unit (KG, EA, etc.)")
 
     # Classification
     item_type: ItemType = Field(ItemType.FINISHED_GOOD, description="Type of item")
@@ -176,6 +182,7 @@ class ItemUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     unit: Optional[str] = Field(None, max_length=20)
+    purchase_uom: Optional[str] = Field(None, max_length=20, description="Purchase unit - costs are per this unit")
 
     # Classification
     item_type: Optional[ItemType] = None
@@ -224,6 +231,7 @@ class ItemListResponse(BaseModel):
     category_id: Optional[int] = None
     category_name: Optional[str] = None
     unit: Optional[str] = None
+    purchase_uom: Optional[str] = None  # Purchase unit - costs are per this
     standard_cost: Optional[Decimal] = None
     average_cost: Optional[Decimal] = None
     selling_price: Optional[Decimal] = None
@@ -251,6 +259,9 @@ class ItemResponse(ItemBase):
     average_cost: Optional[Decimal] = None
     last_cost: Optional[Decimal] = None
     active: bool
+    
+    # Cost display helpers
+    cost_per_storage_unit: Optional[Decimal] = None  # Calculated: standard_cost converted to $/storage_unit
 
     # Category info
     category_name: Optional[str] = None
@@ -298,6 +309,7 @@ class ItemCSVImportResult(BaseModel):
     updated: int
     skipped: int
     errors: List[dict] = []
+    warnings: List[dict] = []  # UOM configuration warnings
 
 
 class ItemBulkUpdateRequest(BaseModel):

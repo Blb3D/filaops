@@ -523,6 +523,7 @@ async def create_item(
         name=request.name,
         description=request.description,
         unit=request.unit or "EA",
+        purchase_uom=request.purchase_uom or request.unit or "EA",  # Default to unit if not specified
         item_type=request.item_type.value if request.item_type else "finished_good",
         procurement_type=request.procurement_type.value if request.procurement_type else "buy",
         category_id=request.category_id,
@@ -1295,6 +1296,19 @@ async def import_items_csv(
         "Wholesale Cost", "wholesale_cost",
     ]
 
+    # UOM column mappings
+    UNIT_COLUMNS = [
+        "unit", "Unit", "UOM", "uom", "Unit of Measure", "unit_of_measure",
+    ]
+
+    PURCHASE_UOM_COLUMNS = [
+        "purchase_uom", "Purchase UOM", "purchase_unit", "Purchase Unit",
+        "buying_unit", "Buying Unit", "order_unit", "Order Unit",
+    ]
+
+    # Import UOM validation service
+    from app.services.product_uom_service import get_recommended_uoms, validate_product_uoms
+
     for row_num, row in enumerate(reader, start=2):
         result.total_rows += 1
 
@@ -1362,11 +1376,24 @@ async def import_items_csv(
                             existing.description = value
                         break
                 
-                # Update unit
-                unit = (row.get("unit", "") or row.get("Unit", "") or row.get("UOM", "")).strip()
-                if unit:
-                    existing.unit = unit
-                
+                # Update unit using column mappings
+                unit_value = ""
+                for col in UNIT_COLUMNS:
+                    if row.get(col, "").strip():
+                        unit_value = row.get(col, "").strip().upper()
+                        break
+                if unit_value:
+                    existing.unit = unit_value
+
+                # Update purchase_uom using column mappings
+                purchase_uom_value = ""
+                for col in PURCHASE_UOM_COLUMNS:
+                    if row.get(col, "").strip():
+                        purchase_uom_value = row.get(col, "").strip().upper()
+                        break
+                if purchase_uom_value:
+                    existing.purchase_uom = purchase_uom_value
+
                 # Update item type
                 item_type_raw = (row.get("item_type", "") or row.get("Item Type", "") or row.get("Type", "")).strip()
                 if item_type_raw:
@@ -1469,6 +1496,16 @@ async def import_items_csv(
                     existing.upc = upc
                 
                 existing.updated_at = datetime.utcnow()
+
+                # Validate UOM configuration for updated items
+                is_valid, warning_msg = validate_product_uoms(db, existing)
+                if not is_valid:
+                    result.warnings.append({
+                        "row": row_num,
+                        "sku": sku,
+                        "warning": warning_msg
+                    })
+
                 result.updated += 1
             else:
                 # Find price using all possible column names
@@ -1564,12 +1601,41 @@ async def import_items_csv(
                         if category:
                             final_category_id = category.id
                 
+                # Get unit from CSV
+                unit_value = ""
+                for col in UNIT_COLUMNS:
+                    if row.get(col, "").strip():
+                        unit_value = row.get(col, "").strip().upper()
+                        break
+
+                # Get purchase_uom from CSV
+                purchase_uom_value = ""
+                for col in PURCHASE_UOM_COLUMNS:
+                    if row.get(col, "").strip():
+                        purchase_uom_value = row.get(col, "").strip().upper()
+                        break
+
+                # Auto-detect UOMs based on SKU/category if not provided
+                if not purchase_uom_value or not unit_value:
+                    recommended_purchase, recommended_unit, is_material = get_recommended_uoms(
+                        db, sku=sku, category_id=final_category_id
+                    )
+                    if not purchase_uom_value:
+                        purchase_uom_value = recommended_purchase
+                    if not unit_value and is_material:
+                        unit_value = recommended_unit
+
+                # Final defaults
+                final_unit = unit_value or "EA"
+                final_purchase_uom = purchase_uom_value or final_unit
+
                 # Create new
                 item = Product(
                     sku=sku,
                     name=name,
                     description=description,
-                    unit=row.get("unit", "") or row.get("Unit", "") or "EA",
+                    unit=final_unit,
+                    purchase_uom=final_purchase_uom,
                     item_type=(row.get("item_type", "") or row.get("Item Type", "")).strip() or default_item_type,
                     category_id=final_category_id,
                     standard_cost=standard_cost,
@@ -1579,6 +1645,17 @@ async def import_items_csv(
                     active=True,
                 )
                 db.add(item)
+                db.flush()  # Flush to get ID for validation
+
+                # Validate UOM configuration and collect warnings
+                is_valid, warning_msg = validate_product_uoms(db, item)
+                if not is_valid:
+                    result.warnings.append({
+                        "row": row_num,
+                        "sku": sku,
+                        "warning": warning_msg
+                    })
+
                 result.created += 1
 
         except Exception as e:
@@ -1587,7 +1664,7 @@ async def import_items_csv(
 
     db.commit()
 
-    logger.info(f"CSV import complete: {result.created} created, {result.updated} updated, {result.skipped} skipped")
+    logger.info(f"CSV import complete: {result.created} created, {result.updated} updated, {result.skipped} skipped, {len(result.warnings)} UOM warnings")
 
     return result
 

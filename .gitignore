@@ -154,6 +154,12 @@ CURRENT_SESSION.md
 /test_*.py
 !backend/app/tests/
 
+# Backend debug/diagnostic scripts (one-off, not part of codebase)
+backend/scripts/
+
+# AI assistant instructions (local context only)
+.ai-instructions/
+
 # Temporary JSON files
 accept.json
 convert_order.json

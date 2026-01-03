@@ -62,6 +62,10 @@ def get_effective_cost(product: "Product") -> "Optional[Decimal]":
         # Fallback to last_cost for products without average yet
         if product.last_cost is not None:
             return Decimal(str(product.last_cost))
+        # Fallback to standard_cost for new products with no receiving history yet
+        # This allows BOM costing and quoting before first purchase
+        if product.standard_cost is not None:
+            return Decimal(str(product.standard_cost))
         return None
 
     elif method == "fifo":
@@ -154,12 +158,16 @@ def get_allocations_by_production_order(
 # This function converts cost from PURCHASING unit ($/KG) to INVENTORY unit ($/G).
 #
 # WHY THIS EXISTS:
-# - Products store cost per purchasing unit (e.g., $14.99/KG for filament)
-# - Inventory transactions store quantity in base unit (e.g., grams)
-# - We must convert cost to match: $14.99/KG -> $0.01499/G
+# - Products store cost per PURCHASE unit (product.purchase_uom, e.g., $/KG)
+# - Inventory transactions store quantity in STORAGE unit (product.unit, e.g., G)
+# - We must convert cost to match: $20/KG -> $0.02/G
 #
-# WITHOUT THIS: 3856 G * $14.99 = $57,801 (caused $1.1M fake COGS!)
-# WITH THIS:    3856 G * $0.01499 = $57.80 (correct)
+# WITHOUT THIS: 3856 G * $20 = $77,120 (caused $1.1M fake COGS!)
+# WITH THIS:    3856 G * $0.02 = $77.12 (correct)
+#
+# KEY FIELDS:
+# - product.purchase_uom: Unit we BUY in (KG, BOX, EA) - costs are per this
+# - product.unit: Unit we STORE in (G, EA) - inventory quantities use this
 #
 # DO NOT CHANGE without verifying accounting dashboard COGS calculations.
 # ============================================================================
@@ -168,13 +176,13 @@ def get_effective_cost_per_inventory_unit(product: "Product") -> "Optional[Decim
     Get the effective cost for a product, converted to cost per inventory unit.
 
     Product costs (standard_cost, average_cost, last_cost) are stored per the
-    cost reference unit (e.g., $/KG for materials). When inventory tracks in
-    a different unit (e.g., grams), we must convert to $/inventory_unit.
+    PURCHASE unit (product.purchase_uom). When inventory tracks in a different
+    unit (product.unit), we must convert to $/storage_unit.
 
     Example:
-        - Product has unit='G' and standard_cost=14.99 ($/KG)
-        - Returns: 0.01499 ($/G)
-        - So: 1000 G * $0.01499/G = $14.99 (correct!)
+        - Product has purchase_uom='KG', unit='G', standard_cost=20.00 ($/KG)
+        - Returns: 0.02 ($/G)
+        - So: 1000 G * $0.02/G = $20.00 (correct!)
 
     Args:
         product: Product to get cost for
@@ -186,11 +194,15 @@ def get_effective_cost_per_inventory_unit(product: "Product") -> "Optional[Decim
     if base_cost is None:
         return None
 
-    inventory_unit = (product.unit or 'EA').upper().strip()
-    cost_reference_unit = get_cost_reference_unit(inventory_unit)
+    storage_unit = (product.unit or 'EA').upper().strip()
+    purchase_unit = (getattr(product, 'purchase_uom', None) or storage_unit).upper().strip()
 
-    # Convert cost from reference unit to inventory unit
-    return convert_cost_for_unit(base_cost, cost_reference_unit, inventory_unit)
+    # If purchase and storage units are the same, no conversion needed
+    if purchase_unit == storage_unit:
+        return base_cost
+
+    # Convert cost from purchase unit to storage unit
+    return convert_cost_for_unit(base_cost, purchase_unit, storage_unit)
 
 
 def convert_and_generate_notes(
@@ -762,6 +774,115 @@ def consume_from_material_lots(
         )
 
     return consumptions
+
+
+def consume_operation_material(
+    db: Session,
+    material: "ProductionOrderOperationMaterial",
+    production_order: ProductionOrder,
+    created_by: Optional[str] = None,
+) -> Optional[InventoryTransaction]:
+    """
+    Consume a single operation material and create proper inventory transaction.
+
+    This is the ROBUST version that actually:
+    - Creates an InventoryTransaction with cost_per_unit
+    - Updates Inventory.on_hand_quantity
+    - Handles UOM conversion
+    - Links the transaction back to the material record
+
+    Called by operation_status.consume_operation_materials() when an operation completes.
+
+    Args:
+        db: Database session
+        material: The ProductionOrderOperationMaterial to consume
+        production_order: The production order (for reference info)
+        created_by: User completing the operation
+
+    Returns:
+        The created InventoryTransaction, or None if material was already consumed
+    """
+    from app.models.production_order import ProductionOrderOperationMaterial
+
+    # Skip already consumed materials
+    if material.status == 'consumed':
+        logger.info(f"Material {material.id} already consumed, skipping")
+        return None
+
+    # Get the component product
+    component = db.query(Product).filter(Product.id == material.component_id).first()
+    if not component:
+        logger.error(f"Component {material.component_id} not found for material {material.id}")
+        return None
+
+    location = get_or_create_default_location(db)
+
+    # Calculate quantity to consume
+    qty_to_consume = Decimal(str(material.quantity_required or 0))
+    if qty_to_consume <= 0:
+        logger.warning(f"Material {material.id} has zero quantity, skipping")
+        return None
+
+    # UOM Conversion: material.unit -> component.unit (inventory unit)
+    material_unit = (material.unit or component.unit or "EA").upper().strip()
+    component_unit = (component.unit or "EA").upper().strip()
+
+    try:
+        total_qty, notes = convert_and_generate_notes(
+            db=db,
+            bom_qty=qty_to_consume,
+            line_unit=material_unit,
+            component_unit=component_unit,
+            component_name=component.name,
+            component_sku=component.sku,
+            reference_prefix="Op consumed for PO#",
+            reference_code=production_order.code,
+        )
+    except UOMConversionError as e:
+        logger.error(f"UOM conversion failed for material {material.id}: {e}")
+        # Don't silently fail - mark material with error but don't create bad transaction
+        material.status = 'error'
+        material.updated_at = datetime.utcnow()
+        return None
+
+    # Create the actual inventory transaction with cost
+    txn = create_inventory_transaction(
+        db=db,
+        product_id=material.component_id,
+        location_id=location.id,
+        transaction_type="consumption",
+        quantity=total_qty,
+        reference_type="production_order",
+        reference_id=production_order.id,
+        notes=notes,
+        cost_per_unit=get_effective_cost_per_inventory_unit(component),
+        created_by=created_by,
+    )
+
+    # Update the material record and link transaction
+    material.quantity_consumed = qty_to_consume
+    material.status = 'consumed'
+    material.consumed_at = datetime.utcnow()
+    material.inventory_transaction_id = txn.id
+    material.updated_at = datetime.utcnow()
+
+    # Track lot consumption for traceability (FIFO)
+    lot_consumptions = consume_from_material_lots(
+        db=db,
+        component_id=material.component_id,
+        quantity=total_qty,
+        production_order_id=production_order.id,
+        bom_line_id=None,  # Operation materials don't have BOM line links
+    )
+
+    logger.info(
+        f"Consumed {total_qty} {component_unit} of {component.sku} "
+        f"for operation material {material.id} (PO#{production_order.code})"
+        f"{f' (tracked in {len(lot_consumptions)} lot(s))' if lot_consumptions else ''}"
+        f" - cost_per_unit: ${txn.cost_per_unit or 0:.4f}"
+    )
+
+    return txn
 
 
 def consume_production_materials(

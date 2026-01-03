@@ -261,8 +261,10 @@ def create_material_product(
         description=f"Filament supply: {material_type.name} in {color.name}",
         item_type='supply',
         procurement_type='buy',
-        unit='G',  # STAR SCHEMA: Materials use grams (G) as base unit
-        standard_cost=material_type.base_price_per_kg,  # Cost is still $/KG
+        unit='G',  # STAR SCHEMA: Materials use grams (G) as storage unit
+        purchase_uom='KG',  # Purchase unit - costs (standard_cost) are $/KG
+        standard_cost=material_type.base_price_per_kg,  # Cost is $/KG (purchase unit)
+        is_raw_material=True,
         material_type_id=material_type.id,
         color_id=color.id,
         active=True

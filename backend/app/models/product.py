@@ -23,7 +23,13 @@ class Product(Base):
     legacy_sku = Column(String(50), nullable=True, index=True)  # Old SKU for Squarespace mapping
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    unit = Column(String(20), default='EA')
+    
+    # Unit of Measure - TWO FIELDS for proper cost handling
+    # - unit: Storage/inventory unit (G for filament, EA for hardware)
+    # - purchase_uom: Purchasing unit (KG for filament, EA for hardware)
+    # Costs (standard_cost, etc.) are stored per PURCHASE unit
+    unit = Column(String(20), default='EA')  # Storage unit
+    purchase_uom = Column(String(20), default='EA')  # Purchase unit (costs are per this)
 
     # Item classification
     item_type = Column(String(20), default='finished_good', nullable=False)  # finished_good, component, supply, service
