@@ -13,6 +13,7 @@ from app.models.user import User, RefreshToken
 from app.models.material import MaterialType, Color, MaterialColor, MaterialInventory
 from app.models.vendor import Vendor
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
+from app.models.purchase_order_document import PurchaseOrderDocument, VendorItem
 from app.models.work_center import WorkCenter, Machine
 from app.models.manufacturing import Routing, RoutingOperation, Resource, RoutingOperationMaterial
 from app.models.mrp import MRPRun, PlannedOrder
@@ -66,6 +67,8 @@ __all__ = [
     "Vendor",
     "PurchaseOrder",
     "PurchaseOrderLine",
+    "PurchaseOrderDocument",
+    "VendorItem",
     # Manufacturing Routes
     "WorkCenter",
     "Machine", 

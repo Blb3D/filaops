@@ -305,3 +305,205 @@ class ReceivePOResponse(BaseModel):
     transactions_created: List[int] = []  # IDs of inventory transactions
     spools_created: List[str] = []  # List of spool numbers created
     material_lots_created: List[str] = []  # Lot numbers for traceability
+
+
+# ============================================================================
+# Document Schemas
+# ============================================================================
+
+class DocumentType(str, Enum):
+    """Types of documents that can be attached to a PO"""
+    INVOICE = "invoice"
+    PACKING_SLIP = "packing_slip"
+    RECEIPT = "receipt"
+    QUOTE = "quote"
+    SHIPPING_LABEL = "shipping_label"
+    OTHER = "other"
+
+
+class PODocumentBase(BaseModel):
+    """Base document fields"""
+    document_type: DocumentType = Field(..., description="Type of document")
+    notes: Optional[str] = None
+
+
+class PODocumentCreate(PODocumentBase):
+    """Create a new document (file comes via multipart form)"""
+    pass
+
+
+class PODocumentUpdate(BaseModel):
+    """Update document metadata"""
+    document_type: Optional[DocumentType] = None
+    notes: Optional[str] = None
+
+
+class PODocumentResponse(BaseModel):
+    """Document response"""
+    id: int
+    purchase_order_id: int
+    document_type: str
+    file_name: str
+    original_file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    file_path: Optional[str] = None
+    storage_type: str
+    file_size: Optional[int] = None
+    mime_type: Optional[str] = None
+    google_drive_id: Optional[str] = None
+    notes: Optional[str] = None
+    uploaded_by: Optional[str] = None
+    uploaded_at: datetime
+    download_url: Optional[str] = None  # Computed URL for downloading
+    preview_url: Optional[str] = None  # Computed URL for preview (Google Drive)
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# Vendor Item (SKU Mapping) Schemas
+# ============================================================================
+
+class VendorItemBase(BaseModel):
+    """Base vendor item fields"""
+    vendor_sku: str = Field(..., max_length=100, description="Vendor's SKU/part number")
+    vendor_description: Optional[str] = Field(None, max_length=500)
+    product_id: Optional[int] = Field(None, description="Mapped FilaOps product ID")
+    default_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    default_purchase_unit: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = None
+
+
+class VendorItemCreate(VendorItemBase):
+    """Create a new vendor item mapping"""
+    pass
+
+
+class VendorItemUpdate(BaseModel):
+    """Update vendor item mapping"""
+    vendor_description: Optional[str] = Field(None, max_length=500)
+    product_id: Optional[int] = None
+    default_unit_cost: Optional[Decimal] = Field(None, ge=0)
+    default_purchase_unit: Optional[str] = Field(None, max_length=20)
+    notes: Optional[str] = None
+
+
+class VendorItemResponse(VendorItemBase):
+    """Vendor item response"""
+    id: int
+    vendor_id: int
+    last_seen_at: Optional[datetime] = None
+    times_ordered: int = 0
+    created_at: datetime
+    updated_at: datetime
+    # Joined product info
+    product_sku: Optional[str] = None
+    product_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
+# QuickBooks Export Schemas
+# ============================================================================
+
+class QBExportType(str, Enum):
+    """QuickBooks export types"""
+    EXPENSE = "expense"  # Direct expenses (credit card purchases)
+    BILL = "bill"  # Accounts payable
+    CHECK = "check"  # Check register
+
+
+class QBExportFormat(str, Enum):
+    """QuickBooks export formats"""
+    CSV = "csv"  # Universal CSV
+    IIF = "iif"  # QuickBooks Desktop Interchange Format
+
+
+class QBExportRequest(BaseModel):
+    """Request for QuickBooks export"""
+    start_date: date
+    end_date: date
+    export_type: QBExportType = QBExportType.EXPENSE
+    format: QBExportFormat = QBExportFormat.CSV
+    include_tax: bool = True
+    include_shipping: bool = True
+    include_line_detail: bool = False
+    status_filter: Optional[List[str]] = Field(
+        default=["received", "closed"],
+        description="Only export POs with these statuses"
+    )
+
+
+class QBExportPreviewLine(BaseModel):
+    """Preview line for QB export"""
+    date: date
+    vendor: str
+    po_number: str
+    account: str
+    amount: Decimal
+    memo: str
+    class_name: Optional[str] = None
+
+
+class QBExportPreviewResponse(BaseModel):
+    """Preview of QB export before download"""
+    total_pos: int
+    total_amount: Decimal
+    date_range: str
+    lines: List[QBExportPreviewLine]
+
+
+# ============================================================================
+# Low Stock → PO Workflow Schemas
+# ============================================================================
+
+class LowStockItem(BaseModel):
+    """A product that's below its reorder point"""
+    product_id: int
+    sku: str
+    name: str
+    current_qty: Decimal
+    reorder_point: Decimal
+    reorder_qty: Decimal
+    shortage: Decimal  # How much below reorder point
+    unit: str
+    purchase_uom: Optional[str] = None
+    last_cost: Optional[Decimal] = None
+    preferred_vendor_id: Optional[int] = None
+    preferred_vendor_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class LowStockByVendor(BaseModel):
+    """Low stock items grouped by vendor"""
+    vendor_id: Optional[int] = None
+    vendor_name: str
+    vendor_code: Optional[str] = None
+    items: List[LowStockItem]
+    total_estimated_cost: Decimal
+
+
+class LowStockResponse(BaseModel):
+    """Response with low stock items grouped by vendor"""
+    total_items: int
+    vendors: List[LowStockByVendor]
+
+
+class CreatePOFromLowStockItem(BaseModel):
+    """Single item for PO creation from low stock"""
+    product_id: int
+    quantity: Decimal = Field(..., gt=0)
+    unit_cost: Optional[Decimal] = Field(None, ge=0)
+    purchase_unit: Optional[str] = None
+
+
+class CreatePOFromLowStockRequest(BaseModel):
+    """Request to create PO from selected low stock items"""
+    vendor_id: int
+    items: List[CreatePOFromLowStockItem]
+    notes: Optional[str] = None

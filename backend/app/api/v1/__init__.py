@@ -15,6 +15,9 @@ from app.api.v1.endpoints import (
     materials,
     vendors,
     purchase_orders,
+    po_documents,
+    low_stock,
+    exports,
     amazon_import,
     work_centers,
     resources,
@@ -110,6 +113,27 @@ router.include_router(
     purchase_orders.router,
     prefix="/purchase-orders",
     tags=["purchase-orders"]
+)
+
+# Purchase Order Documents (multi-file upload)
+router.include_router(
+    po_documents.router,
+    prefix="/purchase-orders",
+    tags=["purchase-orders"]
+)
+
+# Low Stock Workflow (create POs from low stock)
+router.include_router(
+    low_stock.router,
+    prefix="/purchase-orders",
+    tags=["purchase-orders"]
+)
+
+# Exports (QuickBooks, etc.)
+router.include_router(
+    exports.router,
+    prefix="/exports",
+    tags=["exports"]
 )
 
 # Amazon Import

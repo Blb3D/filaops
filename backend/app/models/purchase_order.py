@@ -63,6 +63,7 @@ class PurchaseOrder(Base):
     # Relationships
     vendor = relationship("Vendor", backref="purchase_orders")
     lines = relationship("PurchaseOrderLine", back_populates="purchase_order", cascade="all, delete-orphan")
+    documents = relationship("PurchaseOrderDocument", back_populates="purchase_order", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<PurchaseOrder {self.po_number}: {self.status}>"

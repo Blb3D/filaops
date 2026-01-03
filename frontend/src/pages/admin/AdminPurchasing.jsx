@@ -7,6 +7,7 @@ import VendorDetailPanel from "../../components/purchasing/VendorDetailPanel";
 import POCreateModal from "../../components/purchasing/POCreateModal";
 import PODetailModal from "../../components/purchasing/PODetailModal";
 import ReceiveModal from "../../components/purchasing/ReceiveModal";
+import QuickBooksExportModal from "../../components/purchasing/QuickBooksExportModal";
 
 // Purchasing Trend Chart Component
 function PurchasingChart({ data, period, onPeriodChange, loading }) {
@@ -271,6 +272,10 @@ export default function AdminPurchasing() {
   const [lowStockItems, setLowStockItems] = useState([]);
   const [lowStockSummary, setLowStockSummary] = useState(null);
   const [lowStockLoading, setLowStockLoading] = useState(false);
+  const [selectedLowStockIds, setSelectedLowStockIds] = useState(new Set());
+
+  // QuickBooks Export Modal
+  const [showQBExportModal, setShowQBExportModal] = useState(false);
 
   // Company Settings (for auto-calc tax)
   const [companySettings, setCompanySettings] = useState(null);
@@ -399,6 +404,53 @@ export default function AdminPurchasing() {
       return product;
     });
   }, [products, shortageMap]);
+
+  // Group selected low-stock items by vendor for bulk PO creation
+  const selectedItemsByVendor = useMemo(() => {
+    const grouped = {};
+    lowStockItems
+      .filter(item => selectedLowStockIds.has(item.id))
+      .forEach(item => {
+        const vendorId = item.preferred_vendor_id || 'no_vendor';
+        const vendorName = item.preferred_vendor_name || 'No Preferred Vendor';
+        if (!grouped[vendorId]) {
+          grouped[vendorId] = {
+            vendorId: vendorId === 'no_vendor' ? null : vendorId,
+            vendorName,
+            items: [],
+            totalValue: 0,
+          };
+        }
+        grouped[vendorId].items.push(item);
+        grouped[vendorId].totalValue += (item.shortfall || 0) * (item.last_cost || 0);
+      });
+    return Object.values(grouped);
+  }, [lowStockItems, selectedLowStockIds]);
+
+  // Low stock checkbox handlers
+  const toggleLowStockItem = (itemId) => {
+    setSelectedLowStockIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllLowStock = () => {
+    if (selectedLowStockIds.size === lowStockItems.length) {
+      setSelectedLowStockIds(new Set());
+    } else {
+      setSelectedLowStockIds(new Set(lowStockItems.map(i => i.id)));
+    }
+  };
+
+  const clearLowStockSelection = () => {
+    setSelectedLowStockIds(new Set());
+  };
 
   const fetchPurchasingTrend = async (period) => {
     if (!token) return;
@@ -859,6 +911,41 @@ export default function AdminPurchasing() {
     } catch (err) {
       toast.error(err.message);
     }
+  };
+
+  // Create PO from selected low-stock items for a specific vendor
+  const handleCreatePOFromSelection = async (vendorGroup) => {
+    if (!vendorGroup.vendorId) {
+      toast.warning("Items without a preferred vendor cannot be bulk-ordered. Please set preferred vendors first.");
+      return;
+    }
+
+    // Build initial items for PO modal
+    const initialItems = vendorGroup.items.map(item => ({
+      id: item.id,
+      sku: item.sku,
+      name: item.name,
+      unit: item.unit || "EA",
+      shortfall: item.reorder_quantity || item.shortfall || 1,
+      last_cost: item.last_cost || 0,
+    }));
+
+    // Set initial items and open PO modal
+    setInitialItemsForPO(initialItems);
+    setSelectedPO(null);
+
+    // Ensure company settings are loaded
+    if (!companySettings) {
+      await fetchCompanySettings();
+    }
+
+    setShowPOModal(true);
+    setActiveTab("orders");
+
+    // Clear selection after creating PO
+    clearLowStockSelection();
+
+    toast.info(`Creating PO for ${vendorGroup.vendorName} with ${initialItems.length} items`);
   };
 
   // ============================================================================
@@ -1754,18 +1841,76 @@ export default function AdminPurchasing() {
                 </h3>
                 <p className="text-sm text-gray-400 mt-0.5">
                   {lowStockItems.length} items below reorder point or with MRP shortages
+                  {selectedLowStockIds.size > 0 && (
+                    <span className="ml-2 text-blue-400">({selectedLowStockIds.size} selected)</span>
+                  )}
                 </p>
               </div>
-              <button
-                onClick={fetchLowStock}
-                disabled={lowStockLoading}
-                className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 flex items-center gap-2"
-              >
-                <svg className={`w-4 h-4 ${lowStockLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                {lowStockLoading ? "Refreshing..." : "Refresh"}
-              </button>
+              <div className="flex items-center gap-2">
+                {/* QuickBooks Export Button */}
+                <button
+                  onClick={() => setShowQBExportModal(true)}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Export to QB
+                </button>
+
+                {/* Create PO Dropdown - shows when items are selected */}
+                {selectedLowStockIds.size > 0 && selectedItemsByVendor.length > 0 && (
+                  <div className="relative group">
+                    <button className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm text-white flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      Create PO ({selectedLowStockIds.size})
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div className="absolute right-0 mt-1 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      {selectedItemsByVendor.map((group) => (
+                        <button
+                          key={group.vendorId || 'no_vendor'}
+                          onClick={() => handleCreatePOFromSelection(group)}
+                          disabled={!group.vendorId}
+                          className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 first:rounded-t-lg last:rounded-b-lg ${
+                            !group.vendorId ? 'text-gray-500 cursor-not-allowed' : 'text-white'
+                          }`}
+                        >
+                          <div className="font-medium">{group.vendorName}</div>
+                          <div className="text-xs text-gray-400">
+                            {group.items.length} items · ${group.totalValue.toFixed(2)}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clear Selection */}
+                {selectedLowStockIds.size > 0 && (
+                  <button
+                    onClick={clearLowStockSelection}
+                    className="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300"
+                  >
+                    Clear
+                  </button>
+                )}
+
+                <button
+                  onClick={fetchLowStock}
+                  disabled={lowStockLoading}
+                  className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 flex items-center gap-2"
+                >
+                  <svg className={`w-4 h-4 ${lowStockLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  {lowStockLoading ? "Refreshing..." : "Refresh"}
+                </button>
+              </div>
             </div>
 
             {lowStockLoading ? (
@@ -1789,6 +1934,14 @@ export default function AdminPurchasing() {
               <table className="w-full">
                 <thead className="bg-gray-800/50">
                   <tr>
+                    <th className="text-center py-3 px-2 text-xs font-medium text-gray-400 uppercase w-10">
+                      <input
+                        type="checkbox"
+                        checked={lowStockItems.length > 0 && selectedLowStockIds.size === lowStockItems.length}
+                        onChange={toggleAllLowStock}
+                        className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                      />
+                    </th>
                     <th className="text-left py-3 px-4 text-xs font-medium text-gray-400 uppercase">
                       Urgency
                     </th>
@@ -1824,8 +1977,16 @@ export default function AdminPurchasing() {
                         key={item.id}
                         className={`border-b border-gray-800 hover:bg-gray-800/30 ${
                           isCritical ? 'bg-red-500/5' : isUrgent ? 'bg-orange-500/5' : ''
-                        }`}
+                        } ${selectedLowStockIds.has(item.id) ? 'bg-blue-500/10' : ''}`}
                       >
+                        <td className="py-3 px-2 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedLowStockIds.has(item.id)}
+                            onChange={() => toggleLowStockItem(item.id)}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                          />
+                        </td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             {isCritical && (
@@ -1993,7 +2154,6 @@ export default function AdminPurchasing() {
           onStatusChange={handleStatusChange}
           onEdit={() => setShowPOModal(true)}
           onReceive={() => setShowReceiveModal(true)}
-          onUpload={(file) => handleFileUpload(selectedPO.id, file)}
         />
       )}
 
@@ -2094,6 +2254,14 @@ export default function AdminPurchasing() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* QuickBooks Export Modal */}
+      {showQBExportModal && (
+        <QuickBooksExportModal
+          isOpen={showQBExportModal}
+          onClose={() => setShowQBExportModal(false)}
+        />
       )}
     </div>
   );

@@ -1,8 +1,8 @@
 /**
  * PODetailModal - View purchase order details with actions
  */
-import { useState } from "react";
 import POActivityTimeline from "../POActivityTimeline";
+import DocumentUploadPanel from "./DocumentUploadPanel";
 
 const statusColors = {
   draft: "bg-gray-600 text-gray-100",
@@ -19,39 +19,7 @@ export default function PODetailModal({
   onStatusChange,
   onEdit,
   onReceive,
-  onUpload,
 }) {
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) {
-      setUploading(true);
-      await onUpload(file);
-      setUploading(false);
-    }
-  };
-
-  const handleFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setUploading(true);
-      await onUpload(file);
-      setUploading(false);
-    }
-  };
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -225,92 +193,15 @@ export default function PODetailModal({
             </div>
           </div>
 
-          {/* Document Upload / Link */}
+          {/* Documents */}
           <div className="mb-6">
-            <h4 className="text-sm font-medium text-gray-300 mb-3">Document</h4>
-            {po.document_url ? (
-              <div className="flex items-center gap-4">
-                <a
-                  href={po.document_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-2"
-                >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
-                  View Document
-                </a>
-                <label className="text-gray-400 hover:text-white text-sm cursor-pointer">
-                  Replace
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv"
-                    onChange={handleFileSelect}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            ) : (
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
-                  isDragging
-                    ? "border-blue-500 bg-blue-500/10"
-                    : "border-gray-700 hover:border-gray-600"
-                }`}
-              >
-                {uploading ? (
-                  <div className="flex items-center justify-center gap-2 text-gray-400">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-                    Uploading...
-                  </div>
-                ) : (
-                  <>
-                    <svg
-                      className="w-8 h-8 mx-auto mb-2 text-gray-500"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                      />
-                    </svg>
-                    <p className="text-sm text-gray-400 mb-2">
-                      Drag & drop invoice/receipt here
-                    </p>
-                    <label className="text-sm text-blue-400 hover:text-blue-300 cursor-pointer">
-                      or click to browse
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png,.xlsx,.csv"
-                        onChange={handleFileSelect}
-                        className="hidden"
-                      />
-                    </label>
-                    <p className="text-xs text-gray-500 mt-2">
-                      PDF, Images, Excel, CSV
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
+            <DocumentUploadPanel
+              poId={po.id}
+              poNumber={po.po_number}
+              onDocumentsChange={() => {
+                // Optionally refresh PO details when documents change
+              }}
+            />
           </div>
 
           {/* Notes */}

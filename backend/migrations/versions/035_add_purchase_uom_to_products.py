@@ -23,8 +23,8 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '035'
-down_revision: Union[str, None] = '034'
+revision: str = '035_add_purchase_uom'
+down_revision: Union[str, None] = '034_add_operation_scrap_reason'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
