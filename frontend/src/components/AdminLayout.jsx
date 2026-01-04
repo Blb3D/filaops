@@ -2,7 +2,9 @@ import { Outlet, Link, NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import ProFeaturesAnnouncement from "./ProFeaturesAnnouncement";
 import UpdateNotification from "./UpdateNotification";
+import SecurityBadge from "./SecurityBadge";
 import { getCurrentVersion, getCurrentVersionSync, formatVersion } from "../utils/version";
+import { API_URL } from "../config/api";
 import logoNavbar from "../assets/logo_navbar.png";
 
 const DashboardIcon = () => (
@@ -493,6 +495,33 @@ export default function AdminLayout() {
     }
   });
 
+  // AI Settings for SecurityBadge
+  const [aiSettings, setAiSettings] = useState(null);
+
+  useEffect(() => {
+    const fetchAiSettings = async () => {
+      const token = localStorage.getItem("adminToken");
+      if (!token) return;
+
+      try {
+        const response = await fetch(`${API_URL}/api/v1/settings/ai`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setAiSettings(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch AI settings:", error);
+      }
+    };
+
+    fetchAiSettings();
+    // Refresh every 30 seconds in case settings change
+    const interval = setInterval(fetchAiSettings, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Filter nav items based on user role
   const isAdmin = user?.account_type === "admin";
 
@@ -672,6 +701,10 @@ export default function AdminLayout() {
                 <span className="text-xs text-gray-500">
                   v{formatVersion(currentVersion)}
                 </span>
+                <SecurityBadge
+                  aiProvider={aiSettings?.ai_provider}
+                  externalBlocked={aiSettings?.external_ai_blocked}
+                />
               </div>
               <div className="flex items-center gap-4">
                 {user && (

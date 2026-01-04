@@ -305,3 +305,294 @@ async def delete_company_logo(
 
     logger.info(f"Company logo deleted by {current_user.email}")
     return {"message": "Logo deleted"}
+
+
+# ============================================================================
+# AI SETTINGS
+# ============================================================================
+
+class AISettingsResponse(BaseModel):
+    """AI settings response (API key masked)"""
+    ai_provider: Optional[str] = None  # 'anthropic', 'ollama', or None
+    ai_api_key_set: bool = False  # True if key is configured (don't expose actual key)
+    ai_api_key_masked: Optional[str] = None  # e.g., "sk-...XYZ"
+    ai_ollama_url: Optional[str] = None
+    ai_ollama_model: Optional[str] = None
+    ai_status: str = "not_configured"  # 'not_configured', 'configured', 'connected'
+    ai_status_message: Optional[str] = None
+    external_ai_blocked: bool = False  # When true, only local AI (Ollama) allowed
+
+
+class AISettingsUpdate(BaseModel):
+    """Update AI settings"""
+    ai_provider: Optional[str] = Field(None, pattern="^(anthropic|ollama)?$")
+    ai_api_key: Optional[str] = Field(None, max_length=500)
+    ai_ollama_url: Optional[str] = Field(None, max_length=255)
+    ai_ollama_model: Optional[str] = Field(None, max_length=100)
+    external_ai_blocked: Optional[bool] = None
+
+
+def _mask_api_key(key: Optional[str]) -> Optional[str]:
+    """Mask API key for display, showing only first 3 and last 4 chars"""
+    if not key or len(key) < 10:
+        return None
+    return f"{key[:3]}...{key[-4:]}"
+
+
+def _test_anthropic_connection(api_key: str) -> tuple[bool, str]:
+    """Test Anthropic API connection"""
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        # Simple test - just check if we can create a client and it doesn't immediately fail
+        # A full test would make an API call, but that costs money
+        # Instead, we'll just validate the key format
+        if not api_key.startswith("sk-"):
+            return False, "Invalid API key format (should start with 'sk-')"
+        return True, "API key format valid"
+    except ImportError:
+        return False, "anthropic package not installed"
+    except Exception as e:
+        return False, str(e)
+
+
+def _test_ollama_connection(url: str, model: str) -> tuple[bool, str]:
+    """Test Ollama connection"""
+    import requests
+    try:
+        # Check if Ollama is running
+        response = requests.get(f"{url}/api/tags", timeout=5)
+        if response.status_code != 200:
+            return False, f"Ollama not responding (status {response.status_code})"
+
+        # Check if the specified model is available
+        data = response.json()
+        models = [m.get("name", "").split(":")[0] for m in data.get("models", [])]
+        if model not in models and f"{model}:latest" not in [m.get("name") for m in data.get("models", [])]:
+            available = ", ".join(models[:5])
+            return True, f"Connected, but model '{model}' not found. Available: {available}"
+
+        return True, f"Connected to Ollama, model '{model}' available"
+    except requests.exceptions.ConnectionError:
+        return False, f"Ollama is not running. Click 'Start Ollama' below or launch the Ollama app."
+    except requests.exceptions.Timeout:
+        return False, "Connection timed out"
+    except Exception as e:
+        return False, str(e)
+
+
+@router.get("/ai", response_model=AISettingsResponse)
+async def get_ai_settings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get AI configuration settings (API keys masked)"""
+    settings = get_or_create_settings(db)
+
+    # Determine status
+    ai_status = "not_configured"
+    ai_status_message = "No AI provider configured"
+
+    if settings.ai_provider == "anthropic" and settings.ai_api_key:
+        ai_status = "configured"
+        ai_status_message = "Anthropic API key configured"
+    elif settings.ai_provider == "ollama":
+        ai_status = "configured"
+        ai_status_message = f"Ollama configured at {settings.ai_ollama_url or 'http://localhost:11434'}"
+
+    return AISettingsResponse(
+        ai_provider=settings.ai_provider,
+        ai_api_key_set=bool(settings.ai_api_key),
+        ai_api_key_masked=_mask_api_key(settings.ai_api_key),
+        ai_ollama_url=settings.ai_ollama_url or "http://localhost:11434",
+        ai_ollama_model=settings.ai_ollama_model or "llama3.2",
+        ai_status=ai_status,
+        ai_status_message=ai_status_message,
+        external_ai_blocked=settings.external_ai_blocked or False,
+    )
+
+
+@router.patch("/ai", response_model=AISettingsResponse)
+async def update_ai_settings(
+    data: AISettingsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update AI configuration settings"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+
+    settings = get_or_create_settings(db)
+
+    # Update fields
+    update_data = data.model_dump(exclude_unset=True)
+
+    # Check if trying to set Anthropic while external AI is blocked
+    new_provider = update_data.get("ai_provider", settings.ai_provider)
+    is_blocked = update_data.get("external_ai_blocked", settings.external_ai_blocked)
+
+    if new_provider == "anthropic" and is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot use Anthropic while external AI is blocked. Disable the block first or use Ollama."
+        )
+
+    # If enabling the block, clear Anthropic settings
+    if update_data.get("external_ai_blocked") is True:
+        if settings.ai_provider == "anthropic":
+            settings.ai_provider = None
+        settings.ai_api_key = None
+        logger.info(f"External AI blocked - cleared Anthropic settings")
+
+    for field, value in update_data.items():
+        # Don't clear API key if empty string passed (only if explicitly None)
+        if field == "ai_api_key" and value == "":
+            continue
+        setattr(settings, field, value)
+
+    settings.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(settings)
+
+    logger.info(f"AI settings updated by {current_user.email}")
+
+    # Return updated settings
+    return await get_ai_settings(current_user, db)
+
+
+@router.post("/ai/test")
+async def test_ai_connection(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Test the configured AI connection"""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+
+    settings = get_or_create_settings(db)
+
+    if not settings.ai_provider:
+        return {
+            "success": False,
+            "provider": None,
+            "message": "No AI provider configured. Select 'anthropic' or 'ollama' first."
+        }
+
+    if settings.ai_provider == "anthropic":
+        if not settings.ai_api_key:
+            return {
+                "success": False,
+                "provider": "anthropic",
+                "message": "Anthropic API key not set"
+            }
+        success, message = _test_anthropic_connection(settings.ai_api_key)
+        return {
+            "success": success,
+            "provider": "anthropic",
+            "message": message
+        }
+
+    elif settings.ai_provider == "ollama":
+        url = settings.ai_ollama_url or "http://localhost:11434"
+        model = settings.ai_ollama_model or "llama3.2"
+        success, message = _test_ollama_connection(url, model)
+        return {
+            "success": success,
+            "provider": "ollama",
+            "message": message
+        }
+
+    return {
+        "success": False,
+        "provider": settings.ai_provider,
+        "message": f"Unknown provider: {settings.ai_provider}"
+    }
+
+
+@router.post("/ai/start-ollama")
+async def start_ollama(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Attempt to start the Ollama service"""
+    import subprocess
+    import platform
+
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+
+    settings = get_or_create_settings(db)
+    ollama_url = settings.ai_ollama_url or "http://localhost:11434"
+
+    # First check if already running
+    import requests
+    try:
+        response = requests.get(f"{ollama_url}/api/tags", timeout=2)
+        if response.status_code == 200:
+            return {
+                "success": True,
+                "message": "Ollama is already running!"
+            }
+    except Exception:
+        pass  # Not running, continue to start it
+
+    # Try to start Ollama
+    try:
+        if platform.system() == "Windows":
+            # On Windows, try to start ollama serve in background
+            # Using CREATE_NO_WINDOW flag to run silently
+            CREATE_NO_WINDOW = 0x08000000
+            subprocess.Popen(
+                ["ollama", "serve"],
+                creationflags=CREATE_NO_WINDOW,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        else:
+            # On Linux/Mac
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+
+        # Wait a moment and check if it started
+        import time
+        time.sleep(2)
+
+        try:
+            response = requests.get(f"{ollama_url}/api/tags", timeout=3)
+            if response.status_code == 200:
+                return {
+                    "success": True,
+                    "message": "Ollama started successfully!"
+                }
+        except Exception:
+            pass
+
+        return {
+            "success": False,
+            "message": "Ollama is starting... Please try 'Test Connection' again in a few seconds."
+        }
+
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "message": "Ollama is not installed. Download it from ollama.com"
+        }
+    except Exception as e:
+        logger.error(f"Failed to start Ollama: {e}")
+        return {
+            "success": False,
+            "message": f"Could not start Ollama: {str(e)}"
+        }

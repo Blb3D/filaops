@@ -69,6 +69,18 @@ class CompanySettings(Base):
     # Work days as comma-separated list: "0,1,2,3,4" for Mon-Fri (0=Monday, 6=Sunday)
     business_work_days = Column(String(20), nullable=True, default="0,1,2,3,4")  # Mon-Fri
 
+    # AI Configuration (for invoice parsing, etc.)
+    # Provider: 'anthropic', 'ollama', or None (disabled)
+    ai_provider = Column(String(20), nullable=True)
+    # API key for Anthropic (stored - consider encryption in production)
+    ai_api_key = Column(String(500), nullable=True)
+    # Ollama URL (default: http://localhost:11434)
+    ai_ollama_url = Column(String(255), nullable=True, default="http://localhost:11434")
+    # Ollama model name (default: llama3.2)
+    ai_ollama_model = Column(String(100), nullable=True, default="llama3.2")
+    # Block external AI services (force local-only for data privacy)
+    external_ai_blocked = Column(Boolean, nullable=False, default=False)
+
     # Timestamps
     created_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
     updated_at = Column(DateTime(timezone=False), nullable=False, server_default=func.now())
