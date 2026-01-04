@@ -17,11 +17,6 @@ import base64
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 
-# Load .env from project root (parent of backend/)
-_env_path = Path(__file__).resolve().parents[3] / ".env"
-if _env_path.exists():
-    load_dotenv(_env_path)
-
 from app.logging_config import get_logger
 from app.models.vendor import Vendor
 from app.models.product import Product
@@ -31,6 +26,11 @@ from app.schemas.invoice_parsing import (
     ParsedInvoiceLine,
     MatchConfidence,
 )
+
+# Load .env from project root (parent of backend/)
+_env_path = Path(__file__).resolve().parents[3] / ".env"
+if _env_path.exists():
+    load_dotenv(_env_path)
 
 logger = get_logger(__name__)
 
