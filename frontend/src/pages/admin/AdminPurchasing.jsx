@@ -8,6 +8,8 @@ import POCreateModal from "../../components/purchasing/POCreateModal";
 import PODetailModal from "../../components/purchasing/PODetailModal";
 import ReceiveModal from "../../components/purchasing/ReceiveModal";
 import QuickBooksExportModal from "../../components/purchasing/QuickBooksExportModal";
+import InvoiceUploadModal from "../../components/purchasing/InvoiceUploadModal";
+import InvoiceReviewModal from "../../components/purchasing/InvoiceReviewModal";
 
 // Purchasing Trend Chart Component
 function PurchasingChart({ data, period, onPeriodChange, loading }) {
@@ -275,6 +277,12 @@ export default function AdminPurchasing() {
 
   // QuickBooks Export Modal
   const [showQBExportModal, setShowQBExportModal] = useState(false);
+
+  // Invoice Import Modals
+  const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
+  const [showInvoiceReview, setShowInvoiceReview] = useState(false);
+  const [parsedInvoice, setParsedInvoice] = useState(null);
+  const [invoiceFile, setInvoiceFile] = useState(null);
 
   // Company Settings (for auto-calc tax)
   const [companySettings, setCompanySettings] = useState(null);
@@ -1054,19 +1062,30 @@ export default function AdminPurchasing() {
             </button>
           )}
           {activeTab === "orders" && (
-            <button
-              onClick={async () => {
-                setSelectedPO(null);
-                // Ensure company settings are loaded for auto-calc tax
-                if (!companySettings) {
-                  await fetchCompanySettings();
-                }
-                setShowPOModal(true);
-              }}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
-            >
-              + New PO
-            </button>
+            <>
+              <button
+                onClick={() => setShowInvoiceUpload(true)}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium flex items-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                Import Invoice
+              </button>
+              <button
+                onClick={async () => {
+                  setSelectedPO(null);
+                  // Ensure company settings are loaded for auto-calc tax
+                  if (!companySettings) {
+                    await fetchCompanySettings();
+                  }
+                  setShowPOModal(true);
+                }}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
+              >
+                + New PO
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -2227,6 +2246,42 @@ export default function AdminPurchasing() {
         <QuickBooksExportModal
           isOpen={showQBExportModal}
           onClose={() => setShowQBExportModal(false)}
+        />
+      )}
+
+      {/* Invoice Upload Modal */}
+      {showInvoiceUpload && (
+        <InvoiceUploadModal
+          vendors={vendors}
+          onClose={() => setShowInvoiceUpload(false)}
+          onParsed={(parsed, file) => {
+            setParsedInvoice(parsed);
+            setInvoiceFile(file);
+            setShowInvoiceUpload(false);
+            setShowInvoiceReview(true);
+          }}
+        />
+      )}
+
+      {/* Invoice Review Modal */}
+      {showInvoiceReview && parsedInvoice && (
+        <InvoiceReviewModal
+          parsedInvoice={parsedInvoice}
+          originalFile={invoiceFile}
+          vendors={vendors}
+          products={products}
+          onClose={() => {
+            setShowInvoiceReview(false);
+            setParsedInvoice(null);
+            setInvoiceFile(null);
+          }}
+          onSuccess={(createdPO) => {
+            setShowInvoiceReview(false);
+            setParsedInvoice(null);
+            setInvoiceFile(null);
+            toast.success(`Created PO ${createdPO.po_number}`);
+            fetchOrders(); // Refresh the PO list
+          }}
         />
       )}
     </div>
