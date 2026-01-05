@@ -343,7 +343,7 @@ def _test_anthropic_connection(api_key: str) -> tuple[bool, str]:
     """Test Anthropic API connection"""
     try:
         import anthropic
-        anthropic.Anthropic(api_key=api_key)  # Validate client creation
+        client = anthropic.Anthropic(api_key=api_key)
         # Simple test - just check if we can create a client and it doesn't immediately fail
         # A full test would make an API call, but that costs money
         # Instead, we'll just validate the key format
@@ -374,7 +374,7 @@ def _test_ollama_connection(url: str, model: str) -> tuple[bool, str]:
 
         return True, f"Connected to Ollama, model '{model}' available"
     except requests.exceptions.ConnectionError:
-        return False, "Ollama is not running. Click 'Start Ollama' below or launch the Ollama app."
+        return False, f"Ollama is not running. Click 'Start Ollama' below or launch the Ollama app."
     except requests.exceptions.Timeout:
         return False, "Connection timed out"
     except Exception as e:
@@ -445,7 +445,7 @@ async def update_ai_settings(
         if settings.ai_provider == "anthropic":
             settings.ai_provider = None
         settings.ai_api_key = None
-        logger.info("External AI blocked - cleared Anthropic settings")
+        logger.info(f"External AI blocked - cleared Anthropic settings")
 
     for field, value in update_data.items():
         # Don't clear API key if empty string passed (only if explicitly None)
@@ -595,4 +595,93 @@ async def start_ollama(
         return {
             "success": False,
             "message": f"Could not start Ollama: {str(e)}"
+        }
+
+
+@router.get("/ai/anthropic-status")
+async def check_anthropic_status(
+    current_user: User = Depends(get_current_user),
+):
+    """Check if the anthropic package is installed"""
+    try:
+        import anthropic
+        return {
+            "installed": True,
+            "version": getattr(anthropic, "__version__", "unknown")
+        }
+    except ImportError:
+        return {
+            "installed": False,
+            "version": None
+        }
+
+
+@router.post("/ai/install-anthropic")
+async def install_anthropic_package(
+    current_user: User = Depends(get_current_user),
+):
+    """Install the anthropic Python package"""
+    import subprocess
+    import sys
+
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+
+    # Check if already installed
+    try:
+        import anthropic
+        return {
+            "success": True,
+            "message": f"Anthropic package already installed (v{getattr(anthropic, '__version__', 'unknown')})"
+        }
+    except ImportError:
+        pass
+
+    # Install using pip
+    try:
+        # Get the pip executable from the same environment as the running Python
+        python_executable = sys.executable
+        result = subprocess.run(
+            [python_executable, "-m", "pip", "install", "anthropic"],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+
+        if result.returncode == 0:
+            # Verify installation
+            try:
+                # Force reimport
+                import importlib
+                anthropic = importlib.import_module("anthropic")
+                version = getattr(anthropic, "__version__", "unknown")
+                return {
+                    "success": True,
+                    "message": f"Anthropic package installed successfully (v{version}). Please refresh the page."
+                }
+            except ImportError:
+                return {
+                    "success": True,
+                    "message": "Package installed. Please restart the application to use it."
+                }
+        else:
+            logger.error(f"pip install failed: {result.stderr}")
+            return {
+                "success": False,
+                "message": f"Installation failed: {result.stderr[:200]}"
+            }
+
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "message": "Installation timed out. Please try again or install manually."
+        }
+    except Exception as e:
+        logger.error(f"Failed to install anthropic: {e}")
+        return {
+            "success": False,
+            "message": f"Installation error: {str(e)}"
         }

@@ -473,12 +473,6 @@ const navGroups = [
         icon: SettingsIcon,
         adminOnly: true,
       },
-      {
-        path: "/admin/security",
-        label: "Security Audit",
-        icon: QualityIcon,
-        adminOnly: true,
-      },
     ],
   },
 ];
