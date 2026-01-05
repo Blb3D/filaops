@@ -340,8 +340,43 @@ export default function RoutingEditor({
     setShowAddOperation(false);
   };
 
-  const removeOperation = (index) => {
-    setOperations(operations.filter((_, i) => i !== index));
+  const removeOperation = async (index) => {
+    const operation = operations[index];
+
+    // If operation has an ID, it exists in the database and needs to be deleted via API
+    if (operation.id) {
+      if (!window.confirm(`Remove operation "${operation.operation_name || operation.operation_code || 'Unnamed'}"? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const res = await fetch(
+          `${API_URL}/api/v1/routings/operations/${operation.id}`,
+          {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          }
+        );
+
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.detail || `Failed to delete operation: ${res.status}`);
+        }
+
+        // Successfully deleted from backend, now remove from local state
+        setOperations(operations.filter((_, i) => i !== index));
+        setError(null);
+      } catch (err) {
+        setError(err.message || "Failed to remove operation");
+        console.error("Failed to remove operation:", err);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // New operation not yet saved - just remove from local state
+      setOperations(operations.filter((_, i) => i !== index));
+    }
   };
 
   const updateOperation = (index, field, value) => {
@@ -614,6 +649,7 @@ export default function RoutingEditor({
                             <button
                               onClick={() => removeOperation(index)}
                               className="text-red-400 hover:text-red-300"
+                              disabled={loading}
                             >
                               Remove
                             </button>
