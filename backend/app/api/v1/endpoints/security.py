@@ -1188,7 +1188,6 @@ async def fix_dotfile_blocking(
         )
 
     import subprocess
-    import re
 
     # Find the project root and Caddyfile
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
