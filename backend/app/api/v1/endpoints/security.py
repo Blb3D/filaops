@@ -630,12 +630,21 @@ async def fix_dependencies(
 
         for package in packages_to_upgrade:
             logger.info(f"Upgrading {package}...")
-            upgrade_result = subprocess.run(
-                [pip_path, "install", "--upgrade", package],
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
+            # Use python -m pip for pip self-upgrades (pip can't upgrade itself directly)
+            if package.lower() == "pip":
+                upgrade_result = subprocess.run(
+                    [python_path, "-m", "pip", "install", "--upgrade", "pip"],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+            else:
+                upgrade_result = subprocess.run(
+                    [pip_path, "install", "--upgrade", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
             if upgrade_result.returncode == 0:
                 results["packages_upgraded"].append(package)
             else:
@@ -1162,6 +1171,177 @@ async def check_caddy_status(
         return {"installed": False, "version": None}
 
 
+@router.post("/remediate/fix-dotfile-blocking")
+async def fix_dotfile_blocking(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Automatically update Caddyfile to block access to dotfiles (.env, .git, etc.).
+
+    This prevents sensitive files from being exposed through the web server.
+    """
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required"
+        )
+
+    import subprocess
+
+    # Find the project root and Caddyfile
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )))
+    project_root = os.path.dirname(backend_dir)
+    caddyfile_path = os.path.join(project_root, "Caddyfile")
+
+    results = {
+        "caddyfile_found": False,
+        "caddyfile_updated": False,
+        "caddy_reloaded": False,
+        "errors": []
+    }
+
+    # Check if Caddyfile exists
+    if not os.path.exists(caddyfile_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Caddyfile not found at {caddyfile_path}. Set up HTTPS first."
+        )
+
+    results["caddyfile_found"] = True
+
+    try:
+        # Read current Caddyfile
+        with open(caddyfile_path, "r") as f:
+            content = f.read()
+
+        # Check if dotfile blocking already exists
+        if "handle /.env" in content or "@blocked" in content:
+            logger.info("Dotfile blocking already configured in Caddyfile")
+            return {
+                "success": True,
+                "message": "Dotfile blocking is already configured!",
+                "already_configured": True,
+                **results
+            }
+
+        # Add dotfile blocking rules using explicit handle blocks
+        # These must come BEFORE the catch-all "handle {" block in Caddy
+        dotfile_rules = """    # Security: Block access to sensitive files
+    handle /.env {
+        respond 404
+    }
+    handle /.git/* {
+        respond 404
+    }
+    handle /backend/.env {
+        respond 404
+    }
+"""
+
+        # Find the catch-all "handle {" block and insert before it
+        lines = content.split("\n")
+        insert_index = None
+
+        # Look for "handle {" (catch-all handle block) - it's usually the last handle
+        for i, line in enumerate(lines):
+            stripped = line.strip()
+            # Match "handle {" but not "handle /something {" or "handle @matcher {"
+            if stripped == "handle {":
+                insert_index = i
+                break
+
+        if insert_index is None:
+            # Fallback: insert before the closing brace
+            for i in range(len(lines) - 1, -1, -1):
+                if lines[i].strip() == "}":
+                    insert_index = i
+                    break
+
+        if insert_index is None:
+            insert_index = len(lines) - 1
+
+        # Insert the dotfile blocking rules
+        lines.insert(insert_index, dotfile_rules)
+        new_content = "\n".join(lines)
+
+        # Write updated Caddyfile
+        with open(caddyfile_path, "w") as f:
+            f.write(new_content)
+
+        results["caddyfile_updated"] = True
+        logger.info(f"Caddyfile updated with dotfile blocking by {current_user.email}")
+
+        # Try to reload Caddy
+        try:
+            # Check if caddy is running and reload it
+            import platform
+            if platform.system() == "Windows":
+                # Try to reload Caddy (it will pick up the new config)
+                # First check if caddy is in the project root
+                caddy_exe = os.path.join(project_root, "caddy.exe")
+                if os.path.exists(caddy_exe):
+                    reload_result = subprocess.run(
+                        [caddy_exe, "reload", "--config", caddyfile_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        cwd=project_root
+                    )
+                else:
+                    reload_result = subprocess.run(
+                        ["caddy", "reload", "--config", caddyfile_path],
+                        capture_output=True,
+                        text=True,
+                        timeout=10,
+                        cwd=project_root
+                    )
+
+                if reload_result.returncode == 0:
+                    results["caddy_reloaded"] = True
+                    logger.info("Caddy reloaded successfully")
+                else:
+                    # Caddy might not be running, that's OK
+                    results["errors"].append("Caddy not running - restart Caddy to apply changes")
+            else:
+                reload_result = subprocess.run(
+                    ["caddy", "reload", "--config", caddyfile_path],
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
+                    cwd=project_root
+                )
+                if reload_result.returncode == 0:
+                    results["caddy_reloaded"] = True
+
+        except (FileNotFoundError, subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            results["errors"].append(f"Could not reload Caddy: {str(e)[:50]}")
+            # Non-fatal - user can restart manually
+
+        logger.info(f"Dotfile blocking configured by {current_user.email}")
+
+        if results["caddy_reloaded"]:
+            message = "Dotfile blocking enabled! Caddy has been reloaded."
+        else:
+            message = "Dotfile blocking configured! Restart Caddy to apply changes."
+
+        return {
+            "success": True,
+            "message": message,
+            "requires_restart": not results["caddy_reloaded"],
+            **results
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to configure dotfile blocking: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not update Caddyfile: {str(e)}"
+        )
+
+
 @router.get("/remediate/{check_id}")
 async def get_remediation_steps(
     check_id: str,
@@ -1375,6 +1555,24 @@ pg_dump -U postgres -d filaops > "%BACKUP_DIR%\\filaops_%TIMESTAMP%.sql"
                     "title": "Schedule Daily Backups",
                     "description": "Use Windows Task Scheduler to run the script daily.",
                     "docs_url": "https://www.postgresql.org/docs/current/backup-dump.html"
+                }
+            ]
+        },
+        "env_file_not_exposed": {
+            "title": "Fix: Block .env File Access",
+            "severity": "critical",
+            "estimated_time": "30 seconds",
+            "can_auto_fix_dotfiles": True,
+            "steps": [
+                {
+                    "step": 1,
+                    "title": "Update Caddy Configuration",
+                    "description": "We'll add a rule to your Caddyfile that blocks access to sensitive files like .env and .git folders."
+                },
+                {
+                    "step": 2,
+                    "title": "Reload Caddy",
+                    "description": "We'll automatically reload Caddy to apply the changes."
                 }
             ]
         }

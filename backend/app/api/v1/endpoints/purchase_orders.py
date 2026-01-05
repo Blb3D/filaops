@@ -82,6 +82,7 @@ async def list_purchase_orders(
     status: Optional[str] = Query(None, description="Filter by status (draft, ordered, shipped, received, closed, cancelled)"),
     vendor_id: Optional[int] = Query(None, description="Filter by vendor ID"),
     search: Optional[str] = Query(None, description="Search by PO number"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -140,6 +141,7 @@ async def list_purchase_orders(
 @router.get("/{po_id}", response_model=PurchaseOrderResponse)
 async def get_purchase_order(
     po_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get purchase order details by ID"""
@@ -1202,6 +1204,7 @@ async def list_po_events(
     po_id: int,
     limit: int = Query(default=50, ge=1, le=200, description="Max events to return"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """

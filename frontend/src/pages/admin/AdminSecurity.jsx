@@ -51,6 +51,7 @@ const REMEDIABLE_CHECKS = [
   "dependencies_secure",
   "rate_limiting_enabled",
   "backup_configured",
+  "env_file_not_exposed",
 ];
 
 const getStatusIcon = (status) => {

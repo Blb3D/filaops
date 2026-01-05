@@ -72,6 +72,8 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
   const [httpsFixing, setHttpsFixing] = useState(false);
   const [httpsFixResult, setHttpsFixResult] = useState(null);
   const [httpsDomain, setHttpsDomain] = useState("");
+  const [fixingDotfiles, setFixingDotfiles] = useState(false);
+  const [dotfileFixResult, setDotfileFixResult] = useState(null);
 
   useEffect(() => {
     if (isOpen && check) {
@@ -84,6 +86,7 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
       setRateLimitingFixResult(null);
       setHttpsFixResult(null);
       setHttpsDomain("");
+      setDotfileFixResult(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, check]);
@@ -236,6 +239,35 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
     }
   };
 
+  const handleFixDotfiles = async () => {
+    setFixingDotfiles(true);
+    setDotfileFixResult(null);
+    try {
+      const token = localStorage.getItem("adminToken");
+      const response = await fetch(`${API_URL}/api/v1/security/remediate/fix-dotfile-blocking`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setDotfileFixResult(data);
+        setAutoFixComplete(true);
+        toast.success(data.message);
+        const allSteps = new Set(guide.steps.map((_, i) => i));
+        setCompletedSteps(allSteps);
+      } else {
+        const errorMsg = data.detail || data.message || `Error ${response.status}`;
+        toast.error(`Fix failed: ${errorMsg}`);
+      }
+    } catch (err) {
+      toast.error(`Fix failed: ${err.message}`);
+    } finally {
+      setFixingDotfiles(false);
+    }
+  };
+
   const handleOpenInNotepad = async () => {
     setOpeningFile(true);
     try {
@@ -343,6 +375,7 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
   const canAutoFixDependencies = guide?.can_auto_fix_dependencies && check?.id === "dependencies_secure";
   const canAutoFixRateLimiting = guide?.can_auto_fix_rate_limiting && check?.id === "rate_limiting_enabled";
   const canAutoFixHTTPS = guide?.can_auto_fix_https && check?.id === "https_enabled";
+  const canAutoFixDotfiles = guide?.can_auto_fix_dotfiles && check?.id === "env_file_not_exposed";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -759,6 +792,94 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
                 </div>
               )}
 
+              {/* Auto-Fix Option for Dotfile Blocking */}
+              {canAutoFixDotfiles && !autoFixComplete && (
+                <div className="bg-gradient-to-r from-red-900/50 to-rose-900/50 border-2 border-red-500 rounded-xl p-6">
+                  <div className="flex items-start gap-4">
+                    <div className="p-3 bg-red-600 rounded-full">
+                      <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-bold text-white mb-2">Block Sensitive Files</h3>
+                      <p className="text-gray-300 mb-4">
+                        Click the button below and we'll update your Caddy configuration to block access to sensitive files like <code className="bg-gray-800 px-2 py-0.5 rounded text-red-300">.env</code> and <code className="bg-gray-800 px-2 py-0.5 rounded text-red-300">.git</code>.
+                      </p>
+                      <button
+                        onClick={handleFixDotfiles}
+                        disabled={fixingDotfiles}
+                        className="w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-colors flex items-center justify-center gap-2 text-lg"
+                      >
+                        {fixingDotfiles ? (
+                          <>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                            Updating Caddyfile...
+                          </>
+                        ) : (
+                          <>
+                            <MagicWandIcon />
+                            Block Sensitive Files
+                          </>
+                        )}
+                      </button>
+                      <p className="text-xs text-gray-400 mt-2 text-center">
+                        This adds a security rule to your reverse proxy configuration.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Dotfile Blocking Fix Success Message */}
+              {canAutoFixDotfiles && autoFixComplete && dotfileFixResult && (
+                <div className="bg-green-900/30 border-2 border-green-500 rounded-xl p-6">
+                  <div className="flex justify-center mb-4">
+                    <div className="p-4 bg-green-600 rounded-full">
+                      <CheckCircleIcon />
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-bold text-green-400 mb-2 text-center">
+                    {dotfileFixResult.already_configured ? "Already Protected!" : "Sensitive Files Blocked!"}
+                  </h3>
+                  <p className="text-gray-300 mb-4 text-center">
+                    {dotfileFixResult.message}
+                  </p>
+
+                  <div className="bg-gray-900/50 rounded-lg p-4 mb-4 space-y-2">
+                    {dotfileFixResult.caddyfile_updated && (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-green-400 text-sm">
+                          <CheckCircleIcon /> Caddyfile updated
+                        </span>
+                      </div>
+                    )}
+                    {dotfileFixResult.caddy_reloaded && (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-green-400 text-sm">
+                          <CheckCircleIcon /> Caddy reloaded
+                        </span>
+                      </div>
+                    )}
+                    {dotfileFixResult.already_configured && (
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-green-400 text-sm">
+                          <CheckCircleIcon /> Protection already in place
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {dotfileFixResult.requires_restart && (
+                    <div className="text-center">
+                      <p className="text-yellow-400 text-sm mb-2">
+                        Restart Caddy to apply the changes.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Auto-Fix Option - Big and obvious for SECRET_KEY issues */}
               {canAutoFixSecretKey && !autoFixComplete && (
                 <div className="bg-gradient-to-r from-green-900/50 to-emerald-900/50 border-2 border-green-500 rounded-xl p-6">
@@ -835,7 +956,7 @@ const RemediationModal = ({ isOpen, onClose, check, onComplete }) => {
               )}
 
               {/* Manual Method Divider */}
-              {(canAutoFixSecretKey || canAutoFixDependencies || canAutoFixRateLimiting || canAutoFixHTTPS) && !autoFixComplete && (
+              {(canAutoFixSecretKey || canAutoFixDependencies || canAutoFixRateLimiting || canAutoFixHTTPS || canAutoFixDotfiles) && !autoFixComplete && (
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t border-gray-700"></div>

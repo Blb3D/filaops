@@ -39,6 +39,7 @@ logger = get_logger(__name__)
 async def list_work_centers(
     center_type: Optional[str] = None,
     active_only: bool = True,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -120,6 +121,7 @@ async def create_work_center(
 @router.get("/{wc_id}", response_model=WorkCenterResponse)
 async def get_work_center(
     wc_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get a work center by ID."""
@@ -196,6 +198,7 @@ async def delete_work_center(
 async def list_resources(
     wc_id: int,
     active_only: bool = True,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all resources for a work center."""
@@ -249,6 +252,7 @@ async def create_resource(
 @router.get("/resources/{resource_id}", response_model=ResourceResponse)
 async def get_resource(
     resource_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get a resource by ID."""
@@ -354,6 +358,7 @@ async def update_resource_status(
 async def list_work_center_printers(
     wc_id: int,
     active_only: bool = True,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """

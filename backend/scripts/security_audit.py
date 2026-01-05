@@ -760,29 +760,41 @@ class SecurityAuditor:
                 timeout=120
             )
 
-            if result.returncode == 0:
-                audit_data = json.loads(result.stdout) if result.stdout else {}
-                # pip-audit format: {"dependencies": [{"name": "pkg", "vulns": [...]}], "fixes": []}
-                vulnerable_packages = []
-                for dep in audit_data.get("dependencies", []):
-                    if dep.get("vulns") and len(dep.get("vulns", [])) > 0:
-                        vulnerable_packages.append(dep.get("name"))
+            # pip-audit returns exit code 1 when vulnerabilities are found (not just 0)
+            # So we check if we got valid JSON output instead of relying on return code
+            if result.stdout and result.stdout.strip().startswith("{"):
+                try:
+                    audit_data = json.loads(result.stdout)
+                    # pip-audit format: {"dependencies": [{"name": "pkg", "vulns": [...]}], "fixes": []}
+                    vulnerable_packages = []
+                    for dep in audit_data.get("dependencies", []):
+                        if dep.get("vulns") and len(dep.get("vulns", [])) > 0:
+                            vulnerable_packages.append(dep.get("name"))
 
-                if vulnerable_packages:
-                    vuln_count = len(vulnerable_packages)
+                    if vulnerable_packages:
+                        vuln_count = len(vulnerable_packages)
+                        self.results.append(CheckResult(
+                            id=check_id, name=name, category=category,
+                            status=CheckStatus.WARN,
+                            message=f"{vuln_count} packages have known CVEs",
+                            remediation="Run: pip install pip-audit && pip-audit --fix"
+                        ))
+                    else:
+                        self.results.append(CheckResult(
+                            id=check_id, name=name, category=category,
+                            status=CheckStatus.PASS,
+                            message="No known vulnerabilities found"
+                        ))
+                except json.JSONDecodeError:
+                    # JSON parsing failed, pip-audit might not be working properly
                     self.results.append(CheckResult(
                         id=check_id, name=name, category=category,
-                        status=CheckStatus.WARN,
-                        message=f"{vuln_count} packages have known CVEs",
-                        remediation="Run: pip install pip-audit && pip-audit --fix"
-                    ))
-                else:
-                    self.results.append(CheckResult(
-                        id=check_id, name=name, category=category,
-                        status=CheckStatus.PASS,
-                        message="No known vulnerabilities found"
+                        status=CheckStatus.INFO,
+                        message="pip-audit output error",
+                        remediation="Run: pip install pip-audit && pip-audit"
                     ))
             else:
+                # No valid JSON output - pip-audit probably not installed
                 self.results.append(CheckResult(
                     id=check_id, name=name, category=category,
                     status=CheckStatus.INFO,

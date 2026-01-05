@@ -115,11 +115,16 @@ async def lifespan(app: FastAPI):
 
 
 # Create FastAPI app
+# Disable Swagger/OpenAPI in production to prevent API schema exposure
+_is_production = getattr(settings, "ENVIRONMENT", "development") == "production"
 app = FastAPI(
     title="FilaOps ERP API",
     description="Open-source ERP for 3D print farms",
     version=settings.VERSION,
     lifespan=lifespan,
+    docs_url="/docs" if not _is_production else None,
+    redoc_url="/redoc" if not _is_production else None,
+    openapi_url="/openapi.json" if not _is_production else None,
 )
 
 # Optional rate limiting (no crash if slowapi isn't installed)
