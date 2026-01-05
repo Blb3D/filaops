@@ -42,6 +42,7 @@ import AdminAccounting from "./pages/admin/AdminAccounting";
 import AdminPrinters from "./pages/admin/AdminPrinters";
 import AdminScrapReasons from "./pages/admin/AdminScrapReasons";
 import AdminSpools from "./pages/admin/AdminSpools";
+import AdminSecurity from "./pages/admin/AdminSecurity";
 import MaterialTraceability from "./pages/admin/quality/MaterialTraceability";
 import CommandCenter from "./pages/CommandCenter";
 // import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
@@ -132,6 +133,7 @@ export default function App() {
             <Route path="quality/traceability" element={<MaterialTraceability />} />
             <Route path="command-center" element={<CommandCenter />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="security" element={<AdminSecurity />} />
           </Route>
         </Routes>
           </BrowserRouter>

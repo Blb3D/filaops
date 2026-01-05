@@ -36,6 +36,7 @@ from app.api.v1.endpoints import (
     traceability,
     maintenance,
     command_center,
+    security,
     # license,  # Disabled until ready for production
 )
 from app.api.v1.endpoints.admin import router as admin_router
@@ -208,6 +209,9 @@ router.include_router(
 
 # System (version, updates, health)
 router.include_router(system.router)
+
+# Security Audit
+router.include_router(security.router)
 
 # Material Spools
 router.include_router(spools.router)
