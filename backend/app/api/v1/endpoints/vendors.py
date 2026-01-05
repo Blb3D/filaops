@@ -47,6 +47,7 @@ async def list_vendors(
     pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
     search: Optional[str] = None,
     active_only: bool = True,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
@@ -115,6 +116,7 @@ async def list_vendors(
 @router.get("/{vendor_id}", response_model=VendorResponse)
 async def get_vendor(
     vendor_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get vendor details by ID"""
@@ -205,6 +207,7 @@ async def update_vendor(
 @router.get("/{vendor_id}/metrics")
 async def get_vendor_metrics(
     vendor_id: int,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """

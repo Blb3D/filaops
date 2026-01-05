@@ -23,13 +23,9 @@ router = APIRouter(prefix="/system", tags=["System Management"])
 # ============================================================================
 
 class VersionResponse(BaseModel):
-    """Current version information"""
+    """Current version information (public-safe fields only)"""
     version: str
     build_date: str
-    commit_hash: str
-    database_version: str
-    environment: str
-    update_method: str
 
 
 class UpdateCheckResponse(BaseModel):
@@ -75,25 +71,26 @@ class SystemHealthResponse(BaseModel):
 # ============================================================================
 
 @router.get("/version", response_model=VersionResponse)
-async def get_system_version(db: Session = Depends(get_db)):
+async def get_system_version():
     """
-    Get current FilaOps version and build information
+    Get current FilaOps version and build date.
 
-    Returns comprehensive version info including git commit, database version, etc.
-    This endpoint is used by the frontend to display version in Settings.
+    Returns only public-safe version info for bug reporting.
+    Sensitive fields (environment, database_version, etc.) are redacted.
     """
     try:
         version_info = VersionManager.get_current_version()
 
-        # Get database version using actual DB session
-        version_info["database_version"] = VersionManager.get_database_version(db)
-
-        return VersionResponse(**version_info)
+        # Return only public-safe fields
+        return VersionResponse(
+            version=version_info.get("version", "unknown"),
+            build_date=version_info.get("build_date", "unknown")
+        )
     except Exception as e:
         logger.error(f"Failed to get version info: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Failed to get version info: {str(e)}"
+            detail="Failed to get version info"
         )
 
 

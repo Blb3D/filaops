@@ -119,6 +119,7 @@ async def list_products(
     procurement_type: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -178,6 +179,7 @@ async def list_products(
 @router.get("/{id}", response_model=ProductResponse)
 async def get_product(
     id: int,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get a specific product by ID"""
@@ -198,6 +200,7 @@ async def get_product(
 @router.get("/sku/{sku}", response_model=ProductResponse)
 async def get_product_by_sku(
     sku: str,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get a specific product by SKU"""
@@ -219,6 +222,7 @@ async def get_product_by_sku(
 @router.post("", response_model=ProductResponse)
 async def create_product(
     request: ProductCreate,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create a new product"""
@@ -263,6 +267,7 @@ async def create_product(
 async def update_product(
     id: int,
     request: ProductUpdate,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Update an existing product"""
