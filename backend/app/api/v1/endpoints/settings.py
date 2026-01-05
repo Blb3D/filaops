@@ -332,6 +332,18 @@ class AISettingsUpdate(BaseModel):
     external_ai_blocked: Optional[bool] = None
 
 
+class AnthropicStatusResponse(BaseModel):
+    """Response for Anthropic package installation status"""
+    installed: bool
+    version: Optional[str] = None
+
+
+class PackageInstallResponse(BaseModel):
+    """Response for package installation operations"""
+    success: bool
+    message: str
+
+
 def _mask_api_key(key: Optional[str]) -> Optional[str]:
     """Mask API key for display, showing only first 3 and last 4 chars"""
     if not key or len(key) < 10:
@@ -598,29 +610,29 @@ async def start_ollama(
         }
 
 
-@router.get("/ai/anthropic-status")
+@router.get("/ai/anthropic-status", response_model=AnthropicStatusResponse)
 async def check_anthropic_status(
     current_user: User = Depends(get_current_user),
-):
-    """Check if the anthropic package is installed"""
+) -> AnthropicStatusResponse:
+    """Check if the anthropic package is installed."""
     try:
         import anthropic
-        return {
-            "installed": True,
-            "version": getattr(anthropic, "__version__", "unknown")
-        }
+        return AnthropicStatusResponse(
+            installed=True,
+            version=getattr(anthropic, "__version__", "unknown")
+        )
     except ImportError:
-        return {
-            "installed": False,
-            "version": None
-        }
+        return AnthropicStatusResponse(
+            installed=False,
+            version=None
+        )
 
 
-@router.post("/ai/install-anthropic")
+@router.post("/ai/install-anthropic", response_model=PackageInstallResponse)
 async def install_anthropic_package(
     current_user: User = Depends(get_current_user),
-):
-    """Install the anthropic Python package"""
+) -> PackageInstallResponse:
+    """Install the anthropic Python package."""
     import subprocess
     import sys
 
@@ -633,10 +645,10 @@ async def install_anthropic_package(
     # Check if already installed
     try:
         import anthropic
-        return {
-            "success": True,
-            "message": f"Anthropic package already installed (v{getattr(anthropic, '__version__', 'unknown')})"
-        }
+        return PackageInstallResponse(
+            success=True,
+            message=f"Anthropic package already installed (v{getattr(anthropic, '__version__', 'unknown')})"
+        )
     except ImportError:
         pass
 
@@ -658,30 +670,30 @@ async def install_anthropic_package(
                 import importlib
                 anthropic = importlib.import_module("anthropic")
                 version = getattr(anthropic, "__version__", "unknown")
-                return {
-                    "success": True,
-                    "message": f"Anthropic package installed successfully (v{version}). Please refresh the page."
-                }
+                return PackageInstallResponse(
+                    success=True,
+                    message=f"Anthropic package installed successfully (v{version}). Please refresh the page."
+                )
             except ImportError:
-                return {
-                    "success": True,
-                    "message": "Package installed. Please restart the application to use it."
-                }
+                return PackageInstallResponse(
+                    success=True,
+                    message="Package installed. Please restart the application to use it."
+                )
         else:
             logger.error(f"pip install failed: {result.stderr}")
-            return {
-                "success": False,
-                "message": f"Installation failed: {result.stderr[:200]}"
-            }
+            return PackageInstallResponse(
+                success=False,
+                message=f"Installation failed: {result.stderr[:200]}"
+            )
 
     except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "message": "Installation timed out. Please try again or install manually."
-        }
+        return PackageInstallResponse(
+            success=False,
+            message="Installation timed out. Please try again or install manually."
+        )
     except Exception as e:
         logger.error(f"Failed to install anthropic: {e}")
-        return {
-            "success": False,
-            "message": f"Installation error: {str(e)}"
-        }
+        return PackageInstallResponse(
+            success=False,
+            message=f"Installation error: {str(e)}"
+        )

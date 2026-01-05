@@ -41,7 +41,7 @@ const AdminSettings = () => {
   const [savingAi, setSavingAi] = useState(false);
   const [testingAi, setTestingAi] = useState(false);
   const [startingOllama, setStartingOllama] = useState(false);
-  const [anthropicStatus, setAnthropicStatus] = useState({ installed: true, version: null });
+  const [anthropicStatus, setAnthropicStatus] = useState({ installed: false, version: null, loading: true });
   const [installingAnthropic, setInstallingAnthropic] = useState(false);
 
   // Common timezones (grouped by region)
@@ -112,7 +112,7 @@ const AdminSettings = () => {
     fetchSettings();
     fetchCurrentVersion();
     fetchAiSettings();
-    checkAnthropicStatus();
+    // checkAnthropicStatus is called inside fetchAiSettings when relevant
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -299,9 +299,17 @@ const AdminSettings = () => {
           ai_ollama_model: data.ai_ollama_model || "llama3.2",
           external_ai_blocked: data.external_ai_blocked || false,
         });
+        // Only check Anthropic package status if relevant (anthropic selected or no provider)
+        if (data.ai_provider === "anthropic" || !data.ai_provider) {
+          checkAnthropicStatus();
+        } else {
+          // Not using Anthropic, so mark loading as done
+          setAnthropicStatus((prev) => ({ ...prev, loading: false }));
+        }
       }
     } catch (error) {
       console.error("Failed to fetch AI settings:", error);
+      setAnthropicStatus((prev) => ({ ...prev, loading: false }));
     }
   };
 
@@ -313,10 +321,13 @@ const AdminSettings = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setAnthropicStatus(data);
+        setAnthropicStatus({ ...data, loading: false });
+      } else {
+        setAnthropicStatus((prev) => ({ ...prev, loading: false }));
       }
     } catch (error) {
       console.error("Failed to check anthropic status:", error);
+      setAnthropicStatus((prev) => ({ ...prev, loading: false }));
     }
   };
 
