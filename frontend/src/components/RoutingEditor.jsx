@@ -340,6 +340,12 @@ export default function RoutingEditor({
     setShowAddOperation(false);
   };
 
+  /**
+   * Remove an operation from the routing.
+   * For saved operations (with ID), calls the DELETE API endpoint.
+   * For unsaved operations, just removes from local state.
+   * @param {number} index - The index of the operation to remove
+   */
   const removeOperation = async (index) => {
     const operation = operations[index];
 
