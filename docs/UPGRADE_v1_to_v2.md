@@ -127,8 +127,8 @@ ENVIRONMENT=development
 DEBUG=false
 LOG_LEVEL=INFO
 
-# CORS (adjust ports if needed)
-CORS_ORIGINS=["http://localhost:5173","http://localhost:5174"]
+# CORS (comma-separated, adjust for your setup)
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
 ```
 
 ### Step 6: Create Database Schema
@@ -260,7 +260,7 @@ Check the migration report JSON for specific errors. Common issues:
 
 1. Verify backend is running on port 8000: http://localhost:8000/docs
 2. Check browser console for CORS errors
-3. Verify `CORS_ORIGINS` in `.env` includes your frontend URL
+3. Verify `ALLOWED_ORIGINS` in `.env` includes your frontend URL
 
 ---
 
