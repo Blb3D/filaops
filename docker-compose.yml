@@ -35,6 +35,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       SECRET_KEY: ${SECRET_KEY:-change-in-production}
       ENVIRONMENT: ${ENVIRONMENT:-development}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
     depends_on:
       db:
         condition: service_healthy

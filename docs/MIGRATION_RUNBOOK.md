@@ -1,5 +1,7 @@
 # SQL Server → PostgreSQL Migration Runbook
 
+> **Upgrading from v1.x?** See [UPGRADE_v1_to_v2.md](UPGRADE_v1_to_v2.md) for the complete upgrade guide.
+
 ## Overview
 
 This runbook describes the big-bang cutover process for migrating from SQL Server to PostgreSQL.
@@ -43,10 +45,10 @@ sqlcmd -S localhost\SQLEXPRESS -d BLB3D_ERP -Q "SELECT COUNT(*) FROM sys.dm_exec
 **Run migration script in DRY-RUN mode first:**
 
 ```powershell
-cd C:\BLB3D_Production_DEV\backend
+cd <YOUR_FILAOPS_PATH>\backend
 python scripts\migrate_sqlserver_to_postgres.py `
-    --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/BLB3D_ERP?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
-    --target-conn "postgresql://postgres:password@localhost:5432/BLB3D_ERP_DEV" `
+    --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/<YOUR_SQLSERVER_DB>?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
+    --target-conn "postgresql://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
     --dry-run `
     --output migration_report_dryrun.json
 ```
@@ -59,8 +61,8 @@ python scripts\migrate_sqlserver_to_postgres.py `
 
 ```powershell
 python scripts\migrate_sqlserver_to_postgres.py `
-    --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/BLB3D_ERP?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
-    --target-conn "postgresql://postgres:password@localhost:5432/BLB3D_ERP_DEV" `
+    --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/<YOUR_SQLSERVER_DB>?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
+    --target-conn "postgresql://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
     --output migration_report.json
 ```
 
@@ -115,22 +117,20 @@ SELECT SUM(on_hand_quantity) FROM inventory;
 **Update `.env` or environment variables:**
 
 ```env
-DB_TYPE=postgresql
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=BLB3D_ERP_DEV
+DB_NAME=<YOUR_POSTGRES_DB>
 DB_USER=postgres
-DB_PASSWORD=your_password
-DB_TRUSTED_CONNECTION=False
+DB_PASSWORD=<YOUR_PASSWORD>
 ```
 
 ### Step 6: Smoke Test
 
-**Start DEV backend:**
+**Start backend:**
 
 ```powershell
-cd C:\BLB3D_Production_DEV\backend
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
+cd <YOUR_FILAOPS_PATH>\backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 **Test key workflows:**
@@ -145,13 +145,15 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 **If smoke tests pass:**
 
 1. **Rename production directory** (backup):
+
    ```powershell
-   Rename-Item C:\BLB3D_Production C:\BLB3D_Production_BACKUP_$(Get-Date -Format 'yyyyMMdd_HHmmss')
+   Rename-Item <YOUR_PRODUCTION_PATH> <YOUR_PRODUCTION_PATH>_BACKUP_$(Get-Date -Format 'yyyyMMdd_HHmmss')
    ```
 
 2. **Rename DEV to production**:
+
    ```powershell
-   Rename-Item C:\BLB3D_Production_DEV C:\BLB3D_Production
+   Rename-Item <YOUR_DEV_PATH> <YOUR_PRODUCTION_PATH>
    ```
 
 3. **Update production `.env`** with PostgreSQL connection
@@ -166,10 +168,12 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 
 1. Stop new system
 2. Rename directories back:
+
    ```powershell
-   Rename-Item C:\BLB3D_Production C:\BLB3D_Production_NEW
-   Rename-Item C:\BLB3D_Production_BACKUP_* C:\BLB3D_Production
+   Rename-Item <YOUR_PRODUCTION_PATH> <YOUR_PRODUCTION_PATH>_FAILED
+   Rename-Item <YOUR_PRODUCTION_PATH>_BACKUP_* <YOUR_PRODUCTION_PATH>
    ```
+
 3. Restart old system (SQL Server)
 4. Investigate issues in DEV environment
 
@@ -204,10 +208,41 @@ python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 - Verify all parent tables migrated before children
 - May need to disable FK checks temporarily
 
+## Common Mistakes
+
+### Trying to run Alembic migrations against SQL Server
+
+**Symptom**: Error about column already existing, or PostgreSQL-specific syntax errors.
+
+**Cause**: You're running PostgreSQL migrations against a SQL Server database, or vice versa.
+
+**Solution**: Alembic migrations are for PostgreSQL only. Use the migration script to copy data from SQL Server to PostgreSQL first.
+
+### Using wrong port (8001 vs 8000)
+
+**Symptom**: Frontend can't connect to backend, or API calls fail.
+
+**Cause**: v1.x used port 8001, v2.x uses port 8000.
+
+**Solution**: Update all references to use port 8000.
+
+### Running migration without creating schema first
+
+**Symptom**: "relation does not exist" errors during migration.
+
+**Cause**: PostgreSQL tables don't exist yet.
+
+**Solution**: Run `alembic upgrade head` before running the migration script.
+
+### Not backing up before migration
+
+**Symptom**: Data loss if something goes wrong.
+
+**Solution**: ALWAYS back up your SQL Server database before starting. See Step 1 of the upgrade guide.
+
 ## Notes
 
 - Migration is **one-way** - no sync back to SQL Server
 - All timestamps are preserved (UTC)
 - IDs are preserved (no renumbering)
 - Migration script is **read-only** on source (safe)
-
