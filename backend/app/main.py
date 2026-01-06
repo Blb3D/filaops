@@ -97,6 +97,51 @@ def seed_default_data():
         logger.warning(f"Could not check user data: {e}")
 
 
+def _mask_password(url: str) -> str:
+    """Mask password in connection string for safe logging."""
+    import re
+    return re.sub(r'://([^:]+):([^@]+)@', r'://\1:***@', url)
+
+
+def log_startup_configuration():
+    """Log configuration at startup for debugging."""
+    # Database configuration
+    db_url = getattr(settings, 'database_url', 'NOT SET')
+    logger.info("=" * 60)
+    logger.info("FILAOPS STARTUP CONFIGURATION")
+    logger.info("=" * 60)
+
+    # Database info
+    logger.info(f"Database URL: {_mask_password(db_url)}")
+    logger.info(f"DB Host: {getattr(settings, 'DB_HOST', 'NOT SET')}")
+    logger.info(f"DB Port: {getattr(settings, 'DB_PORT', 'NOT SET')}")
+    logger.info(f"DB Name: {getattr(settings, 'DB_NAME', 'NOT SET')}")
+
+    # Check for SQL Server indicators (debugging Viper's issue)
+    if 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower():
+        logger.warning("⚠️  SQL SERVER DETECTED - FilaOps v2.x requires PostgreSQL!")
+        logger.warning("⚠️  Please update your database configuration.")
+    elif 'postgresql' in db_url.lower() or 'postgres' in db_url.lower():
+        logger.info("✓ PostgreSQL database configured correctly")
+    else:
+        logger.warning(f"⚠️  Unknown database type in URL: {db_url[:30]}...")
+
+    # CORS configuration
+    cors_origins = getattr(settings, 'ALLOWED_ORIGINS', [])
+    logger.info(f"CORS Origins ({len(cors_origins)} configured):")
+    for origin in cors_origins:
+        logger.info(f"  - {origin}")
+
+    frontend_url = getattr(settings, 'FRONTEND_URL', 'NOT SET')
+    logger.info(f"Frontend URL: {frontend_url}")
+
+    # Environment
+    logger.info(f"Environment: {getattr(settings, 'ENVIRONMENT', 'development')}")
+    logger.info(f"Debug Mode: {getattr(settings, 'DEBUG', False)}")
+    logger.info(f"Tier: {getattr(settings, 'TIER', 'open')}")
+    logger.info("=" * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
@@ -108,6 +153,7 @@ async def lifespan(app: FastAPI):
             "debug": getattr(settings, "DEBUG", False),
         }
     )
+    log_startup_configuration()
     init_database()
     seed_default_data()
     yield
@@ -217,6 +263,50 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/debug/config")
+async def debug_config():
+    """
+    Debug endpoint to check configuration.
+    Shows database type, CORS origins, and other settings.
+    DISABLE THIS IN PRODUCTION by setting ENVIRONMENT=production.
+    """
+    if getattr(settings, "ENVIRONMENT", "development") == "production":
+        return {"error": "Debug endpoint disabled in production"}
+
+    db_url = getattr(settings, 'database_url', 'NOT SET')
+
+    # Determine database type
+    db_type = "unknown"
+    if 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower():
+        db_type = "SQL Server (WRONG for v2.x!)"
+    elif 'postgresql' in db_url.lower() or 'postgres' in db_url.lower():
+        db_type = "PostgreSQL (correct)"
+    elif 'sqlite' in db_url.lower():
+        db_type = "SQLite (not recommended)"
+
+    return {
+        "version": settings.VERSION,
+        "environment": getattr(settings, "ENVIRONMENT", "development"),
+        "database": {
+            "type": db_type,
+            "host": getattr(settings, 'DB_HOST', 'NOT SET'),
+            "port": getattr(settings, 'DB_PORT', 'NOT SET'),
+            "name": getattr(settings, 'DB_NAME', 'NOT SET'),
+            "url_prefix": db_url.split("://")[0] if "://" in db_url else "unknown",
+        },
+        "cors": {
+            "allowed_origins": getattr(settings, 'ALLOWED_ORIGINS', []),
+            "frontend_url": getattr(settings, 'FRONTEND_URL', 'NOT SET'),
+        },
+        "tier": getattr(settings, 'TIER', 'open'),
+        "debug": getattr(settings, 'DEBUG', False),
+        "hints": {
+            "sql_server_detected": 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower(),
+            "cors_count": len(getattr(settings, 'ALLOWED_ORIGINS', [])),
+        }
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
