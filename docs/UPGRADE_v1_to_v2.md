@@ -157,7 +157,7 @@ cd backend
 # First, do a DRY RUN to verify connectivity and see what will be migrated
 python scripts/migrate_sqlserver_to_postgres.py \
     --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/YourDB?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" \
-    --target-conn "postgresql://postgres:yourpassword@localhost:5432/filaops" \
+    --target-conn "postgresql+psycopg://postgres:yourpassword@localhost:5432/filaops" \
     --dry-run \
     --output migration_dryrun.json
 ```
@@ -168,7 +168,7 @@ Review the output. If everything looks correct:
 # Run the actual migration
 python scripts/migrate_sqlserver_to_postgres.py \
     --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/YourDB?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" \
-    --target-conn "postgresql://postgres:yourpassword@localhost:5432/filaops" \
+    --target-conn "postgresql+psycopg://postgres:yourpassword@localhost:5432/filaops" \
     --output migration_report.json
 ```
 

@@ -48,7 +48,7 @@ sqlcmd -S localhost\SQLEXPRESS -d BLB3D_ERP -Q "SELECT COUNT(*) FROM sys.dm_exec
 cd <YOUR_FILAOPS_PATH>\backend
 python scripts\migrate_sqlserver_to_postgres.py `
     --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/<YOUR_SQLSERVER_DB>?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
-    --target-conn "postgresql://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
+    --target-conn "postgresql+psycopg://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
     --dry-run `
     --output migration_report_dryrun.json
 ```
@@ -62,7 +62,7 @@ python scripts\migrate_sqlserver_to_postgres.py `
 ```powershell
 python scripts\migrate_sqlserver_to_postgres.py `
     --source-conn "mssql+pyodbc://localhost\SQLEXPRESS/<YOUR_SQLSERVER_DB>?driver=ODBC+Driver+17+for+SQL+Server&trusted_connection=yes" `
-    --target-conn "postgresql://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
+    --target-conn "postgresql+psycopg://postgres:<PASSWORD>@localhost:5432/<YOUR_POSTGRES_DB>" `
     --output migration_report.json
 ```
 
