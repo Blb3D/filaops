@@ -4,10 +4,9 @@ Invoice Import API Endpoints
 Parse invoices and create purchase orders from them:
 - Upload and parse PDF/CSV invoices
 - Review and confirm product mappings
-- Create PO with attached document
+- Create PO from parsed invoice data
 """
 import os
-import uuid
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -19,7 +18,7 @@ from app.logging_config import get_logger
 from app.models.vendor import Vendor
 from app.models.product import Product
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
-from app.models.purchase_order_document import PurchaseOrderDocument, VendorItem
+from app.models.purchase_order_document import VendorItem
 from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.services.invoice_parser import parse_invoice
@@ -127,7 +126,6 @@ async def parse_invoice_file(
 @router.post("/invoices/create-po", response_model=PurchaseOrderResponse, status_code=201)
 async def create_po_from_invoice(
     request: CreatePOFromInvoiceRequest,
-    file: Optional[UploadFile] = File(None, description="Original invoice to attach"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -137,7 +135,8 @@ async def create_po_from_invoice(
     After reviewing and confirming product mappings, call this endpoint to:
     1. Create the purchase order with all line items
     2. Save new vendor SKU mappings for future invoices
-    3. Optionally attach the original invoice document
+
+    To attach a document, use POST /purchase-orders/{po_id}/documents after creation.
     """
     # Verify vendor
     vendor = db.query(Vendor).filter(Vendor.id == request.vendor_id).first()
@@ -164,7 +163,7 @@ async def create_po_from_invoice(
         PurchaseOrder.po_number.like(f"{prefix}%")
     ).order_by(PurchaseOrder.id.desc()).first()
 
-    if last_po and last_po.po_number.startswith(prefix):
+    if last_po and last_po.po_number and last_po.po_number.startswith(prefix):
         try:
             last_num = int(last_po.po_number.split('-')[-1])
             po_number = f"{prefix}-{last_num + 1:03d}"
@@ -194,9 +193,9 @@ async def create_po_from_invoice(
         status="draft",
         order_date=request.invoice_date or today.date(),
         subtotal=subtotal,
-        tax=tax,
+        tax_amount=tax,
         shipping_cost=shipping,
-        total=total,
+        total_amount=total,
         notes=notes,
         created_by=current_user.email if current_user else None,
     )
@@ -209,6 +208,7 @@ async def create_po_from_invoice(
 
         po_line = PurchaseOrderLine(
             purchase_order_id=purchase_order.id,
+            line_number=idx,
             product_id=line.product_id,
             quantity_ordered=line.quantity,
             unit_cost=line.unit_cost,
@@ -227,11 +227,11 @@ async def create_po_from_invoice(
 
             if existing_mapping:
                 # Update existing mapping
-                existing_mapping.product_id = line.product_id
-                existing_mapping.default_unit_cost = str(line.unit_cost)
-                existing_mapping.default_purchase_unit = line.purchase_unit
-                existing_mapping.last_seen_at = datetime.utcnow()
-                existing_mapping.times_ordered = (existing_mapping.times_ordered or 0) + 1
+                setattr(existing_mapping, 'product_id', line.product_id)
+                setattr(existing_mapping, 'default_unit_cost', str(line.unit_cost))
+                setattr(existing_mapping, 'default_purchase_unit', line.purchase_unit)
+                setattr(existing_mapping, 'last_seen_at', datetime.utcnow())
+                setattr(existing_mapping, 'times_ordered', (existing_mapping.times_ordered or 0) + 1)
             else:
                 # Create new mapping
                 vendor_item = VendorItem(
@@ -244,34 +244,6 @@ async def create_po_from_invoice(
                     times_ordered=1,
                 )
                 db.add(vendor_item)
-
-    # Attach original document if provided
-    if file and request.attach_document:
-        file_bytes = await file.read()
-        if file_bytes:
-            # Save to local storage
-            upload_dir = os.path.join("uploads", "po_documents", str(purchase_order.id))
-            os.makedirs(upload_dir, exist_ok=True)
-
-            ext = file.filename.split('.')[-1] if '.' in file.filename else 'pdf'
-            safe_filename = f"{uuid.uuid4()}.{ext}"
-            file_path = os.path.join(upload_dir, safe_filename)
-
-            with open(file_path, 'wb') as f:
-                f.write(file_bytes)
-
-            document = PurchaseOrderDocument(
-                purchase_order_id=purchase_order.id,
-                document_type=request.document_type,
-                file_name=safe_filename,
-                original_file_name=file.filename,
-                file_path=file_path,
-                storage_type="local",
-                file_size=len(file_bytes),
-                mime_type=file.content_type,
-                uploaded_by=current_user.email if current_user else None,
-            )
-            db.add(document)
 
     db.commit()
     db.refresh(purchase_order)
@@ -287,21 +259,24 @@ async def create_po_from_invoice(
         po_number=purchase_order.po_number,
         vendor_id=purchase_order.vendor_id,
         vendor_name=vendor.name,
-        vendor_code=vendor.code,
         status=purchase_order.status,
         order_date=purchase_order.order_date,
         expected_date=purchase_order.expected_date,
         received_date=purchase_order.received_date,
         subtotal=purchase_order.subtotal,
-        tax=purchase_order.tax,
+        tax_amount=purchase_order.tax_amount,
         shipping_cost=purchase_order.shipping_cost,
-        total=purchase_order.total,
+        total_amount=purchase_order.total_amount,
         notes=purchase_order.notes,
         created_by=purchase_order.created_by,
         created_at=purchase_order.created_at,
-        updated_at=purchase_order.updated_at,
+        updated_at=getattr(purchase_order, 'updated_at', None),
+        tracking_number=None,
+        carrier=None,
+        payment_method=None,
+        payment_reference=None,
+        document_url=None,
         lines=[],  # Not loading lines for response
-        document_count=1 if (file and request.attach_document) else 0,
     )
 
 

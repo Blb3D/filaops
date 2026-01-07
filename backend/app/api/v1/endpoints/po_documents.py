@@ -132,33 +132,16 @@ async def upload_document(
     # Generate safe filename
     safe_filename = _get_safe_filename(original_filename, po.po_number)
     
-    # Try Google Drive first
-    drive_service = get_drive_service()
+    # Storage configuration
     storage_type = "local"
     file_url = None
     file_path = None
     google_drive_id = None
-    
-    if drive_service.enabled:
-        success, result = drive_service.upload_bytes(
-            file_bytes=file_content,
-            filename=safe_filename,
-            mime_type=mime_type,
-            subfolder=f"Purchase Orders/{po.po_number}"
-        )
-        
-        if success:
-            storage_type = "google_drive"
-            file_url = result
-            # Extract Google Drive file ID from URL
-            # URL format: https://drive.google.com/file/d/{file_id}/view
-            if "/d/" in result:
-                google_drive_id = result.split("/d/")[1].split("/")[0]
-            logger.info(f"Uploaded {safe_filename} to Google Drive")
-        else:
-            logger.warning(f"Google Drive upload failed: {result}, falling back to local")
-    
-    # Fallback to local storage
+
+    # TODO: Google Drive integration disabled - requires proper OAuth token flow
+    # For now, always use local storage
+
+    # Save to local storage
     if storage_type == "local":
         _ensure_upload_dir()
         local_path = os.path.join(UPLOAD_DIR, safe_filename)

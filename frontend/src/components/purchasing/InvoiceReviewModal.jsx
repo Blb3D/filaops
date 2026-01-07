@@ -6,6 +6,7 @@
  */
 import { useState, useMemo } from "react";
 import { API_URL } from "../../config/api";
+import ProductSearchSelect from "./ProductSearchSelect";
 
 // Match confidence badge colors
 const CONFIDENCE_STYLES = {
@@ -19,6 +20,32 @@ const CONFIDENCE_LABELS = {
   fuzzy: "Fuzzy Match",
   none: "Unmapped",
 };
+
+// UOM classes - units in the same class can be converted between each other
+const UOM_CLASSES = {
+  weight: ["G", "KG", "LB", "OZ"],
+  quantity: ["EA", "PK"],
+};
+
+// All available UOMs for fallback when no product selected
+const ALL_UOMS = ["EA", "KG", "G", "LB", "OZ", "PK"];
+
+// Get valid UOMs for a product based on its purchase_uom class
+function getValidUomsForProduct(product) {
+  if (!product?.purchase_uom) return ALL_UOMS;
+
+  const productUom = product.purchase_uom.toUpperCase();
+
+  // Find which class this UOM belongs to
+  for (const [, uoms] of Object.entries(UOM_CLASSES)) {
+    if (uoms.includes(productUom)) {
+      return uoms;
+    }
+  }
+
+  // Unknown UOM class - return all
+  return ALL_UOMS;
+}
 
 export default function InvoiceReviewModal({
   parsedInvoice,
@@ -39,12 +66,34 @@ export default function InvoiceReviewModal({
 
   // Line items with editable overrides
   const [lines, setLines] = useState(
-    parsedInvoice.lines.map((line, idx) => ({
-      ...line,
-      key: idx,
-      product_id: line.matched_product_id || "",
-      save_mapping: line.match_confidence !== "exact", // Auto-save new mappings
-    }))
+    parsedInvoice.lines.map((line, idx) => {
+      // If product is matched, use that product's purchase_uom instead of invoice unit
+      const matchedProduct = line.matched_product_id
+        ? products.find((p) => String(p.id) === String(line.matched_product_id))
+        : null;
+
+      // Recalculate unit_cost from line_total if available (handles discounts)
+      // The parser may extract list price as unit_cost but actual charged amount as line_total
+      const qty = parseFloat(line.quantity) || 1;
+      const lineTotal = parseFloat(line.line_total) || 0;
+      const parsedUnitCost = parseFloat(line.unit_cost) || 0;
+      // Use line_total / qty if it differs significantly from parsed unit_cost (indicates discount)
+      const calculatedUnitCost = qty > 0 ? lineTotal / qty : parsedUnitCost;
+      const unitCost = lineTotal > 0 && Math.abs(calculatedUnitCost - parsedUnitCost) > 0.01
+        ? calculatedUnitCost.toFixed(4)
+        : line.unit_cost;
+
+      return {
+        ...line,
+        key: idx,
+        product_id: line.matched_product_id || "",
+        save_mapping: line.match_confidence !== "exact", // Auto-save new mappings
+        // Override unit with product's purchase_uom if matched (e.g., KG instead of EA)
+        unit: matchedProduct?.purchase_uom || line.unit,
+        // Use calculated unit cost that accounts for discounts
+        unit_cost: unitCost,
+      };
+    })
   );
 
   const [creating, setCreating] = useState(false);
@@ -69,10 +118,27 @@ export default function InvoiceReviewModal({
     return lines.filter((line) => !line.product_id).length;
   }, [lines]);
 
-  // Update a line field
+  // Update a line field with automatic recalculation
   const updateLine = (index, field, value) => {
     setLines((prev) =>
-      prev.map((line, i) => (i === index ? { ...line, [field]: value } : line))
+      prev.map((line, i) => {
+        if (i !== index) return line;
+
+        const updated = { ...line, [field]: value };
+        const qty = parseFloat(field === "quantity" ? value : line.quantity) || 0;
+        const unitCost = parseFloat(field === "unit_cost" ? value : line.unit_cost) || 0;
+        const lineTotal = parseFloat(field === "line_total" ? value : line.line_total) || 0;
+
+        if (field === "quantity" || field === "unit_cost") {
+          // Recalc line total when qty or unit cost changes
+          updated.line_total = (qty * unitCost).toFixed(2);
+        } else if (field === "line_total") {
+          // Recalc unit cost when line total changes
+          updated.unit_cost = qty > 0 ? (lineTotal / qty).toFixed(4) : "0";
+        }
+
+        return updated;
+      })
     );
   };
 
@@ -89,6 +155,8 @@ export default function InvoiceReviewModal({
           matched_product_name: product?.name || "",
           match_confidence: productId ? "exact" : "none",
           save_mapping: true, // User manually selected, save the mapping
+          // Use product's purchase_uom if available (e.g., KG for filament instead of EA)
+          unit: product?.purchase_uom || line.unit,
         };
       })
     );
@@ -110,8 +178,6 @@ export default function InvoiceReviewModal({
     setError(null);
 
     try {
-      const formData = new FormData();
-
       // Build request payload
       const payload = {
         vendor_id: parseInt(vendorId),
@@ -133,13 +199,9 @@ export default function InvoiceReviewModal({
         })),
       };
 
-      // Add file if attaching
-      if (attachDocument && originalFile) {
-        formData.append("file", originalFile);
-      }
-
-      // Add JSON payload
       const token = localStorage.getItem("adminToken");
+
+      // Step 1: Create the PO with JSON
       const response = await fetch(
         `${API_URL}/api/v1/purchase-orders/invoices/create-po`,
         {
@@ -156,6 +218,29 @@ export default function InvoiceReviewModal({
 
       if (!response.ok) {
         throw new Error(data.detail || "Failed to create purchase order");
+      }
+
+      // Step 2: Upload document if requested
+      if (attachDocument && originalFile && data.id) {
+        const formData = new FormData();
+        formData.append("file", originalFile);
+        formData.append("document_type", "invoice");
+
+        const docResponse = await fetch(
+          `${API_URL}/api/v1/purchase-orders/${data.id}/documents`,
+          {
+            method: "POST",
+            headers: {
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: formData,
+          }
+        );
+
+        if (!docResponse.ok) {
+          // PO was created but document upload failed - log but don't fail
+          console.warn("Document upload failed, but PO was created:", await docResponse.text());
+        }
       }
 
       onSuccess(data);
@@ -305,20 +390,18 @@ export default function InvoiceReviewModal({
                         </div>
                       </td>
                       <td className="px-3 py-2">
-                        <select
+                        <ProductSearchSelect
                           value={line.product_id || ""}
-                          onChange={(e) => handleProductChange(idx, e.target.value)}
-                          className={`w-full bg-gray-800 border rounded px-2 py-1 text-sm text-white ${
-                            !line.product_id ? "border-red-500" : "border-gray-700"
-                          }`}
-                        >
-                          <option value="">-- Select Product --</option>
-                          {productOptions.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.sku} - {p.name}
-                            </option>
-                          ))}
-                        </select>
+                          products={productOptions}
+                          onChange={(productId) => handleProductChange(idx, productId)}
+                          placeholder="Search products..."
+                          onCreateNew={(searchText) => {
+                            // Open items page in new tab with search pre-filled
+                            const params = new URLSearchParams();
+                            params.set("search", line.vendor_sku || line.description || searchText || "");
+                            window.open(`/admin/items?${params.toString()}`, "_blank");
+                          }}
+                        />
                         {line.match_source && line.match_confidence !== "none" && (
                           <div className="text-gray-500 text-xs mt-1">
                             via {line.match_source}
@@ -335,7 +418,27 @@ export default function InvoiceReviewModal({
                           className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-right text-white text-sm"
                         />
                       </td>
-                      <td className="px-3 py-2 text-gray-400 text-sm">{line.unit || "EA"}</td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const selectedProduct = products.find(
+                            (p) => String(p.id) === String(line.product_id)
+                          );
+                          const validUoms = getValidUomsForProduct(selectedProduct);
+                          return (
+                            <select
+                              value={line.unit || "EA"}
+                              onChange={(e) => updateLine(idx, "unit", e.target.value)}
+                              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white text-sm"
+                            >
+                              {validUoms.map((uom) => (
+                                <option key={uom} value={uom}>
+                                  {uom}
+                                </option>
+                              ))}
+                            </select>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2">
                         <input
                           type="number"
@@ -346,8 +449,18 @@ export default function InvoiceReviewModal({
                           className="w-24 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-right text-white text-sm"
                         />
                       </td>
-                      <td className="px-3 py-2 text-right text-white text-sm">
-                        ${parseFloat(line.line_total || 0).toFixed(2)}
+                      <td className="px-3 py-2">
+                        <div className="flex items-center">
+                          <span className="text-gray-400 mr-1">$</span>
+                          <input
+                            type="number"
+                            value={line.line_total || 0}
+                            onChange={(e) => updateLine(idx, "line_total", e.target.value)}
+                            step="0.01"
+                            min="0"
+                            className="w-20 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-right text-white text-sm"
+                          />
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-center">
                         <span

@@ -176,13 +176,6 @@ export default function InvoiceUploadModal({
                   <p className="text-white">Drop your invoice here</p>
                   <p className="text-gray-400 text-sm">or click to browse</p>
                 </div>
-                <input
-                  type="file"
-                  accept=".pdf,.csv"
-                  onChange={handleFileInput}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  style={{ position: 'absolute', top: 0, left: 0 }}
-                />
                 <label className="inline-block px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-white text-sm cursor-pointer">
                   <input
                     type="file"
