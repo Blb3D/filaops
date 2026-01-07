@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import ProFeaturesAnnouncement from "./ProFeaturesAnnouncement";
 import UpdateNotification from "./UpdateNotification";
 import SecurityBadge from "./SecurityBadge";
+import useActivityTokenRefresh from "../hooks/useActivityTokenRefresh";
 import { getCurrentVersion, getCurrentVersionSync, formatVersion } from "../utils/version";
 import { API_URL } from "../config/api";
 import logoNavbar from "../assets/logo_navbar.png";
@@ -487,6 +488,9 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Auto-refresh tokens when user is active to prevent losing work
+  useActivityTokenRefresh();
   const [currentVersion, setCurrentVersion] = useState(getCurrentVersionSync());
   const [user] = useState(() => {
     const userData = localStorage.getItem("adminUser");
@@ -561,6 +565,7 @@ export default function AdminLayout() {
 
   const handleLogout = () => {
     localStorage.removeItem("adminToken");
+    localStorage.removeItem("adminRefreshToken");
     localStorage.removeItem("adminUser");
     navigate("/admin/login");
   };

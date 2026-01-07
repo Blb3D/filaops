@@ -14,37 +14,36 @@ export default function AdminLogin() {
   const [checkingSetup, setCheckingSetup] = useState(true);
   const [apiError, setApiError] = useState(null);
 
-  // Check if first-run setup is needed
   useEffect(() => {
+    const checkSetupStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/setup/status`);
+        if (!res.ok) {
+          throw new Error(`API returned ${res.status}`);
+        }
+        const data = await res.json();
+
+        if (data.needs_setup) {
+          // No users exist - redirect to onboarding
+          navigate("/onboarding");
+          return;
+        }
+      } catch {
+        // Show connection error - this helps users diagnose VITE_API_URL issues
+        setApiError(
+          `Cannot connect to API at ${API_URL}. ` +
+            (window.location.hostname !== "localhost" &&
+            window.location.hostname !== "127.0.0.1"
+              ? `If accessing remotely, ensure VITE_API_URL is set to the server's address (e.g., http://${window.location.hostname}:8000) and rebuild the frontend.`
+              : "Please ensure the backend is running.")
+        );
+      } finally {
+        setCheckingSetup(false);
+      }
+    };
+
     checkSetupStatus();
-  }, []);
-
-  const checkSetupStatus = async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/v1/setup/status`);
-      if (!res.ok) {
-        throw new Error(`API returned ${res.status}`);
-      }
-      const data = await res.json();
-
-      if (data.needs_setup) {
-        // No users exist - redirect to onboarding
-        navigate("/onboarding");
-        return;
-      }
-    } catch {
-      // Show connection error - this helps users diagnose VITE_API_URL issues
-      setApiError(
-        `Cannot connect to API at ${API_URL}. ` +
-          (window.location.hostname !== "localhost" &&
-          window.location.hostname !== "127.0.0.1"
-            ? `If accessing remotely, ensure VITE_API_URL is set to the server's address (e.g., http://${window.location.hostname}:8000) and rebuild the frontend.`
-            : "Please ensure the backend is running.")
-      );
-    } finally {
-      setCheckingSetup(false);
-    }
-  };
+  }, [navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,8 +90,11 @@ export default function AdminLogin() {
         );
       }
 
-      // Store token and user data
+      // Store tokens and user data
       localStorage.setItem("adminToken", data.access_token);
+      if (data.refresh_token) {
+        localStorage.setItem("adminRefreshToken", data.refresh_token);
+      }
       localStorage.setItem("adminUser", JSON.stringify(userData));
 
       // Redirect to admin dashboard
