@@ -316,6 +316,7 @@ class AISettingsResponse(BaseModel):
     ai_provider: Optional[str] = None  # 'anthropic', 'ollama', or None
     ai_api_key_set: bool = False  # True if key is configured (don't expose actual key)
     ai_api_key_masked: Optional[str] = None  # e.g., "sk-...XYZ"
+    ai_anthropic_model: Optional[str] = None  # Claude model selection
     ai_ollama_url: Optional[str] = None
     ai_ollama_model: Optional[str] = None
     ai_status: str = "not_configured"  # 'not_configured', 'configured', 'connected'
@@ -327,6 +328,7 @@ class AISettingsUpdate(BaseModel):
     """Update AI settings"""
     ai_provider: Optional[str] = Field(None, pattern="^(anthropic|ollama)?$")
     ai_api_key: Optional[str] = Field(None, max_length=500)
+    ai_anthropic_model: Optional[str] = Field(None, max_length=100)
     ai_ollama_url: Optional[str] = Field(None, max_length=255)
     ai_ollama_model: Optional[str] = Field(None, max_length=100)
     external_ai_blocked: Optional[bool] = None
@@ -415,6 +417,7 @@ async def get_ai_settings(
         ai_provider=settings.ai_provider,
         ai_api_key_set=bool(settings.ai_api_key),
         ai_api_key_masked=_mask_api_key(settings.ai_api_key),
+        ai_anthropic_model=settings.ai_anthropic_model or "claude-sonnet-4-20250514",
         ai_ollama_url=settings.ai_ollama_url or "http://localhost:11434",
         ai_ollama_model=settings.ai_ollama_model or "llama3.2",
         ai_status=ai_status,

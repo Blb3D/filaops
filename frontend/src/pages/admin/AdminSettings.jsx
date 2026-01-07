@@ -379,6 +379,9 @@ const AdminSettings = () => {
       if (aiForm.ai_ollama_model) {
         payload.ai_ollama_model = aiForm.ai_ollama_model;
       }
+      if (aiForm.ai_anthropic_model) {
+        payload.ai_anthropic_model = aiForm.ai_anthropic_model;
+      }
 
       const response = await fetch(`${API_URL}/api/v1/settings/ai`, {
         method: "PATCH",
