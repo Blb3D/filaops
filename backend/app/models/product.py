@@ -24,12 +24,22 @@ class Product(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     
-    # Unit of Measure - TWO FIELDS for proper cost handling
-    # - unit: Storage/inventory unit (G for filament, EA for hardware)
-    # - purchase_uom: Purchasing unit (KG for filament, EA for hardware)
-    # Costs (standard_cost, etc.) are stored per PURCHASE unit
-    unit = Column(String(20), default='EA')  # Storage unit
-    purchase_uom = Column(String(20), default='EA')  # Purchase unit (costs are per this)
+    # Unit of Measure - THREE FIELDS for proper cost handling
+    # See docs/AI_DIRECTIVE_UOM_COSTS.md for complete documentation.
+    #
+    # - unit: Storage/consumption unit (G for filament, EA for hardware)
+    # - purchase_uom: Purchasing unit (KG for filament, BOX for hardware)
+    # - purchase_factor: Conversion (1 purchase_uom = X unit). REQUIRED if purchase_uom != unit.
+    #
+    # Example: Filament
+    #   unit='G', purchase_uom='KG', purchase_factor=1000
+    #   Purchase: 3 KG @ $20/KG
+    #   Transaction: 3000 G @ $0.02/G = $60 total
+    #
+    unit = Column(String(20), default='EA')  # Storage/consumption unit
+    purchase_uom = Column(String(20), default='EA')  # Purchase unit
+    purchase_factor = Column(Numeric(18, 6), nullable=True,
+                             comment='Conversion: 1 purchase_uom = X unit. E.g., 1000 for KG->G')
 
     # Item classification
     item_type = Column(String(20), default='finished_good', nullable=False)  # finished_good, component, supply, service

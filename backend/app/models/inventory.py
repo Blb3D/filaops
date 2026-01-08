@@ -84,9 +84,17 @@ class InventoryTransaction(Base):
     lot_number = Column(String(100), nullable=True)
     serial_number = Column(String(100), nullable=True)
 
-    # Costs
+    # Costs - SINGLE SOURCE OF TRUTH
+    # cost_per_unit: Cost per unit in transaction's unit ($/G for materials, $/EA for discrete)
+    # total_cost: Pre-calculated at creation time. UI displays this directly - NO client-side math.
+    # See docs/AI_DIRECTIVE_UOM_COSTS.md for details.
     cost_per_unit = Column(Numeric(18, 4), nullable=True)
-    # total_cost is a computed column (quantity * cost_per_unit)
+    total_cost = Column(Numeric(18, 4), nullable=True,
+                        comment='Pre-calculated: quantity * cost_per_unit. UI displays directly.')
+    
+    # Unit of measure for quantity - STORED, not inferred from product
+    unit = Column(String(20), nullable=True,
+                  comment='Unit for quantity (G, EA, BOX). Stored at creation, not looked up.')
 
     # Notes
     notes = Column(Text, nullable=True)

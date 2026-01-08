@@ -767,7 +767,7 @@ async def receive_purchase_order(
                 f"UOM conversion for PO {po.po_number} line {line.line_number}: "
                 f"{item.quantity_received} {purchase_unit} @ ${line.unit_cost}/{purchase_unit} -> "
                 f"{quantity_for_inventory} {product_unit} @ ${cost_per_unit_for_inventory}/"
-                f"{'KG' if is_mat else product_unit} (material: {is_mat})"
+                f"{'G' if is_mat else product_unit} (material: {is_mat})"
             )
 
         # ============================================================================
@@ -800,6 +800,55 @@ async def receive_purchase_order(
                 f"Material conversion for transaction: {quantity_for_inventory} {product_unit} -> "
                 f"{transaction_quantity} G (product: {product.sku}, purchased in: {purchase_unit})"
             )
+            
+            # ============================================================================
+            # FIX: Ensure cost is ALWAYS in $/G for materials (matches transaction unit)
+            # ============================================================================
+            # This handles the case where purchase_unit == product_unit (e.g., both KG)
+            # In that case, the earlier cost conversion block was skipped, but we still
+            # need to convert cost from $/product_unit to $/G since quantity is now in grams.
+            #
+            # Example: Purchase 1 KG @ $20/KG, product_unit=KG
+            #   - Earlier block skipped (units match)
+            #   - Quantity converted: 1 KG -> 1000 G
+            #   - Cost MUST be: $20/KG -> $0.02/G
+            #   - Verify: 1000 G × $0.02/G = $20 ✓
+            #
+            # IMPORTANT: Only run this when purchase_unit == product_unit
+            # When purchase_unit != product_unit, cost was already converted above (lines 703-727)
+            if purchase_unit == product_unit:
+                if product_unit == "KG":
+                    # Cost was in $/KG, convert to $/G
+                    cost_per_unit_for_inventory = line.unit_cost / Decimal("1000")
+                    logger.info(
+                        f"Material cost normalization (KG->G): ${line.unit_cost}/KG -> "
+                        f"${cost_per_unit_for_inventory}/G"
+                    )
+                elif product_unit == "LB":
+                    # Cost was in $/LB, convert to $/G (1 LB = 453.592 G)
+                    cost_per_unit_for_inventory = line.unit_cost / Decimal("453.592")
+                    logger.info(
+                        f"Material cost normalization (LB->G): ${line.unit_cost}/LB -> "
+                        f"${cost_per_unit_for_inventory}/G"
+                    )
+                elif product_unit == "OZ":
+                    # Cost was in $/OZ, convert to $/G (1 OZ = 28.3495 G)
+                    cost_per_unit_for_inventory = line.unit_cost / Decimal("28.3495")
+                    logger.info(
+                        f"Material cost normalization (OZ->G): ${line.unit_cost}/OZ -> "
+                        f"${cost_per_unit_for_inventory}/G"
+                    )
+                elif product_unit == "G":
+                    # Already in $/G, no conversion needed
+                    logger.info(
+                        f"Material cost already in $/G: ${cost_per_unit_for_inventory}/G"
+                    )
+                else:
+                    # Unknown unit - log warning but keep original cost
+                    logger.warning(
+                        f"Material {product.sku} has unknown unit '{product_unit}', "
+                        f"cost not normalized. This may cause incorrect COGS calculations!"
+                    )
         # For non-materials, transaction_quantity = quantity_for_inventory (already in product_unit)
         
         # Update inventory (store in transaction unit: GRAMS for materials)
@@ -827,7 +876,12 @@ async def receive_purchase_order(
 
         # Create inventory transaction
         # STAR SCHEMA: Store in transaction unit (GRAMS for materials, native for others)
-        # Cost per unit: For materials, keep as $/KG (cost is per-KG even though qty is in grams)
+        # Cost per unit: For materials, cost is $/G (matches quantity unit of grams)
+        # SINGLE SOURCE OF TRUTH: total_cost and unit are pre-calculated and stored
+        # See docs/AI_DIRECTIVE_UOM_COSTS.md - UI must display these directly, NO client-side math
+        transaction_unit = 'G' if is_mat else product_unit
+        transaction_total_cost = transaction_quantity * cost_per_unit_for_inventory
+        
         txn = InventoryTransaction(
             product_id=line.product_id,
             location_id=location_id,
@@ -835,9 +889,11 @@ async def receive_purchase_order(
             reference_type="purchase_order",
             reference_id=po.id,
             quantity=float(transaction_quantity),  # GRAMS for materials, product_unit for others
+            unit=transaction_unit,  # STORED unit - UI displays this directly
             transaction_date=actual_received_date,  # User-entered date (when actually received)
             lot_number=item.lot_number,
-            cost_per_unit=cost_per_unit_for_inventory,  # Cost per product_unit (KG for materials)
+            cost_per_unit=cost_per_unit_for_inventory,  # Cost per unit ($/G for materials, $/product_unit for others)
+            total_cost=transaction_total_cost,  # PRE-CALCULATED - UI displays this directly
             notes=item.notes or f"Received from PO {po.po_number}",
             created_at=datetime.utcnow(),  # System timestamp (when entered)
             created_by=current_user.email,

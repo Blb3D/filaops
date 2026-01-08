@@ -572,18 +572,10 @@ export default function AdminInventoryTransactions() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-white">
-                      {txn.product_unit === "KG" ? (
-                        // For materials: quantity is already in GRAMS (star schema)
-                        <>
-                          {parseFloat(txn.quantity).toFixed(4)} <span className="text-gray-500 text-xs ml-1">G</span>
-                        </>
-                      ) : (
-                        // For other items, show as-is
-                        <>
-                          {txn.quantity} {txn.product_unit ? (
-                            <span className="text-gray-500 text-xs ml-1">{txn.product_unit}</span>
-                          ) : null}
-                        </>
+                      {/* SINGLE SOURCE OF TRUTH: Display stored quantity and unit directly */}
+                      {parseFloat(txn.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      {txn.unit && (
+                        <span className="text-gray-500 text-xs ml-1">{txn.unit}</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-gray-400">
@@ -595,25 +587,20 @@ export default function AdminInventoryTransactions() {
                         : "-"}
                     </td>
                     <td className="py-3 px-4 text-gray-400">
-                      {txn.cost_per_unit ? (
-                        // For materials (material_type_id is not null), costs are stored per-KG
-                        // Always show "/KG" for materials, even though quantities are displayed in grams
-                        txn.material_type_id 
-                          ? `$${parseFloat(txn.cost_per_unit).toFixed(4)}/KG`
-                          : `$${parseFloat(txn.cost_per_unit).toFixed(4)}/${txn.product_unit || ""}`
-                      ) : (
-                        "-"
-                      )}
+                      {/* SINGLE SOURCE OF TRUTH: Display stored cost_per_unit with unit */}
+                      {txn.cost_per_unit
+                        ? "$" + parseFloat(txn.cost_per_unit).toFixed(4) + "/" + (txn.unit || "EA")
+                        : "-"}
                     </td>
                     <td className="py-3 px-4 text-white font-medium">
-                      {txn.total_cost ? (
-                        `$${parseFloat(txn.total_cost).toFixed(2)}`
-                      ) : (
-                        "-"
-                      )}
+                      {/* SINGLE SOURCE OF TRUTH: Display stored total_cost directly - NO client-side math */}
+                      {txn.total_cost != null
+                        ? "$" + parseFloat(txn.total_cost).toFixed(2)
+                        : "-"}
                     </td>
                     <td className="py-3 px-4 text-gray-500 text-xs">
-                      {txn.material_type_id ? "G" : (txn.product_unit || "-")}
+                      {/* SINGLE SOURCE OF TRUTH: Display stored unit directly */}
+                      {txn.unit || "-"}
                     </td>
                     <td className="py-3 px-4 text-gray-500 text-sm max-w-xs truncate">
                       {txn.notes || "-"}

@@ -202,8 +202,9 @@ class TransactionResponse(BaseModel):
     location_name: Optional[str]
     transaction_type: str
     quantity: Decimal
+    unit: Optional[str] = None  # STORED unit from transaction (G, EA, etc.) - UI displays directly
     cost_per_unit: Optional[Decimal]
-    total_cost: Optional[Decimal]
+    total_cost: Optional[Decimal]  # STORED total - UI displays directly, NO client-side math
     reference_type: Optional[str]
     reference_id: Optional[int]
     lot_number: Optional[str]
@@ -232,7 +233,12 @@ async def list_transactions(
     current_admin: User = Depends(get_current_staff_user),
     db: Session = Depends(get_db),
 ):
-    """List inventory transactions with filters"""
+    """
+    List inventory transactions with filters.
+    
+    SINGLE SOURCE OF TRUTH: Returns stored total_cost and unit directly.
+    See docs/AI_DIRECTIVE_UOM_COSTS.md - UI displays these values with NO client-side math.
+    """
     query = db.query(InventoryTransaction).join(Product)
     
     if product_id:
@@ -254,68 +260,56 @@ async def list_transactions(
         location = db.query(InventoryLocation).filter(InventoryLocation.id == txn.location_id).first() if txn.location_id else None
         to_location = db.query(InventoryLocation).filter(InventoryLocation.id == txn.to_location_id).first() if hasattr(txn, 'to_location_id') and txn.to_location_id else None
         
-        total_cost = None
-        if txn.cost_per_unit is not None and txn.quantity is not None:
+        # SINGLE SOURCE OF TRUTH: Use stored values from transaction
+        # Fallback calculation only for legacy transactions created before migration 039
+        stored_total_cost = getattr(txn, 'total_cost', None)
+        stored_unit = getattr(txn, 'unit', None)
+        
+        if stored_total_cost is not None:
+            # New transaction with stored total_cost - use directly
+            total_cost = stored_total_cost
+        elif txn.cost_per_unit is not None and txn.quantity is not None:
+            # Legacy transaction - calculate for display (but log warning)
+            logger.debug(
+                f"Transaction {txn.id} missing stored total_cost - calculating for display. "
+                f"Run migration 039 to backfill."
+            )
             try:
-                # For materials: cost_per_unit is per-KG, so convert quantity to KG
-                # For non-materials: quantity and cost are typically in same unit, but validate
                 if product and is_material(product):
-                    # Materials: convert quantity from product.unit to KG for cost calculation
                     quantity_kg = convert_quantity_to_kg_for_cost(
                         db, txn.quantity, product.unit, product.id, product.sku
                     )
-                    total_cost = float(txn.cost_per_unit) * quantity_kg
+                    total_cost = Decimal(str(float(txn.cost_per_unit) * quantity_kg))
                 else:
-                    # For non-materials: typically quantity and cost are in same unit
-                    # But we should still validate the unit if it's specified
-                    if product is not None and product.unit is not None:
-                        # If unit is specified, ensure it's compatible (e.g., both in same unit)
-                        # For now, assume non-materials have cost_per_unit in the same unit as quantity
-                        # This could be enhanced later if needed
-                        try:
-                            total_cost = float(txn.cost_per_unit) * float(txn.quantity)
-                        except (ValueError, TypeError) as e:
-                            logger.error(
-                                f"Failed to calculate total_cost for non-material product {product.id} "
-                                f"({product.sku}): {e}",
-                                extra={
-                                    "product_id": product.id,
-                                    "product_sku": product.sku,
-                                    "cost_per_unit": str(txn.cost_per_unit),
-                                    "quantity": str(txn.quantity)
-                                }
-                            )
-                            # Don't raise - set total_cost to None to avoid breaking the response
-                            total_cost = None
-                    else:
-                        # No unit specified - assume direct multiplication
-                        total_cost = float(txn.cost_per_unit) * float(txn.quantity)
-            except ValueError as e:
-                # Unit conversion failed - log error and set total_cost to None
-                logger.error(
-                    f"Failed to calculate total_cost for transaction {txn.id}: {e}",
-                    extra={
-                        "transaction_id": txn.id,
-                        "product_id": txn.product_id,
-                        "cost_per_unit": str(txn.cost_per_unit),
-                        "quantity": str(txn.quantity)
-                    }
-                )
+                    total_cost = Decimal(str(float(txn.cost_per_unit) * float(txn.quantity)))
+            except (ValueError, TypeError) as e:
+                logger.error(f"Failed to calculate total_cost for transaction {txn.id}: {e}")
                 total_cost = None
+        else:
+            total_cost = None
+        
+        # Use stored unit, fallback to inferred for legacy transactions
+        if stored_unit:
+            display_unit = stored_unit
+        elif product:
+            display_unit = 'G' if is_material(product) else product.unit
+        else:
+            display_unit = None
         
         result.append(TransactionResponse(
             id=txn.id,
             product_id=txn.product_id,
             product_sku=product.sku if product else "",
             product_name=product.name if product else "",
-            product_unit=product.unit if product else None,  # Include product unit
-            material_type_id=product.material_type_id if product else None,  # Include material type for cost display
+            product_unit=product.unit if product else None,
+            material_type_id=product.material_type_id if product else None,
             location_id=txn.location_id,
             location_name=location.name if location else None,
             transaction_type=txn.transaction_type,
             quantity=txn.quantity,
+            unit=display_unit,  # STORED unit - UI displays directly
             cost_per_unit=txn.cost_per_unit,
-            total_cost=Decimal(str(total_cost)) if total_cost else None,
+            total_cost=total_cost,  # STORED total - UI displays directly
             reference_type=txn.reference_type,
             reference_id=txn.reference_id,
             lot_number=txn.lot_number,
