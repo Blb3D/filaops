@@ -528,6 +528,7 @@ export default function AdminItems() {
     itemType: "all",
     activeOnly: true,
   });
+  const [quickFilter, setQuickFilter] = useState(null); // null | "all" | "finished_good" | "component" | "filament" | "supply" | "needs_reorder"
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -667,9 +668,15 @@ export default function AdminItems() {
     return 3; // In Stock (healthy)
   };
 
+  // Apply quick filter for needs_reorder (client-side since it's a flag)
+  let baseItems = items;
+  if (quickFilter === "needs_reorder") {
+    baseItems = items.filter((item) => item.needs_reorder);
+  }
+
   const filteredItems = viewMode === "cards"
-    ? [...items].sort((a, b) => getItemStockStatus(a) - getItemStockStatus(b))
-    : items;
+    ? [...baseItems].sort((a, b) => getItemStockStatus(a) - getItemStockStatus(b))
+    : baseItems;
 
   // Debounced search - trigger fetch when search changes
   useEffect(() => {
@@ -1145,9 +1152,10 @@ export default function AdminItems() {
           </div>
           <select
             value={filters.itemType}
-            onChange={(e) =>
-              setFilters({ ...filters, itemType: e.target.value })
-            }
+            onChange={(e) => {
+              setFilters({ ...filters, itemType: e.target.value });
+              setQuickFilter(null); // Clear quick filter when manually changing dropdown
+            }}
             className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
           >
             <option value="all">All Types</option>
@@ -1170,43 +1178,79 @@ export default function AdminItems() {
           </label>
         </div>
 
-        {/* Stats */}
+        {/* Stats - Clickable filters */}
         <div className="grid grid-cols-6 gap-4">
           <StatCard
             variant="simple"
             title="Total Items"
             value={stats.total}
             color="neutral"
+            onClick={() => {
+              setQuickFilter(quickFilter === "all" ? null : "all");
+              setFilters({ ...filters, itemType: "all" });
+            }}
+            active={quickFilter === "all"}
           />
           <StatCard
             variant="simple"
             title="Finished Goods"
             value={stats.finishedGoods}
             color="primary"
+            onClick={() => {
+              const isActive = quickFilter === "finished_good";
+              setQuickFilter(isActive ? null : "finished_good");
+              setFilters({ ...filters, itemType: isActive ? "all" : "finished_good" });
+            }}
+            active={quickFilter === "finished_good"}
           />
           <StatCard
             variant="simple"
             title="Components"
             value={stats.components}
             color="secondary"
+            onClick={() => {
+              const isActive = quickFilter === "component";
+              setQuickFilter(isActive ? null : "component");
+              setFilters({ ...filters, itemType: isActive ? "all" : "component" });
+            }}
+            active={quickFilter === "component"}
           />
           <StatCard
             variant="simple"
             title="Filaments"
             value={stats.filaments}
             color="primary"
+            onClick={() => {
+              const isActive = quickFilter === "filament";
+              setQuickFilter(isActive ? null : "filament");
+              setFilters({ ...filters, itemType: isActive ? "all" : "material" });
+            }}
+            active={quickFilter === "filament"}
           />
           <StatCard
             variant="simple"
             title="Supplies"
             value={stats.supplies}
             color="warning"
+            onClick={() => {
+              const isActive = quickFilter === "supply";
+              setQuickFilter(isActive ? null : "supply");
+              setFilters({ ...filters, itemType: isActive ? "all" : "supply" });
+            }}
+            active={quickFilter === "supply"}
           />
           <StatCard
             variant="simple"
             title="Needs Reorder"
             value={stats.needsReorder}
             color="danger"
+            onClick={() => {
+              const isActive = quickFilter === "needs_reorder";
+              setQuickFilter(isActive ? null : "needs_reorder");
+              // For needs_reorder, we need a different approach - filter by needs_reorder flag
+              // This will be handled in the filteredItems logic
+            }}
+            active={quickFilter === "needs_reorder"}
           />
         </div>
 
@@ -1217,8 +1261,15 @@ export default function AdminItems() {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && (
+        {/* Loading overlay - shows spinner over content instead of replacing it */}
+        {loading && items.length > 0 && (
+          <div className="flex items-center justify-center py-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 mr-2"></div>
+            <span className="text-gray-400 text-sm">Refreshing...</span>
+          </div>
+        )}
+        {/* Initial loading - only when no items yet */}
+        {loading && items.length === 0 && (
           <div className="flex items-center justify-center h-32">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
           </div>
@@ -1249,8 +1300,8 @@ export default function AdminItems() {
         )}
 
         {/* Items Card View */}
-        {!loading && viewMode === "cards" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {viewMode === "cards" && (
+          <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
             {filteredItems.length === 0 ? (
               <div className="col-span-full py-12 text-center text-gray-500">
                 No items found
@@ -1271,8 +1322,8 @@ export default function AdminItems() {
         )}
 
         {/* Items Table */}
-        {!loading && viewMode === "table" && (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+        {viewMode === "table" && (
+          <div className={`bg-gray-900 border border-gray-800 rounded-xl overflow-hidden transition-opacity ${loading ? 'opacity-60' : ''}`}>
             <table className="w-full">
               <thead className="bg-gray-800/50">
                 <tr>

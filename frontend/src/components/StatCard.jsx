@@ -78,20 +78,30 @@ export default function StatCard({
   icon,
   variant = "gradient",
   to,
+  onClick,
+  active = false,
 }) {
   // Wrapper component - Link if `to` prop provided, div otherwise
   const Wrapper = to ? Link : "div";
   const wrapperProps = to
     ? { to, className: "block" }
     : {};
+  const isClickable = to || onClick;
 
   if (variant === "simple") {
-    const baseClasses = "bg-gray-900 border border-gray-800 rounded-xl p-4";
-    const hoverClasses = to ? "hover:border-gray-700 hover:bg-gray-800/50 transition-all cursor-pointer" : "";
+    const baseClasses = "bg-gray-900 border rounded-xl p-4";
+    const borderClasses = active ? "border-blue-500/50 bg-blue-500/10" : "border-gray-800";
+    const hoverClasses = isClickable ? "hover:border-gray-700 hover:bg-gray-800/50 transition-all cursor-pointer" : "";
 
     return (
       <Wrapper {...wrapperProps}>
-        <div className={`${baseClasses} ${hoverClasses}`}>
+        <div
+          className={`${baseClasses} ${borderClasses} ${hoverClasses}`}
+          onClick={onClick}
+          role={onClick ? "button" : undefined}
+          tabIndex={onClick ? 0 : undefined}
+          onKeyDown={onClick ? (e) => e.key === 'Enter' && onClick() : undefined}
+        >
           <div className="flex items-start justify-between">
             <div>
               <p className="text-gray-400 text-sm">{title}</p>
@@ -100,7 +110,7 @@ export default function StatCard({
               </p>
               {subtitle && <p className="text-gray-500 text-xs mt-1">{subtitle}</p>}
             </div>
-            {to && (
+            {isClickable && (
               <div className="text-gray-600">
                 <ChevronIcon />
               </div>
