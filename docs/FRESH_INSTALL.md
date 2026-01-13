@@ -167,17 +167,18 @@ python load_test_data.py
 ### 4.6 Start the Backend
 
 ```powershell
-python run.py
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 You should see:
 ```
-* Running on http://0.0.0.0:5000
+INFO:     Uvicorn running on http://0.0.0.0:8000
+INFO:     Application startup complete.
 ```
 
-**Test it:** Open browser to http://localhost:5000/health
+**Test it:** Open browser to <http://localhost:8000/docs> (Swagger UI) or <http://localhost:8000/health>
 
-Should show: `{"status": "healthy", "version": "2.0.0"}`
+Should show: `{"status": "healthy"}`
 
 ✅ **Backend is running!** Keep this terminal open.
 
@@ -213,8 +214,8 @@ You should see:
 
 ## Step 6: Verify Everything Works
 
-1. **Check backend health:** http://localhost:5000/health
-2. **Open the app:** http://localhost:5173
+1. **Check backend health:** <http://localhost:8000/health>
+2. **Open the app:** <http://localhost:5173>
 3. **Navigate around** — you should see the dashboard, inventory, etc.
 
 If you ran `load_test_data.py`, you should see sample materials in the Inventory section.
@@ -248,15 +249,15 @@ pip install -r requirements.txt
 ```
 
 ### Frontend shows "Network Error" or blank page
-- Make sure backend is running on port 5000
+- Make sure backend is running on port 8000
 - Check browser console (F12) for specific errors
 - Verify backend health endpoint works
 
 ### "Port already in use"
-Something else is using port 5000 or 5173:
+Something else is using port 8000 or 5173:
 ```powershell
 # Find what's using the port
-netstat -ano | findstr :5000
+netstat -ano | findstr :8000
 
 # Kill it (replace PID with the number from above)
 taskkill /PID <PID> /F
@@ -272,7 +273,7 @@ Once installed, here's your daily routine:
 ```powershell
 cd C:\repos\filaops\backend
 .\venv\Scripts\Activate
-python run.py
+uvicorn app.main:app --reload --port 8000
 ```
 
 **Terminal 2 - Frontend:**
@@ -281,7 +282,14 @@ cd C:\repos\filaops\frontend
 npm run dev
 ```
 
-Open: http://localhost:5173
+Open: <http://localhost:5173>
+
+**Or use the convenience scripts:**
+
+```powershell
+cd C:\repos\filaops
+.\start-all.ps1
+```
 
 ---
 
