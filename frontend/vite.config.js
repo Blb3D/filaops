@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['localhost', 'filaops.local'],
+    // Setting this to true bypasses the host check
+    allowedHosts: true, 
   },
 })
