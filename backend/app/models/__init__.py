@@ -29,6 +29,9 @@ from app.models.purchasing_event import PurchasingEvent
 from app.models.shipping_event import ShippingEvent
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
 from app.models.maintenance import MaintenanceLog
+from app.models.price_level import PriceLevel
+from app.models.customer import Customer
+from app.models.catalog import Catalog, CatalogProduct, CustomerCatalog
 # from app.models.license import License  # Disabled until ready for production
 
 __all__ = [
@@ -101,6 +104,12 @@ __all__ = [
     "ProductionOrderSpool",
     # Maintenance
     "MaintenanceLog",
+    # CRM / B2B
+    "PriceLevel",
+    "Customer",
+    "Catalog",
+    "CatalogProduct",
+    "CustomerCatalog",
     # License (disabled until ready)
     # "License",
 ]

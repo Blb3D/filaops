@@ -62,7 +62,12 @@ class User(Base):
     created_by = Column(Integer, nullable=True)  # NULL for self-registration
     updated_by = Column(Integer, nullable=True)
 
+    # Customer Organization Link (B2B)
+    # Portal users can be linked to a Customer organization
+    customer_id = Column(Integer, ForeignKey('customers.id', ondelete='SET NULL'), nullable=True, index=True)
+
     # Relationships
+    customer = relationship("Customer", back_populates="users")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     quotes = relationship("Quote", back_populates="user", foreign_keys="[Quote.user_id]", cascade="all, delete-orphan")
     sales_orders = relationship("SalesOrder", back_populates="user", foreign_keys="[SalesOrder.user_id]", cascade="all, delete-orphan")
