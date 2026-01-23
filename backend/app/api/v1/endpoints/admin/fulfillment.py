@@ -34,6 +34,7 @@ from app.models.inventory import Inventory, InventoryTransaction, InventoryLocat
 from app.models.traceability import SerialNumber
 # MaterialInventory removed - using unified Inventory table (Phase 1.4)
 from app.services.shipping_service import shipping_service
+from app.services.transaction_service import TransactionService, MaterialConsumption, ShipmentItem, PackagingUsed
 from app.api.v1.deps import get_current_staff_user
 from app.core.settings import settings
 
@@ -155,21 +156,39 @@ class BulkStatusUpdate(BaseModel):
     notes: Optional[str] = None
 
 
+class ShipFromStockRequest(BaseModel):
+    """Request to ship from existing FG inventory (Ship-from-Stock path)"""
+    rate_id: str  # EasyPost rate ID from get-rates
+    shipment_id: str  # EasyPost shipment ID from get-rates
+    packaging_product_id: Optional[int] = None  # Optional: override default box
+    packaging_quantity: Optional[int] = None  # Optional: override box count (default=1)
+
+    class Config:
+        from_attributes = True
+
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
 def build_production_queue_item(po: ProductionOrder, db: Session) -> dict:
     """Build a queue item from a production order with all related data"""
-    
+
     # Get related sales order if exists
+    # FIXED: Use direct link first, fallback to quote lookup for legacy POs
     sales_order = None
     quote = None
     customer = None
-    
-    # Find sales order that references this production order's product
-    if po.product_id:
-        # First try to find via quote
+
+    if po.sales_order_id:
+        # Direct link (preferred)
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == po.sales_order_id).first()
+        if sales_order and sales_order.quote_id:
+            quote = db.query(Quote).filter(Quote.id == sales_order.quote_id).first()
+            if quote and quote.user_id:
+                customer = db.query(User).filter(User.id == quote.user_id).first()
+    elif po.product_id:
+        # Fallback for legacy production orders without direct link
         quote = db.query(Quote).filter(Quote.product_id == po.product_id).first()
         if quote:
             sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
@@ -369,11 +388,20 @@ async def get_production_order_details(
     product = db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
     bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first() if po.product_id else None  # noqa: E712
     
-    # Get quote details
-    quote = db.query(Quote).filter(Quote.product_id == po.product_id).first() if po.product_id else None
-    
-    # Get sales order
-    sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first() if quote else None
+    # Get quote and sales order details
+    # FIXED: Use direct link first, fallback to quote lookup for legacy POs
+    quote = None
+    sales_order = None
+    if po.sales_order_id:
+        # Direct link (preferred)
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == po.sales_order_id).first()
+        if sales_order and sales_order.quote_id:
+            quote = db.query(Quote).filter(Quote.id == sales_order.quote_id).first()
+    elif po.product_id:
+        # Fallback for legacy production orders without direct link
+        quote = db.query(Quote).filter(Quote.product_id == po.product_id).first()
+        if quote:
+            sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
     
     # Get print jobs
     print_jobs = db.query(PrintJob).filter(PrintJob.production_order_id == po.id).all()
@@ -599,7 +627,10 @@ async def start_production(
                 # Calculate what available will be after this update
                 new_available = float(inventory.on_hand_quantity) - new_allocated
 
-                # Create reservation transaction
+                # Create reservation transaction with cost for accounting
+                from app.services.inventory_service import get_effective_cost_per_inventory_unit
+                unit_cost = get_effective_cost_per_inventory_unit(component)
+                total_cost = Decimal(str(required_qty)) * unit_cost if unit_cost else None
                 transaction = InventoryTransaction(
                     product_id=line.component_id,
                     location_id=inventory.location_id,
@@ -607,6 +638,9 @@ async def start_production(
                     reference_type="production_order",
                     reference_id=po.id,
                     quantity=Decimal(str(-required_qty)),  # Negative = reserved/out
+                    cost_per_unit=unit_cost,
+                    total_cost=total_cost,
+                    unit=component.unit or "EA",
                     notes=f"Reserved for {po.code}: {required_qty:.2f} units of {component_sku}",
                     created_by="system",
                 )
@@ -632,11 +666,19 @@ async def start_production(
                 })
 
     # Update related sales order if exists
-    quote = db.query(Quote).filter(Quote.product_id == po.product_id).first() if po.product_id else None
-    if quote:
-        sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
-        if sales_order and sales_order.status == "confirmed":
-            sales_order.status = "in_production"
+    # FIXED: Use direct link first, fallback to quote lookup for legacy POs
+    sales_order = None
+    if po.sales_order_id:
+        # Direct link (preferred)
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == po.sales_order_id).first()
+    elif po.product_id:
+        # Fallback for legacy production orders without direct link
+        quote = db.query(Quote).filter(Quote.product_id == po.product_id).first()
+        if quote:
+            sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
+
+    if sales_order and sales_order.status == "confirmed":
+        sales_order.status = "in_production"
 
     db.commit()
 
@@ -762,40 +804,45 @@ async def complete_print(
         ).first()
 
         if inventory:
-            # Release reservation and consume from on_hand
+            # Release reservation only - on_hand decrement and GL handled by TransactionService
             inventory.allocated_quantity = Decimal(str(
                 max(0, float(inventory.allocated_quantity) - reserved_qty)
             ))
-            inventory.on_hand_quantity = Decimal(str(
-                max(0, float(inventory.on_hand_quantity) - reserved_qty)
-            ))
 
-            # Get component info
+            # Get component info for response and TransactionService
             component = db.query(Product).filter(Product.id == res_txn.product_id).first()
             component_sku = component.sku if component else "N/A"
 
-            # Create consumption transaction
-            consumption_txn = InventoryTransaction(
-                product_id=res_txn.product_id,
-                location_id=res_txn.location_id,
-                transaction_type="consumption",
-                reference_type="production_order",
-                reference_id=po.id,
-                quantity=Decimal(str(-reserved_qty)),
-                notes=f"Consumed for {po.code}: {reserved_qty:.4f} units ({qty_good} good + {qty_bad} scrapped)",
-                created_by="system",
-            )
-            db.add(consumption_txn)
-
-            # =================================================================
-            # PHASE 1.4: Inventory is now the source of truth
-            # Material consumption is tracked via Inventory table
-            # =================================================================
-            # Note: Inventory decrement already handled above in reservation logic
+            # Track for TransactionService call below (no manual txn creation here)
             consumed_materials.append({
+                "component_id": res_txn.product_id,  # For TransactionService
                 "component_sku": component_sku,
                 "quantity_consumed": round(reserved_qty, 4),
             })
+
+    # =========================================================================
+    # MATERIAL CONSUMPTION via TransactionService (atomic + GL entries)
+    # =========================================================================
+    txn_service = TransactionService(db)
+
+    # Build materials list from what was consumed
+    materials_to_consume = []
+    for mat in consumed_materials:
+        if mat.get("quantity_consumed", 0) > 0 and mat.get("component_id"):
+            product = db.query(Product).filter(Product.id == mat["component_id"]).first()
+            materials_to_consume.append(MaterialConsumption(
+                product_id=mat["component_id"],
+                quantity=Decimal(str(mat["quantity_consumed"])),
+                unit_cost=product.standard_cost if product and product.standard_cost else Decimal("0"),
+                unit=product.unit if product and product.unit else "EA",
+            ))
+
+    if materials_to_consume:
+        inv_txns, journal_entry = txn_service.issue_materials_for_operation(
+            production_order_id=po.id,
+            operation_sequence=10,  # Printing operation
+            materials=materials_to_consume,
+        )
 
     # =========================================================================
     # MACHINE TIME TRACKING - Record printer usage for metrics & costing
@@ -837,6 +884,8 @@ async def complete_print(
                     reference_id=po.id,
                     quantity=Decimal(str(actual_hours)),  # Positive = hours used
                     cost_per_unit=Decimal(str(hourly_rate)),
+                    total_cost=Decimal(str(machine_cost)),
+                    unit="HR",
                     notes=f"Machine time for {po.code}: {actual_hours:.2f} hrs @ ${hourly_rate}/hr = ${machine_cost:.2f}" +
                           (f" on {printer_info['name']}" if printer_info else ""),
                     created_by="system",
@@ -855,91 +904,35 @@ async def complete_print(
                 break  # Only one machine time line per BOM
 
     # =========================================================================
-    # FINISHED GOODS INVENTORY - Add good parts to stock
-    # Handle overruns: ordered quantity goes to order fulfillment, overrun becomes MTS stock
+    # FINISHED GOODS INVENTORY - MOVED TO pass_qc()
+    # FG receipt now happens at QC pass (Step 3), not print complete (Step 1)
+    # This ensures parts only enter FG inventory after passing quality check.
     # =========================================================================
-    finished_goods_added = None
-    if qty_good > 0 and po.product_id:
-        # Find or create finished goods inventory for this product
-        fg_inventory = db.query(Inventory).filter(
-            Inventory.product_id == po.product_id
-        ).first()
-
-        # BUG FIX #3: For MTO (make-to-order) custom products, no Inventory
-        # record exists. Create one at a default finished goods location.
-        if not fg_inventory:
-            # Get default location (configurable via InventoryLocation table)
-            default_location = get_default_location(db)
-            # For MTO, this is a transient record - product ships immediately
-            fg_inventory = Inventory(
-                product_id=po.product_id,
-                location_id=default_location.id,  # Default FG location
-                on_hand_quantity=Decimal("0"),
-                allocated_quantity=Decimal("0"),
-            )
-            db.add(fg_inventory)
-            db.flush()  # Get ID for transaction reference
-
-        # Add ordered quantity to inventory
-        ordered_qty_to_add = min(qty_good, ordered_qty)
-        fg_inventory.on_hand_quantity = Decimal(str(
-            float(fg_inventory.on_hand_quantity) + ordered_qty_to_add
-        ))
-
-        # Create receipt transaction for ordered quantity
-        receipt_txn = InventoryTransaction(
-            product_id=po.product_id,
-            location_id=fg_inventory.location_id,
-            transaction_type="receipt",
-            reference_type="production_order",
-            reference_id=po.id,
-            quantity=Decimal(str(ordered_qty_to_add)),
-            notes=f"Produced from {po.code}: {ordered_qty_to_add} good parts (ordered quantity)",
-            created_by="system",
-        )
-        db.add(receipt_txn)
-
-        # Handle overrun: add extra units as MTS stock
-        if overrun_qty > 0:
-            fg_inventory.on_hand_quantity = Decimal(str(
-                float(fg_inventory.on_hand_quantity) + overrun_qty
-            ))
-            
-            overrun_txn = InventoryTransaction(
-                product_id=po.product_id,
-                location_id=fg_inventory.location_id,
-                transaction_type="receipt",
-                reference_type="production_order",
-                reference_id=po.id,
-                quantity=Decimal(str(overrun_qty)),
-                notes=f"MTS overrun from {po.code}: {overrun_qty} extra units added to stock",
-                created_by="system",
-            )
-            db.add(overrun_txn)
-
-        product = db.query(Product).filter(Product.id == po.product_id).first()
-        finished_goods_added = {
-            "product_sku": product.sku if product else "N/A",
-            "quantity_added": qty_good,
-            "ordered_quantity": ordered_qty_to_add,
-            "overrun_quantity": overrun_qty,
-            "new_on_hand": float(fg_inventory.on_hand_quantity),
-            "inventory_created": True if fg_inventory.id is None else False,
-        }
+    finished_goods_added = None  # FG receipt happens at pass_qc(), not here
 
     # =========================================================================
     # SCRAP TRACKING - Record scrapped parts for variance analysis
     # =========================================================================
     scrap_recorded = None
     if qty_bad > 0:
+        # Get default location for scrap tracking
+        default_location = get_default_location(db)
+        # Get product for cost calculation
+        product = db.query(Product).filter(Product.id == po.product_id).first()
+        from app.services.inventory_service import get_effective_cost_per_inventory_unit
+        unit_cost = get_effective_cost_per_inventory_unit(product) if product else None
+        total_cost = Decimal(str(qty_bad)) * unit_cost if unit_cost else None
         # Create a scrap/variance transaction for tracking
         scrap_txn = InventoryTransaction(
             product_id=po.product_id,
-            location_id=fg_inventory.location_id if fg_inventory else 1,  # Default location
+            location_id=default_location.id,
             transaction_type="scrap",
             reference_type="production_order",
             reference_id=po.id,
             quantity=Decimal(str(-qty_bad)),  # Negative = loss
+            cost_per_unit=unit_cost,
+            total_cost=total_cost,
+            unit=product.unit if product else "EA",
             notes=f"Production scrap from {po.code}: {qty_bad} parts failed (adhesion/defects)",
             created_by="system",
         )
@@ -974,8 +967,8 @@ async def complete_print(
         "finished_goods_added": finished_goods_added,
         "scrap_recorded": scrap_recorded,
         "reprint_needed": reprint_needed,
-        "message": f"Print complete for {po.code}: {qty_good} good, {qty_bad} scrapped" +
-                   (f". SHORTFALL: {shortfall} parts need reprint!" if reprint_needed else ""),
+        "message": f"Print complete for {po.code}: {qty_good} good, {qty_bad} scrapped. FG will be added to inventory at QC pass." +
+                   (f" SHORTFALL: {shortfall} parts need reprint!" if reprint_needed else ""),
     }
 
 
@@ -987,17 +980,19 @@ async def pass_quality_check(
     current_admin: User = Depends(get_current_staff_user),
 ):
     """
-    Mark order as passed QC and ready to ship.
-    
-    Updates production order to 'completed' and sales order to 'ready_to_ship'.
-    
-    NOTE: Materials are consumed in complete_print(), NOT here.
-    This endpoint only updates statuses - no inventory changes.
-    
+    Mark order as passed QC, receipt finished goods, and mark ready to ship.
+
+    Updates production order to 'completed', receipts FG to inventory,
+    and updates sales order to 'ready_to_ship'.
+
     Flow:
     1. start_production() - reserves materials (allocated_qty increases)
     2. complete_print() - consumes materials (on_hand + allocated decrease)
-    3. pass_qc() - status update only (THIS FUNCTION)
+    3. pass_qc() - RECEIPTS FG TO INVENTORY + status updates (THIS FUNCTION)
+    4. buy_label() - issues FG from inventory when shipped
+
+    NOTE: Materials are consumed in complete_print(), NOT here.
+    FG receipt happens HERE because parts should only enter inventory after QC.
     """
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
     
@@ -1028,13 +1023,63 @@ async def pass_quality_check(
     # =========================================================================
 
     # Update sales order to ready_to_ship
+    # FIXED: Use direct link first, fallback to quote lookup for legacy POs
     sales_order_updated = False
-    quote = db.query(Quote).filter(Quote.product_id == po.product_id).first() if po.product_id else None
-    if quote:
-        sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
-        if sales_order:
-            sales_order.status = "ready_to_ship"
-            sales_order_updated = True
+    sales_order = None
+    if po.sales_order_id:
+        # Direct link (preferred)
+        sales_order = db.query(SalesOrder).filter(SalesOrder.id == po.sales_order_id).first()
+    elif po.product_id:
+        # Fallback for legacy production orders without direct link
+        quote = db.query(Quote).filter(Quote.product_id == po.product_id).first()
+        if quote:
+            sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
+
+    if sales_order:
+        sales_order.status = "ready_to_ship"
+        sales_order_updated = True
+
+    # =========================================================================
+    # FINISHED GOODS RECEIPT via TransactionService (atomic + GL entries)
+    # This is the correct point for FG receipt (Step 3: QC Pass)
+    # Parts only enter FG inventory after passing quality check.
+    # Accounting: DR 1220 FG Inventory, CR 1210 WIP
+    # =========================================================================
+    finished_goods_added = None
+
+    # Get quantity from production order (full ordered quantity passes QC)
+    qty_good = int(po.quantity)
+
+    # Determine the product_id and get product for costing
+    fg_product_id = po.product_id
+    product = db.query(Product).filter(Product.id == fg_product_id).first() if fg_product_id else None
+
+    if qty_good > 0 and fg_product_id and product:
+        # Get unit cost from product (standard_cost preferred, fall back to cost)
+        unit_cost = product.standard_cost if product.standard_cost else (product.cost if product.cost else Decimal("0"))
+
+        # Use TransactionService for atomic inventory + GL entry
+        txn_service = TransactionService(db)
+        inv_txn, journal_entry = txn_service.receipt_finished_good(
+            production_order_id=po.id,
+            product_id=fg_product_id,
+            quantity=Decimal(str(qty_good)),
+            unit_cost=unit_cost,
+            lot_number=None,  # Future: generate lot number
+            user_id=None,  # Future: pass current_admin.id
+        )
+
+        # Get updated inventory for response
+        fg_inventory = db.query(Inventory).filter(
+            Inventory.product_id == fg_product_id
+        ).first()
+
+        finished_goods_added = {
+            "product_sku": product.sku if product else "N/A",
+            "quantity_added": qty_good,
+            "new_on_hand": float(fg_inventory.on_hand_quantity) if fg_inventory else qty_good,
+            "journal_entry_id": journal_entry.id if journal_entry else None,
+        }
 
     db.commit()
 
@@ -1044,7 +1089,8 @@ async def pass_quality_check(
         "code": po.code,
         "status": po.status,
         "sales_order_status": "ready_to_ship" if sales_order_updated else None,
-        "message": f"QC passed for {po.code}. Order ready to ship!",
+        "finished_goods_added": finished_goods_added,
+        "message": f"QC passed for {po.code}. {qty_good} units added to FG inventory. Order ready to ship!",
     }
 
 
@@ -1077,11 +1123,29 @@ async def fail_quality_check(
     po.notes = (po.notes + "\n" if po.notes else "") + f"[{datetime.utcnow().isoformat()}] QC FAILED: {failure_reason}"
 
     # =========================================================================
-    # MATERIAL SCRAP - Convert reservations to waste/scrap
+    # RELEASE SHIPPING-STAGE RESERVATIONS (boxes weren't used)
+    # Production-stage materials were already consumed in complete_print()
     # =========================================================================
-    scrapped_materials = []
+    released_materials = []
 
-    # Find all reservation transactions for this production order
+    # Get BOM to identify shipping-stage components
+    bom = None
+    if po.bom_id:
+        bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
+    elif po.product_id:
+        bom = db.query(BOM).filter(
+            BOM.product_id == po.product_id,
+            BOM.active.is_(True)
+        ).first()
+
+    # Build set of shipping-stage component IDs
+    shipping_stage_components = set()
+    if bom and bom.lines:
+        for line in bom.lines:
+            if getattr(line, 'consume_stage', 'production') == 'shipping':
+                shipping_stage_components.add(line.component_id)
+
+    # Find remaining reservation transactions (should only be shipping-stage)
     reservation_txns = db.query(InventoryTransaction).filter(
         InventoryTransaction.reference_type == "production_order",
         InventoryTransaction.reference_id == po.id,
@@ -1089,48 +1153,82 @@ async def fail_quality_check(
     ).all()
 
     for res_txn in reservation_txns:
-        # The reservation quantity is negative (reserved out)
         reserved_qty = abs(float(res_txn.quantity))
 
-        # Find the inventory record by product_id and location_id
         inventory = db.query(Inventory).filter(
             Inventory.product_id == res_txn.product_id,
             Inventory.location_id == res_txn.location_id
         ).first()
 
         if inventory:
-            # Materials are wasted - reduce allocated and on_hand (scrapped)
+            # Release the reservation (return to available, NOT consumed)
             inventory.allocated_quantity = Decimal(str(
                 max(0, float(inventory.allocated_quantity) - reserved_qty)
             ))
-            inventory.on_hand_quantity = Decimal(str(
-                max(0, float(inventory.on_hand_quantity) - reserved_qty)
-            ))
+            # NOTE: Do NOT decrement on_hand - material wasn't used!
 
-            # Get component info
             component = db.query(Product).filter(Product.id == res_txn.product_id).first()
             component_sku = component.sku if component else "N/A"
-            component_name = component.name if component else f"Component #{res_txn.product_id}"
 
-            # Create scrap transaction
-            scrap_txn = InventoryTransaction(
+            # Create release transaction (positive qty = returned to available)
+            # Copy cost from original reservation transaction
+            unit_cost = res_txn.cost_per_unit
+            total_cost = Decimal(str(reserved_qty)) * unit_cost if unit_cost else None
+            release_txn = InventoryTransaction(
                 product_id=res_txn.product_id,
                 location_id=res_txn.location_id,
-                transaction_type="scrap",
+                transaction_type="release",
                 reference_type="production_order",
                 reference_id=po.id,
-                quantity=Decimal(str(-reserved_qty)),  # Negative = scrapped/out
-                notes=f"SCRAPPED for {po.code}: {reserved_qty:.2f} units of {component_sku} (QC Failed: {failure_reason})",
+                quantity=Decimal(str(reserved_qty)),  # Positive = released back
+                cost_per_unit=unit_cost,
+                total_cost=total_cost,
+                unit=res_txn.unit or (component.unit if component else "EA"),
+                notes=f"Reservation released for {po.code} (QC Failed - materials not used)",
                 created_by="system",
             )
-            db.add(scrap_txn)
+            db.add(release_txn)
 
-            scrapped_materials.append({
-                "component_id": res_txn.product_id,
+            released_materials.append({
                 "component_sku": component_sku,
-                "component_name": component_name,
-                "quantity_scrapped": round(reserved_qty, 4),
+                "quantity_released": round(reserved_qty, 4),
             })
+
+    # =========================================================================
+    # WIP SCRAP via TransactionService (atomic + GL entries)
+    # Write off the production costs (materials + labor already consumed)
+    # Accounting: DR 5020 Scrap Expense, CR 1210 WIP
+    # =========================================================================
+    scrap_record = None
+    qty_scrapped = int(po.quantity)
+    fg_product = db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
+
+    if qty_scrapped > 0 and fg_product:
+        # Get unit cost (WIP value per unit)
+        unit_cost = fg_product.standard_cost if fg_product.standard_cost else (
+            fg_product.cost if fg_product.cost else Decimal("0")
+        )
+
+        txn_service = TransactionService(db)
+        inv_txn, journal_entry, scrap_rec = txn_service.scrap_materials(
+            production_order_id=po.id,
+            operation_sequence=30,  # QC operation (Step 3)
+            product_id=fg_product.id,
+            quantity=Decimal(str(qty_scrapped)),
+            unit_cost=unit_cost,
+            reason_code=f"QC_FAIL: {failure_reason[:50]}",  # Truncate for code field
+            notes=f"QC Failed: {failure_reason}",
+            user_id=None,  # Future: pass current_admin.id
+        )
+
+        scrap_record = {
+            "product_sku": fg_product.sku,
+            "quantity_scrapped": qty_scrapped,
+            "unit_cost": float(unit_cost),
+            "total_cost": float(qty_scrapped * unit_cost),
+            "journal_entry_id": journal_entry.id if journal_entry else None,
+            "scrap_record_id": scrap_rec.id if scrap_rec else None,
+        }
 
     new_po = None
     if reprint:
@@ -1172,7 +1270,8 @@ async def fail_quality_check(
         "reprint_created": reprint,
         "new_production_order_id": new_po.id if new_po else None,
         "new_production_order_code": new_po.code if new_po else None,
-        "materials_scrapped": scrapped_materials,
+        "materials_released": released_materials,
+        "scrap_record": scrap_record,
         "message": f"QC failed for {po.code}." + (f" Reprint order {new_po.code} created." if new_po else ""),
     }
 
@@ -1538,6 +1637,11 @@ async def buy_consolidated_shipping_label(
 
                 component = db.query(Product).filter(Product.id == res_txn.product_id).first()
 
+                # Get cost for accounting
+                from app.services.inventory_service import get_effective_cost_per_inventory_unit
+                unit_cost = get_effective_cost_per_inventory_unit(component) if component else None
+                total_cost = Decimal(str(reserved_qty)) * unit_cost if unit_cost else None
+
                 consumption_txn = InventoryTransaction(
                     product_id=res_txn.product_id,
                     location_id=res_txn.location_id,
@@ -1545,6 +1649,9 @@ async def buy_consolidated_shipping_label(
                     reference_type="consolidated_shipment",
                     reference_id=first_order.id,
                     quantity=Decimal(str(-reserved_qty)),
+                    cost_per_unit=unit_cost,
+                    total_cost=total_cost,
+                    unit=component.unit if component else "EA",
                     notes=f"Packaging for consolidated shipment: {', '.join([o.order_number for o in orders])}",
                     created_by="system",
                 )
@@ -1603,6 +1710,9 @@ async def buy_consolidated_shipping_label(
 
                     component = db.query(Product).filter(Product.id == res_txn.product_id).first()
 
+                    # Copy cost from original reservation transaction
+                    unit_cost = res_txn.cost_per_unit
+                    total_cost = Decimal(str(reserved_qty)) * unit_cost if unit_cost else None
                     release_txn = InventoryTransaction(
                         product_id=res_txn.product_id,
                         location_id=res_txn.location_id,
@@ -1610,6 +1720,9 @@ async def buy_consolidated_shipping_label(
                         reference_type="consolidated_shipment",
                         reference_id=order.id,
                         quantity=Decimal(str(reserved_qty)),  # Positive = released back
+                        cost_per_unit=unit_cost,
+                        total_cost=total_cost,
+                        unit=res_txn.unit or (component.unit if component else "EA"),
                         notes=f"Box reservation released - consolidated into {first_order.order_number}",
                         created_by="system",
                     )
@@ -1791,18 +1904,30 @@ async def buy_shipping_label(
         )
 
     # =========================================================================
-    # PACKAGING CONSUMPTION - Consume shipping-stage items (boxes)
-    # These were reserved at production start but not consumed at complete_print
+    # SHIPMENT via TransactionService (atomic + GL entries)
+    # Handles both FG issue and packaging consumption with proper accounting
+    # Accounting:
+    #   - FG: DR 5000 COGS, CR 1220 FG Inventory
+    #   - Packaging: DR 5010 Shipping Expense, CR 1230 Packaging Inventory
     # =========================================================================
-    packaging_consumed = []
+    from app.services.transaction_service import ShipmentItem, PackagingUsed
 
-    # Find production orders for this sales order
+    packaging_consumed = []
+    finished_goods_shipped = None
+    shipment_journal_entry_id = None
+
+    # Get quote for product info
+    quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
+    fg_product = db.query(Product).filter(Product.id == quote.product_id).first() if quote and quote.product_id else None
+    qty_shipped = order.quantity or 1
+
+    # Build packaging list from BOM shipping-stage items
+    packaging_list = []  # List[PackagingUsed]
     production_orders = db.query(ProductionOrder).filter(
         ProductionOrder.sales_order_id == sales_order_id
     ).all()
 
     for po in production_orders:
-        # Get BOM for this production order
         bom = None
         if po.bom_id:
             bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
@@ -1815,12 +1940,11 @@ async def buy_shipping_label(
         if not bom or not bom.lines:
             continue
 
-        # Find shipping-stage items and their reservations
         for line in bom.lines:
             if getattr(line, 'consume_stage', 'production') != 'shipping':
-                continue  # Skip production-stage items (already consumed)
+                continue
 
-            # Find reservation transaction for this component
+            # Find reservation to get actual reserved quantity
             res_txn = db.query(InventoryTransaction).filter(
                 InventoryTransaction.reference_type == "production_order",
                 InventoryTransaction.reference_id == po.id,
@@ -1828,47 +1952,64 @@ async def buy_shipping_label(
                 InventoryTransaction.transaction_type == "reservation"
             ).first()
 
-            if not res_txn:
-                continue  # No reservation for this item
+            if res_txn:
+                reserved_qty = int(abs(float(res_txn.quantity)))  # PackagingUsed expects int
+                pkg_product = db.query(Product).filter(Product.id == line.component_id).first()
+                pkg_cost = pkg_product.cost if pkg_product and pkg_product.cost else Decimal("0")
 
-            reserved_qty = abs(float(res_txn.quantity))
-
-            # Find the inventory record
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == res_txn.product_id,
-                Inventory.location_id == res_txn.location_id
-            ).first()
-
-            if inventory:
-                # Release reservation and consume from on_hand
-                inventory.allocated_quantity = Decimal(str(
-                    max(0, float(inventory.allocated_quantity) - reserved_qty)
-                ))
-                inventory.on_hand_quantity = Decimal(str(
-                    max(0, float(inventory.on_hand_quantity) - reserved_qty)
+                packaging_list.append(PackagingUsed(
+                    product_id=line.component_id,
+                    quantity=reserved_qty,
+                    unit_cost=pkg_cost,
                 ))
 
-                # Get component info
-                component = db.query(Product).filter(Product.id == res_txn.product_id).first()
-                component_sku = component.sku if component else "N/A"
-
-                # Create consumption transaction
-                consumption_txn = InventoryTransaction(
-                    product_id=res_txn.product_id,
-                    location_id=res_txn.location_id,
-                    transaction_type="consumption",
-                    reference_type="shipment",
-                    reference_id=sales_order_id,
-                    quantity=Decimal(str(-reserved_qty)),
-                    notes=f"Packaging consumed for shipment of {order.order_number}",
-                    created_by="system",
-                )
-                db.add(consumption_txn)
+                # Release the reservation (TransactionService handles the consumption)
+                inventory = db.query(Inventory).filter(
+                    Inventory.product_id == res_txn.product_id,
+                    Inventory.location_id == res_txn.location_id
+                ).first()
+                if inventory:
+                    inventory.allocated_quantity = Decimal(str(
+                        max(0, float(inventory.allocated_quantity) - reserved_qty)
+                    ))
 
                 packaging_consumed.append({
-                    "component_sku": component_sku,
-                    "quantity_consumed": round(reserved_qty, 4),
+                    "component_sku": pkg_product.sku if pkg_product else "N/A",
+                    "quantity_consumed": reserved_qty,
                 })
+
+    # Call TransactionService for atomic shipment with GL
+    if fg_product and qty_shipped > 0:
+        fg_cost = fg_product.standard_cost if fg_product.standard_cost else (
+            fg_product.cost if fg_product.cost else Decimal("0")
+        )
+
+        # Build shipment items list (uses ShipmentItem NamedTuple)
+        shipment_items = [ShipmentItem(
+            product_id=fg_product.id,
+            quantity=Decimal(str(qty_shipped)),
+            unit_cost=fg_cost,
+        )]
+
+        txn_service = TransactionService(db)
+        inv_txns, journal_entry = txn_service.ship_order(
+            sales_order_id=sales_order_id,
+            items=shipment_items,
+            packaging=packaging_list if packaging_list else None,
+        )
+
+        # Get updated FG inventory for response
+        fg_inventory = db.query(Inventory).filter(
+            Inventory.product_id == fg_product.id
+        ).first()
+
+        finished_goods_shipped = {
+            "product_sku": fg_product.sku,
+            "quantity_shipped": qty_shipped,
+            "inventory_remaining": float(fg_inventory.on_hand_quantity) if fg_inventory else 0,
+            "journal_entry_id": journal_entry.id if journal_entry else None,
+        }
+        shipment_journal_entry_id = journal_entry.id if journal_entry else None
 
     # Update order
     order.tracking_number = result.tracking_number
@@ -1910,8 +2051,262 @@ async def buy_shipping_label(
         "label_url": result.label_url,
         "shipping_cost": float(result.rate) if result.rate else None,
         "packaging_consumed": packaging_consumed,
+        "finished_goods_shipped": finished_goods_shipped,
         "serials_updated": serials_updated,
         "message": f"Label created! Tracking: {result.tracking_number}",
+    }
+
+
+# =============================================================================
+# SHIP-FROM-STOCK (SFS) - Direct shipping without production
+# =============================================================================
+
+@router.post(
+    "/ship-from-stock/{sales_order_id}/check",
+    summary="Check if order can ship from stock",
+    description="Verify FG inventory is available to fulfill this order without production."
+)
+async def check_ship_from_stock(
+    sales_order_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_staff_user),
+):
+    """
+    Check if a sales order can be fulfilled directly from existing FG inventory.
+
+    Returns:
+        - can_ship: bool - True if sufficient FG on hand
+        - available_qty: int - Current FG available (on_hand - allocated)
+        - required_qty: int - Quantity needed for this order
+        - product_info: dict - Product details
+    """
+    # 1. Get the sales order
+    order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Sales order not found")
+
+    # 2. Verify order is in a shippable state (not already shipped, not cancelled)
+    if order.status in ["shipped", "cancelled", "delivered"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order cannot be shipped - status is {order.status}"
+        )
+
+    # 3. Get product from quote
+    quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
+    if not quote or not quote.product_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Order has no linked product - cannot determine what to ship"
+        )
+
+    product = db.query(Product).filter(Product.id == quote.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # 4. Check FG inventory
+    fg_inventory = db.query(Inventory).filter(
+        Inventory.product_id == product.id
+    ).first()
+
+    on_hand = int(fg_inventory.on_hand_quantity) if fg_inventory else 0
+    allocated = int(fg_inventory.allocated_quantity) if fg_inventory else 0
+    available = on_hand - allocated
+    required = order.quantity or 1
+
+    # 5. Check for existing production orders (might be MTO path)
+    existing_po = db.query(ProductionOrder).filter(
+        ProductionOrder.sales_order_id == sales_order_id,
+        ProductionOrder.status.notin_(["cancelled", "shipped"])
+    ).first()
+
+    return {
+        "sales_order_id": sales_order_id,
+        "order_number": order.order_number,
+        "can_ship": available >= required,
+        "available_qty": available,
+        "on_hand_qty": on_hand,
+        "allocated_qty": allocated,
+        "required_qty": required,
+        "has_production_order": existing_po is not None,
+        "production_order_status": existing_po.status if existing_po else None,
+        "product_info": {
+            "id": product.id,
+            "sku": product.sku,
+            "name": product.name,
+        },
+        "recommendation": "ready_to_ship" if available >= required else "needs_production",
+    }
+
+
+@router.post(
+    "/ship-from-stock/{sales_order_id}/ship",
+    summary="Ship order directly from FG inventory",
+    description="Ship from existing FG inventory without production. Reuses get-rates for shipping quotes."
+)
+async def ship_from_stock(
+    sales_order_id: int,
+    request: ShipFromStockRequest,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_staff_user),
+):
+    """
+    Ship a sales order directly from existing FG inventory (Ship-from-Stock path).
+
+    Prerequisites:
+        1. Call GET /ship/{so_id}/get-rates to get shipping rates
+        2. Call POST /ship-from-stock/{so_id}/check to verify availability
+        3. Call this endpoint with rate_id and shipment_id from step 1
+
+    Flow:
+        1. Verify FG availability
+        2. Buy shipping label (reuses EasyPost shipment)
+        3. Issue FG from inventory with GL entry
+        4. Consume packaging with GL entry (if specified)
+        5. Update serial numbers (if any)
+        6. Update order status to shipped
+    """
+    # 1. Get and validate sales order
+    order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Sales order not found")
+
+    if order.status in ["shipped", "cancelled", "delivered"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Order cannot be shipped - status is {order.status}"
+        )
+
+    # 2. Get product from quote
+    quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
+    if not quote or not quote.product_id:
+        raise HTTPException(status_code=400, detail="Order has no linked product")
+
+    product = db.query(Product).filter(Product.id == quote.product_id).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    # 3. Verify FG inventory availability
+    fg_inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
+    qty_to_ship = order.quantity or 1
+
+    if not fg_inventory:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No inventory record for product {product.sku}"
+        )
+
+    available = int(fg_inventory.on_hand_quantity) - int(fg_inventory.allocated_quantity)
+    if available < qty_to_ship:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient FG inventory. Available: {available}, Required: {qty_to_ship}"
+        )
+
+    # 4. Buy shipping label (reuse EasyPost shipment from get-rates)
+    result = shipping_service.buy_label(
+        shipment_id=request.shipment_id,
+        rate_id=request.rate_id,
+    )
+
+    if not result.success:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to purchase shipping label: {result.error}"
+        )
+
+    # 5. Ship via TransactionService (FG issue + optional packaging)
+    txn_service = TransactionService(db)
+    packaging_consumed = []
+    finished_goods_shipped = None
+
+    # Build shipment items
+    fg_cost = product.standard_cost if product.standard_cost else (
+        product.cost if product.cost else Decimal("0")
+    )
+    shipment_items = [ShipmentItem(
+        product_id=product.id,
+        quantity=Decimal(str(qty_to_ship)),
+        unit_cost=fg_cost,
+    )]
+
+    # Handle packaging if specified
+    packaging_list = []
+    if request.packaging_product_id:
+        pkg_product = db.query(Product).filter(
+            Product.id == request.packaging_product_id
+        ).first()
+        if pkg_product:
+            pkg_qty = request.packaging_quantity or 1
+            pkg_cost = pkg_product.cost if pkg_product.cost else Decimal("0")
+
+            # Verify packaging inventory
+            pkg_inventory = db.query(Inventory).filter(
+                Inventory.product_id == pkg_product.id
+            ).first()
+            if pkg_inventory and int(pkg_inventory.on_hand_quantity) >= pkg_qty:
+                packaging_list.append(PackagingUsed(
+                    product_id=pkg_product.id,
+                    quantity=pkg_qty,
+                    unit_cost=pkg_cost,
+                ))
+                packaging_consumed.append({
+                    "component_sku": pkg_product.sku,
+                    "quantity_consumed": pkg_qty,
+                })
+
+    # Execute shipment
+    inv_txns, journal_entry = txn_service.ship_order(
+        sales_order_id=sales_order_id,
+        items=shipment_items,
+        packaging=packaging_list if packaging_list else None,
+    )
+
+    # Get updated inventory for response
+    fg_inventory = db.query(Inventory).filter(
+        Inventory.product_id == product.id
+    ).first()
+
+    finished_goods_shipped = {
+        "product_sku": product.sku,
+        "quantity_shipped": qty_to_ship,
+        "inventory_remaining": float(fg_inventory.on_hand_quantity) if fg_inventory else 0,
+        "journal_entry_id": journal_entry.id if journal_entry else None,
+    }
+
+    # 6. Update serial numbers if any exist
+    serials_updated = 0
+    serials = db.query(SerialNumber).filter(
+        SerialNumber.sales_order_id == sales_order_id,
+        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
+    ).all()
+    for serial in serials:
+        serial.status = "shipped"
+        serial.tracking_number = result.tracking_number
+        serial.shipped_at = datetime.utcnow()
+        serials_updated += 1
+
+    # 7. Update order status
+    order.status = "shipped"
+    order.tracking_number = result.tracking_number
+    order.carrier = result.carrier
+    order.shipping_cost = Decimal(str(result.rate)) if result.rate else None
+    order.shipped_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "success": True,
+        "order_number": order.order_number,
+        "fulfillment_type": "ship_from_stock",
+        "tracking_number": result.tracking_number,
+        "carrier": result.carrier,
+        "label_url": result.label_url,
+        "shipping_cost": float(result.rate) if result.rate else None,
+        "finished_goods_shipped": finished_goods_shipped,
+        "packaging_consumed": packaging_consumed,
+        "serials_updated": serials_updated,
+        "message": f"Shipped from stock! Tracking: {result.tracking_number}",
     }
 
 
@@ -1953,6 +2348,52 @@ async def mark_order_shipped(
         serial.status = "shipped"
         serials_updated += 1
 
+    # =========================================================================
+    # FINISHED GOODS SHIPMENT - Issue finished goods from inventory
+    # =========================================================================
+    finished_goods_shipped = None
+    if order.quote_id:
+        quote = db.query(Quote).filter(Quote.id == order.quote_id).first()
+        if quote and quote.product_id:
+            fg_inventory = db.query(Inventory).filter(
+                Inventory.product_id == quote.product_id
+            ).first()
+
+            if fg_inventory:
+                qty_shipped = order.quantity or 1
+
+                # Decrement inventory
+                fg_inventory.on_hand_quantity = Decimal(str(
+                    max(0, float(fg_inventory.on_hand_quantity) - qty_shipped)
+                ))
+
+                # Get product for cost calculation
+                product = db.query(Product).filter(Product.id == quote.product_id).first()
+                from app.services.inventory_service import get_effective_cost_per_inventory_unit
+                unit_cost = get_effective_cost_per_inventory_unit(product) if product else None
+                total_cost = Decimal(str(qty_shipped)) * unit_cost if unit_cost else None
+
+                # Create shipment transaction
+                shipment_txn = InventoryTransaction(
+                    product_id=quote.product_id,
+                    location_id=fg_inventory.location_id,
+                    transaction_type="shipment",
+                    reference_type="sales_order",
+                    reference_id=sales_order_id,
+                    quantity=Decimal(str(-qty_shipped)),  # Negative = outgoing
+                    cost_per_unit=unit_cost,
+                    total_cost=total_cost,
+                    unit=product.unit if product else "EA",
+                    notes=f"Shipped {qty_shipped} units for {order.order_number}",
+                    created_by="system",
+                )
+                db.add(shipment_txn)
+                finished_goods_shipped = {
+                    "product_sku": product.sku if product else "N/A",
+                    "quantity_shipped": qty_shipped,
+                    "inventory_remaining": float(fg_inventory.on_hand_quantity),
+                }
+
     db.commit()
 
     # TODO: Send email notification if request.notify_customer
@@ -1963,6 +2404,7 @@ async def mark_order_shipped(
         "status": order.status,
         "tracking_number": order.tracking_number,
         "carrier": order.carrier,
+        "finished_goods_shipped": finished_goods_shipped,
         "serials_updated": serials_updated,
         "message": f"Order {order.order_number} marked as shipped!",
     }

@@ -266,17 +266,21 @@ def complete_operation_endpoint(
     current_user=Depends(get_current_user)
 ):
     """
-    Complete an operation.
+    Complete an operation with optional partial scrap and cascading material accounting.
 
     Validations:
     - Operation must be in running status
+    - If quantity_scrapped > 0, scrap_reason is required
 
     Side effects:
+    - Consumes materials for this operation
+    - If scrapping: Creates ScrapRecords with cascading material costs + GL entries
+    - If create_replacement=true: Creates new PO linked to original
     - Updates PO status if this is the last operation
-    - Consumes materials for this operation stage
+    - Auto-skips downstream operations if no good pieces remain
     """
     try:
-        op = complete_operation(
+        op, scrap_result = complete_operation(
             db=db,
             po_id=po_id,
             op_id=op_id,
@@ -285,6 +289,9 @@ def complete_operation_endpoint(
             scrap_reason=request.scrap_reason,
             actual_run_minutes=request.actual_run_minutes,
             notes=request.notes,
+            scrap_notes=request.scrap_notes,
+            create_replacement=request.create_replacement,
+            user_id=current_user.id if current_user else None,
         )
         db.commit()
     except OperationError as e:
@@ -293,7 +300,15 @@ def complete_operation_endpoint(
     po = db.get(ProductionOrder, po_id)
     next_op = get_next_operation(db, po, op)
 
-    return build_operation_response(op, po, next_op)
+    response = build_operation_response(op, po, next_op)
+
+    # Add scrap result to response if available
+    if scrap_result:
+        response_dict = response.model_dump()
+        response_dict["scrap_result"] = scrap_result
+        return response_dict
+
+    return response
 
 
 @router.post(

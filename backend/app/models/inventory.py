@@ -67,6 +67,7 @@ class InventoryTransaction(Base):
     # References
     product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
     location_id = Column(Integer, ForeignKey('inventory_locations.id'), nullable=True)
+    journal_entry_id = Column(Integer, ForeignKey('gl_journal_entries.id', ondelete='SET NULL'), nullable=True)
 
     # Transaction details
     transaction_type = Column(String(50), nullable=False)
@@ -116,6 +117,7 @@ class InventoryTransaction(Base):
     # Relationships
     location = relationship("InventoryLocation")
     product = relationship("Product")
+    journal_entry = relationship("GLJournalEntry")
 
     def __repr__(self):
         return f"<InventoryTransaction {self.transaction_type}: {self.quantity}>"

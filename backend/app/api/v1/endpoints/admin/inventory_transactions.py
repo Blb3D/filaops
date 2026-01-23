@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from decimal import Decimal
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, or_
 
 from app.db.session import get_db
 from app.models.user import User
@@ -22,6 +22,7 @@ from app.models.product import Product
 from app.api.v1.deps import get_current_staff_user
 from app.services.inventory_helpers import is_material
 from app.services.uom_service import convert_quantity_safe
+from app.services.transaction_service import TransactionService
 from app.logging_config import get_logger
 
 router = APIRouter(prefix="/inventory/transactions", tags=["Admin - Inventory"])
@@ -400,6 +401,11 @@ async def create_transaction(
                 detail=f"Insufficient inventory for transfer. On hand: {inventory.on_hand_quantity}, requested: {request.quantity}"
             )
         
+        # Calculate total_cost if cost_per_unit provided
+        total_cost = None
+        if request.cost_per_unit is not None and request.quantity:
+            total_cost = float(request.quantity) * float(request.cost_per_unit)
+
         # Create issue transaction at source
         from_transaction = InventoryTransaction(
             product_id=request.product_id,
@@ -409,6 +415,7 @@ async def create_transaction(
             reference_id=request.reference_id,
             quantity=request.quantity,
             cost_per_unit=request.cost_per_unit,
+            total_cost=total_cost,
             lot_number=request.lot_number,
             serial_number=request.serial_number,
             notes=f"Transfer to {to_location.name if to_location else 'location'}: {request.notes or ''}",
@@ -434,7 +441,7 @@ async def create_transaction(
             )
             db.add(to_inventory)
         
-        # Create receipt transaction at destination
+        # Create receipt transaction at destination (reuse total_cost calculated above)
         to_transaction = InventoryTransaction(
             product_id=request.product_id,
             location_id=request.to_location_id,
@@ -443,6 +450,7 @@ async def create_transaction(
             reference_id=request.reference_id,
             quantity=request.quantity,
             cost_per_unit=request.cost_per_unit,
+            total_cost=total_cost,
             lot_number=request.lot_number,
             serial_number=request.serial_number,
             notes=f"Transfer from {location.name}: {request.notes or ''}",
@@ -456,6 +464,11 @@ async def create_transaction(
         # Return the from_transaction as the primary one
         transaction = from_transaction
     else:
+        # Calculate total_cost if cost_per_unit provided
+        total_cost = None
+        if request.cost_per_unit is not None and request.quantity:
+            total_cost = float(request.quantity) * float(request.cost_per_unit)
+
         # Create single transaction for other types
         transaction = InventoryTransaction(
             product_id=request.product_id,
@@ -465,6 +478,7 @@ async def create_transaction(
             reference_id=request.reference_id,
             quantity=request.quantity,
             cost_per_unit=request.cost_per_unit,
+            total_cost=total_cost,
             lot_number=request.lot_number,
             serial_number=request.serial_number,
             notes=request.notes,
@@ -577,4 +591,289 @@ async def list_locations(
         }
         for loc in locations
     ]
+
+
+# ============================================================================
+# BATCH INVENTORY UPDATE (CYCLE COUNTING)
+# ============================================================================
+
+class BatchItemUpdate(BaseModel):
+    """Single item in a batch update"""
+    product_id: int
+    counted_quantity: Decimal
+    reason: str  # Required for accounting audit trail
+
+
+class BatchUpdateRequest(BaseModel):
+    """Batch inventory update request for cycle counting"""
+    items: List[BatchItemUpdate]
+    location_id: Optional[int] = None
+    count_reference: Optional[str] = None  # e.g., "Cycle Count 2025-01-20"
+
+
+class BatchUpdateResult(BaseModel):
+    """Result of a single item update in batch"""
+    product_id: int
+    product_sku: str
+    product_name: str
+    previous_quantity: Decimal
+    counted_quantity: Decimal
+    variance: Decimal
+    transaction_id: Optional[int] = None
+    journal_entry_id: Optional[int] = None  # GL journal entry for accounting
+    success: bool
+    error: Optional[str] = None
+
+
+class BatchUpdateResponse(BaseModel):
+    """Batch update response"""
+    total_items: int
+    successful: int
+    failed: int
+    results: List[BatchUpdateResult]
+    count_reference: Optional[str]
+
+
+@router.post("/batch", response_model=BatchUpdateResponse, status_code=200)
+async def batch_update_inventory(
+    request: BatchUpdateRequest,
+    current_admin: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Batch update inventory quantities for cycle counting.
+
+    This endpoint accepts a list of items with their counted quantities
+    and creates adjustment transactions for each item where the count
+    differs from the current on-hand quantity.
+
+    For cycle counting workflow:
+    1. User performs physical count
+    2. User enters counted quantities in batch
+    3. System creates adjustment transactions for variances
+    4. Inventory is updated to match counted quantities
+    """
+    results = []
+    successful = 0
+    failed = 0
+
+    # Get or create default location
+    if request.location_id:
+        location = db.query(InventoryLocation).filter(
+            InventoryLocation.id == request.location_id
+        ).first()
+        if not location:
+            raise HTTPException(status_code=404, detail=f"Location {request.location_id} not found")
+    else:
+        location = db.query(InventoryLocation).filter(
+            InventoryLocation.type == "warehouse"
+        ).first()
+        if not location:
+            # Create default warehouse
+            location = InventoryLocation(
+                name="Main Warehouse",
+                code="MAIN",
+                type="warehouse",
+                active=True
+            )
+            db.add(location)
+            db.flush()
+
+    count_ref = request.count_reference or f"Cycle Count {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}"
+
+    # Use TransactionService for atomic inventory + GL transactions
+    txn_service = TransactionService(db)
+
+    for item in request.items:
+        try:
+            # Get product
+            product = db.query(Product).filter(Product.id == item.product_id).first()
+            if not product:
+                results.append(BatchUpdateResult(
+                    product_id=item.product_id,
+                    product_sku="UNKNOWN",
+                    product_name="Unknown Product",
+                    previous_quantity=Decimal(0),
+                    counted_quantity=item.counted_quantity,
+                    variance=Decimal(0),
+                    success=False,
+                    error=f"Product {item.product_id} not found"
+                ))
+                failed += 1
+                continue
+
+            # Get or create inventory record
+            inventory = db.query(Inventory).filter(
+                Inventory.product_id == item.product_id,
+                Inventory.location_id == location.id
+            ).first()
+
+            if not inventory:
+                inventory = Inventory(
+                    product_id=item.product_id,
+                    location_id=location.id,
+                    on_hand_quantity=0,
+                    allocated_quantity=0
+                )
+                db.add(inventory)
+                db.flush()
+
+            previous_qty = Decimal(str(inventory.on_hand_quantity))
+            variance = item.counted_quantity - previous_qty
+
+            # Skip if no variance (count matches)
+            if variance == 0:
+                results.append(BatchUpdateResult(
+                    product_id=item.product_id,
+                    product_sku=product.sku,
+                    product_name=product.name,
+                    previous_quantity=previous_qty,
+                    counted_quantity=item.counted_quantity,
+                    variance=Decimal(0),
+                    success=True,
+                    error=None
+                ))
+                successful += 1
+                continue
+
+            # Build reason for audit trail: count reference + user reason
+            full_reason = f"{count_ref}: {item.reason}"
+
+            # Use TransactionService for atomic inventory + GL accounting
+            # This creates:
+            # 1. InventoryTransaction record
+            # 2. GLJournalEntry with balanced debit/credit lines
+            # 3. Updates inventory quantity
+            inv_txn, journal_entry = txn_service.cycle_count_adjustment(
+                product_id=item.product_id,
+                expected_qty=previous_qty,
+                actual_qty=item.counted_quantity,
+                reason=full_reason,
+                location_id=location.id,
+                user_id=current_admin.id,
+            )
+
+            # Update last_counted timestamp
+            inventory.last_counted = datetime.utcnow()
+
+            db.flush()
+
+            results.append(BatchUpdateResult(
+                product_id=item.product_id,
+                product_sku=product.sku,
+                product_name=product.name,
+                previous_quantity=previous_qty,
+                counted_quantity=item.counted_quantity,
+                variance=variance,
+                transaction_id=inv_txn.id,
+                journal_entry_id=journal_entry.id,
+                success=True,
+                error=None
+            ))
+            successful += 1
+
+        except ValueError as e:
+            # TransactionService raises ValueError for missing accounts, etc.
+            logger.error(f"Accounting error for batch item {item.product_id}: {e}")
+            results.append(BatchUpdateResult(
+                product_id=item.product_id,
+                product_sku=product.sku if product else "ERROR",
+                product_name=product.name if product else "Error",
+                previous_quantity=previous_qty if 'previous_qty' in locals() else Decimal(0),
+                counted_quantity=item.counted_quantity,
+                variance=Decimal(0),
+                success=False,
+                error=f"Accounting error: {str(e)}"
+            ))
+            failed += 1
+        except Exception as e:
+            logger.error(f"Error processing batch item {item.product_id}: {e}")
+            results.append(BatchUpdateResult(
+                product_id=item.product_id,
+                product_sku="ERROR",
+                product_name="Error",
+                previous_quantity=Decimal(0),
+                counted_quantity=item.counted_quantity,
+                variance=Decimal(0),
+                success=False,
+                error=str(e)
+            ))
+            failed += 1
+
+    # Commit all changes (inventory + GL entries atomically)
+    db.commit()
+
+    return BatchUpdateResponse(
+        total_items=len(request.items),
+        successful=successful,
+        failed=failed,
+        results=results,
+        count_reference=count_ref
+    )
+
+
+@router.get("/inventory-summary")
+async def get_inventory_summary(
+    location_id: Optional[int] = Query(None, description="Filter by location"),
+    category_id: Optional[int] = Query(None, description="Filter by category"),
+    search: Optional[str] = Query(None, description="Search by SKU or name"),
+    show_zero: bool = Query(False, description="Include items with zero quantity"),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_admin: User = Depends(get_current_staff_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Get inventory summary for cycle counting.
+
+    Returns current inventory levels with product info for easy counting.
+    """
+    query = db.query(Inventory).join(Product)
+
+    if location_id:
+        query = query.filter(Inventory.location_id == location_id)
+
+    if category_id:
+        query = query.filter(Product.category_id == category_id)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                Product.sku.ilike(search_term),
+                Product.name.ilike(search_term)
+            )
+        )
+
+    if not show_zero:
+        query = query.filter(Inventory.on_hand_quantity > 0)
+
+    total = query.count()
+    items = query.order_by(Product.sku).offset(offset).limit(limit).all()
+
+    result = []
+    for inv in items:
+        product = inv.product
+        location = inv.location
+        result.append({
+            "inventory_id": inv.id,
+            "product_id": product.id,
+            "product_sku": product.sku,
+            "product_name": product.name,
+            "category_name": product.item_category.name if product.item_category else None,
+            "unit": 'G' if is_material(product) else (product.unit or 'EA'),
+            "location_id": location.id if location else None,
+            "location_name": location.name if location else None,
+            "on_hand_quantity": float(inv.on_hand_quantity),
+            "allocated_quantity": float(inv.allocated_quantity),
+            "available_quantity": float(inv.available_quantity) if inv.available_quantity else float(inv.on_hand_quantity) - float(inv.allocated_quantity),
+            "last_counted": inv.last_counted.isoformat() if inv.last_counted else None,
+        })
+
+    return {
+        "items": result,
+        "total": total,
+        "limit": limit,
+        "offset": offset
+    }
 

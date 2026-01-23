@@ -68,8 +68,15 @@ class Customer(Base):
 
     # Relationships
     price_level = relationship("PriceLevel", back_populates="customers")
-    users = relationship("User", back_populates="customer")  # Portal users for this customer
+    users = relationship("User", back_populates="customer")  # Portal users for this customer (legacy single-customer)
     customer_catalogs = relationship("CustomerCatalog", back_populates="customer", cascade="all, delete-orphan")
+    
+    # Multi-user access (B2B portal)
+    user_access = relationship(
+        "UserCustomerAccess",
+        back_populates="customer",
+        cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<Customer(id={self.id}, number='{self.customer_number}', company='{self.company_name}')>"

@@ -240,25 +240,28 @@ async def update_spool(
                 raise HTTPException(status_code=404, detail="Product not found for spool")
             
             # For materials: Store transaction in GRAMS (star schema - transactions are source of truth)
-            # Cost is still per-KG, so we need to convert cost_per_unit for display
             is_mat = is_material(product)
             transaction_quantity = float(adjustment_g) if is_mat else float(adjustment_g / Decimal("1000"))
-            
-            # Cost calculation: For materials, cost is stored per-KG, so we keep it as-is
-            # The transaction quantity is in grams, but cost_per_unit stays per-KG
+
+            # Cost calculation: Use cost per inventory unit for correct total_cost calculation
+            # For materials: $/gram. For others: $/unit
+            from app.services.inventory_service import get_effective_cost_per_inventory_unit
             cost_per_unit = None
+            total_cost = None
             if product:
-                # Use average cost if available, otherwise standard cost (both are per-KG for materials)
-                cost_per_unit = float(product.average_cost or product.standard_cost or 0)
-            
+                cost_per_unit = get_effective_cost_per_inventory_unit(product)
+                if cost_per_unit:
+                    total_cost = abs(transaction_quantity) * float(cost_per_unit)
+
             # Create inventory adjustment transaction
-            # For materials: quantity in GRAMS, cost_per_unit in $/KG
+            # For materials: quantity in GRAMS, cost_per_unit in $/gram
             transaction = InventoryTransaction(
                 product_id=spool.product_id,
                 location_id=spool.location_id,  # Link to spool's location
                 transaction_type="adjustment",
-                quantity=transaction_quantity,  # GRAMS for materials, KG for others
-                cost_per_unit=cost_per_unit,  # Cost per KG (for materials)
+                quantity=transaction_quantity,  # GRAMS for materials, product_unit for others
+                cost_per_unit=cost_per_unit,  # Cost per inventory unit ($/gram for materials)
+                total_cost=total_cost,  # Pre-calculated for UI display
                 reference_type="spool_adjustment",
                 reference_id=str(spool.id),
                 notes=f"Spool {spool.spool_number} weight adjusted: {float(old_weight_g)}g → {float(new_weight_g)}g. Reason: {reason}",

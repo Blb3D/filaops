@@ -35,6 +35,12 @@ class ProductionOrderSource(str, Enum):
     MRP_PLANNED = "mrp_planned"
 
 
+class ProductionOrderType(str, Enum):
+    """Production order type - determines fulfillment flow"""
+    MAKE_TO_ORDER = "MAKE_TO_ORDER"  # MTO: Produced for specific sales order, ships when complete
+    MAKE_TO_STOCK = "MAKE_TO_STOCK"  # MTS: Produced for inventory, FG sits on shelf until ordered
+
+
 class OperationStatus(str, Enum):
     """Operation execution status"""
     PENDING = "pending"
@@ -133,8 +139,27 @@ class ProductionOrderOperationResponse(BaseModel):
     is_running: bool = False
     efficiency_percent: Optional[float] = None
 
+    # Materials for this operation
+    materials: List["OperationMaterialResponse"] = Field(default_factory=list)
+
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OperationMaterialResponse(BaseModel):
+    """Material requirement for a production order operation"""
+    id: int
+    component_id: int
+    component_sku: Optional[str] = None
+    component_name: Optional[str] = None
+    quantity_required: Decimal
+    quantity_allocated: Decimal = Decimal("0")
+    quantity_consumed: Decimal = Decimal("0")
+    unit: str
+    status: str
 
     class Config:
         from_attributes = True
@@ -160,6 +185,7 @@ class ProductionOrderCreate(ProductionOrderBase):
     sales_order_id: Optional[int] = None
     sales_order_line_id: Optional[int] = None
     source: ProductionOrderSource = ProductionOrderSource.MANUAL
+    order_type: ProductionOrderType = ProductionOrderType.MAKE_TO_ORDER
     assigned_to: Optional[str] = Field(None, max_length=100)
 
 
@@ -169,6 +195,7 @@ class ProductionOrderUpdate(BaseModel):
     quantity_completed: Optional[Decimal] = Field(None, ge=0)
     quantity_scrapped: Optional[Decimal] = Field(None, ge=0)
     status: Optional[ProductionOrderStatus] = None
+    order_type: Optional[ProductionOrderType] = None
     priority: Optional[int] = Field(None, ge=1, le=5)
     due_date: Optional[date] = None
     scheduled_start: Optional[datetime] = None
@@ -207,6 +234,7 @@ class ProductionOrderListResponse(BaseModel):
     status: str
     priority: int
     source: str
+    order_type: str = "MAKE_TO_ORDER"  # MTO or MTS
 
     # QC Status
     qc_status: str = "not_required"
@@ -254,6 +282,7 @@ class ProductionOrderResponse(BaseModel):
 
     # Status
     source: str
+    order_type: str = "MAKE_TO_ORDER"  # MTO or MTS
     status: str
     priority: int
 
@@ -285,6 +314,11 @@ class ProductionOrderResponse(BaseModel):
     # Assignment
     assigned_to: Optional[str] = None
     notes: Optional[str] = None
+
+    # Lineage - for tracking remakes and parent/child orders
+    remake_of_id: Optional[int] = None  # If this is a remake, links to original failed order
+    remake_of_code: Optional[str] = None  # Code of original order
+    remake_reason: Optional[str] = None  # Why this remake was created (scrap reason)
 
     # Operations
     operations: List[ProductionOrderOperationResponse] = []
@@ -573,5 +607,150 @@ class ProductionOrderCompleteRequest(BaseModel):
                 "spools_used": [
                     {"product_id": 5, "spool_id": 12, "weight_consumed_g": 150.5}
                 ]
+            }
+        }
+
+
+# ============================================================================
+# Operation-Level Scrap Schemas
+# ============================================================================
+
+class OperationScrapRequest(BaseModel):
+    """Request to scrap units at a specific operation with cascading material accounting"""
+    quantity_scrapped: int = Field(..., ge=1, description="Number of units to scrap")
+    scrap_reason_code: str = Field(..., min_length=1, max_length=50, description="Scrap reason code")
+    notes: Optional[str] = Field(None, max_length=2000, description="Optional notes about the scrap")
+    create_replacement: bool = Field(
+        True,
+        description="If True, create a replacement production order for the scrapped quantity"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "quantity_scrapped": 2,
+                "scrap_reason_code": "layer_shift",
+                "notes": "Layer shift detected at z=50mm",
+                "create_replacement": True
+            }
+        }
+
+
+class ScrapCascadeMaterial(BaseModel):
+    """Material consumed in the scrap cascade"""
+    operation_id: int
+    operation_sequence: int
+    operation_name: str
+    component_id: int
+    component_sku: str
+    component_name: str
+    quantity: float
+    unit: str
+    unit_cost: float
+    cost: float
+
+
+class ScrapCascadeResponse(BaseModel):
+    """Response from scrap cascade calculation (preview before scrap)"""
+    production_order_id: int
+    production_order_code: str
+    operation_id: int
+    operation_name: str
+    quantity_scrapped: int
+    materials_consumed: List[ScrapCascadeMaterial]
+    total_cost: float
+    operations_affected: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "production_order_id": 123,
+                "production_order_code": "PO-2026-0001",
+                "operation_id": 456,
+                "operation_name": "Assembly",
+                "quantity_scrapped": 2,
+                "materials_consumed": [
+                    {
+                        "operation_id": 450,
+                        "operation_sequence": 1,
+                        "operation_name": "Printing",
+                        "component_id": 10,
+                        "component_sku": "PLA-BLUE",
+                        "component_name": "PLA Blue Filament",
+                        "quantity": 100.0,
+                        "unit": "G",
+                        "unit_cost": 0.02,
+                        "cost": 2.0
+                    }
+                ],
+                "total_cost": 5.50,
+                "operations_affected": 3
+            }
+        }
+
+
+class ReplacementOrderInfo(BaseModel):
+    """Info about a created replacement production order"""
+    id: int
+    code: str
+
+
+class OperationScrapResponse(BaseModel):
+    """Response from operation-level scrap execution"""
+    success: bool
+    scrap_records_created: int
+    operations_affected: int
+    total_scrap_cost: float
+    journal_entry_number: Optional[str] = None
+    downstream_ops_skipped: int = 0
+    replacement_order: Optional[ReplacementOrderInfo] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "success": True,
+                "scrap_records_created": 5,
+                "operations_affected": 3,
+                "total_scrap_cost": 12.50,
+                "journal_entry_number": "JE-2026-000042",
+                "downstream_ops_skipped": 2,
+                "replacement_order": {
+                    "id": 124,
+                    "code": "PO-2026-0002"
+                }
+            }
+        }
+
+
+# ============================================================================
+# Partial Operation Completion Schemas
+# ============================================================================
+
+class OperationPartialCompleteRequest(BaseModel):
+    """Request to partially complete an operation with optional scrap"""
+    quantity_completed: int = Field(..., ge=0, description="Number of good units completed")
+    quantity_scrapped: int = Field(0, ge=0, description="Number of units scrapped at this operation")
+    scrap_reason_code: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Required if quantity_scrapped > 0"
+    )
+    scrap_notes: Optional[str] = Field(None, max_length=2000, description="Notes about the scrap")
+    actual_run_minutes: Optional[int] = Field(None, ge=0, description="Actual run time in minutes")
+    notes: Optional[str] = Field(None, max_length=2000, description="General operation notes")
+    create_replacement: bool = Field(
+        True,
+        description="If scrapping, create replacement PO for scrapped qty"
+    )
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "quantity_completed": 8,
+                "quantity_scrapped": 2,
+                "scrap_reason_code": "layer_shift",
+                "scrap_notes": "Layer shift on 2 parts",
+                "actual_run_minutes": 45,
+                "create_replacement": True
             }
         }

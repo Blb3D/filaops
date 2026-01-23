@@ -287,6 +287,7 @@ export default function ProductionOrderDetail() {
       {/* Operations Panel */}
       <OperationsPanel
         productionOrderId={order.id}
+        productionOrder={order}
         orderStatus={order.status}
         onOperationClick={(operation) => {
           if (operation.status === 'pending') {
@@ -315,6 +316,35 @@ export default function ProductionOrderDetail() {
           }
         }}
       />
+
+      {/* Order Lineage - Show if this is a remake */}
+      {order.remake_of_id && (
+        <div className="bg-gray-900 border border-yellow-600/30 rounded-xl p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <h2 className="text-lg font-semibold text-yellow-400">Remake Order</h2>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-400 text-sm mb-1">This order is a remake of:</p>
+              <p className="text-white font-medium">{order.remake_of_code || `PO-${order.remake_of_id}`}</p>
+              {order.remake_reason && (
+                <p className="text-yellow-400/80 text-sm mt-1">
+                  Reason: {order.remake_reason}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => navigate(`/admin/production/${order.remake_of_id}`)}
+              className="px-4 py-2 bg-yellow-600/20 text-yellow-400 rounded-lg hover:bg-yellow-600/30"
+            >
+              View Original
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Linked Sales Order */}
       {order.sales_order_id && (

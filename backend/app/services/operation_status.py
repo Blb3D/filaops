@@ -15,7 +15,8 @@ from app.models.production_order import (
 from app.models.work_center import Machine
 from app.services.operation_blocking import check_operation_blocking
 from app.services.resource_scheduling import check_resource_available_now
-from app.services.inventory_service import consume_operation_material
+from app.services.inventory_service import consume_operation_material, process_production_completion
+from app.services.status_sync_service import sync_on_production_complete
 
 
 logger = logging.getLogger(__name__)
@@ -164,11 +165,18 @@ def derive_po_status(po: ProductionOrder) -> str:
         return 'in_progress'
 
 
-def update_po_status(db: Session, po: ProductionOrder) -> None:
-    """Update PO status based on operations."""
-    new_status = derive_po_status(po)
+def update_po_status(db: Session, po: ProductionOrder, created_by: Optional[str] = None) -> None:
+    """
+    Update PO status based on operations.
 
-    if po.status != new_status:
+    When PO transitions to 'complete':
+    - Adds finished goods to inventory via process_production_completion
+    - Syncs parent sales order status via sync_on_production_complete
+    """
+    new_status = derive_po_status(po)
+    old_status = po.status
+
+    if old_status != new_status:
         po.status = new_status
         po.updated_at = datetime.utcnow()
 
@@ -177,6 +185,35 @@ def update_po_status(db: Session, po: ProductionOrder) -> None:
         elif new_status == 'complete' and not po.actual_end:
             po.actual_end = datetime.utcnow()
             po.completed_at = datetime.utcnow()
+
+            # === AUTO-COMPLETE: Add finished goods to inventory ===
+            # This triggers when all operations complete, not just when
+            # the explicit /complete endpoint is called
+            qty_completed = po.quantity_completed or po.quantity_ordered
+            try:
+                process_production_completion(
+                    db=db,
+                    production_order=po,
+                    quantity_completed=qty_completed,
+                    created_by=created_by,
+                )
+                logger.info(
+                    f"Auto-completed inventory receipt for {po.code}: "
+                    f"{qty_completed} units of product {po.product_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"Failed to process inventory for {po.code}: {e}"
+                )
+                # Don't fail the operation completion - log and continue
+
+            # === AUTO-SYNC: Update parent sales order status ===
+            try:
+                sync_on_production_complete(db, po)
+            except Exception as e:
+                logger.error(
+                    f"Failed to sync sales order for {po.code}: {e}"
+                )
 
 
 def consume_operation_materials(
@@ -318,7 +355,7 @@ def start_operation(
     op.updated_at = datetime.utcnow()
 
     # Update PO status
-    update_po_status(db, po)
+    update_po_status(db, po, created_by=operator_name)
 
     db.flush()
     return op
@@ -332,22 +369,42 @@ def complete_operation(
     quantity_scrapped: Decimal = Decimal("0"),
     scrap_reason: Optional[str] = None,
     actual_run_minutes: Optional[int] = None,
-    notes: Optional[str] = None
-) -> ProductionOrderOperation:
+    notes: Optional[str] = None,
+    scrap_notes: Optional[str] = None,
+    create_replacement: bool = False,
+    user_id: Optional[int] = None,
+) -> Tuple[ProductionOrderOperation, Optional[dict]]:
     """
-    Complete an operation.
+    Complete an operation with optional partial scrap and cascading material accounting.
 
     Validations:
     - Operation must be running
     - quantity_completed + quantity_scrapped <= max_allowed
       (max_allowed = previous op's qty_completed, or order qty for first op)
+    - If quantity_scrapped > 0 and scrap_reason is provided, cascading scrap accounting is triggered
 
     Side effects:
-    - Updates PO status if last operation
     - Consumes materials for this operation (marks as consumed)
+    - If scrapping: Creates ScrapRecords with cascading material costs + GL entries
+    - If scrapping with create_replacement: Creates new PO linked to original
+    - Updates PO status if last operation
+    - Auto-skips downstream operations if no good pieces remain
+
+    Args:
+        db: Database session
+        po_id: Production order ID
+        op_id: Operation ID
+        quantity_completed: Number of good units
+        quantity_scrapped: Number of units to scrap (default 0)
+        scrap_reason: Scrap reason code (required if quantity_scrapped > 0)
+        actual_run_minutes: Override for actual run time
+        notes: General operation notes
+        scrap_notes: Notes specific to the scrap event
+        create_replacement: If True and scrapping, create replacement PO
+        user_id: Current user ID for audit trail
 
     Returns:
-        Updated operation
+        Tuple of (updated operation, scrap_result dict or None)
 
     Raises:
         OperationError: If validation fails
@@ -369,6 +426,13 @@ def complete_operation(
             400
         )
 
+    # Validate scrap reason if scrapping
+    if quantity_scrapped > Decimal("0") and not scrap_reason:
+        raise OperationError(
+            "Scrap reason is required when quantity_scrapped > 0",
+            400
+        )
+
     # Update operation
     op.status = 'complete'
     op.actual_end = datetime.utcnow()
@@ -387,10 +451,36 @@ def complete_operation(
         op.notes = notes
     op.updated_at = datetime.utcnow()
 
-    # Consume materials for this operation
+    # Consume materials for this operation (for good + scrapped units)
     consumed = consume_operation_materials(db, op, quantity_completed, quantity_scrapped)
     if consumed:
         logger.info(f"Consumed {len(consumed)} materials for operation {op.id}")
+
+    # Process cascading scrap accounting if scrapping
+    scrap_result = None
+    if quantity_scrapped > Decimal("0") and scrap_reason:
+        from app.services.scrap_service import process_operation_scrap, ScrapError
+        try:
+            scrap_result = process_operation_scrap(
+                db=db,
+                po_id=po_id,
+                op_id=op_id,
+                quantity_scrapped=int(quantity_scrapped),
+                scrap_reason_code=scrap_reason,
+                notes=scrap_notes,
+                create_replacement=create_replacement,
+                user_id=user_id,
+            )
+            logger.info(
+                f"Processed cascading scrap for {quantity_scrapped} units: "
+                f"{scrap_result['scrap_records_created']} records, "
+                f"${scrap_result['total_scrap_cost']:.2f} total cost"
+            )
+        except ScrapError as e:
+            # Log but don't fail the operation completion
+            logger.error(f"Failed to process cascading scrap: {e.message}")
+            # Still record the scrap on the operation, just without cascade accounting
+            pass
 
     # Auto-skip downstream operations if no good pieces remain
     if quantity_completed == Decimal("0"):
@@ -399,14 +489,19 @@ def complete_operation(
             logger.info(f"Auto-skipped {skipped} downstream operations due to 0 good pieces")
 
     # Update PO quantities BEFORE deriving status
+    # Note: scrap_service may have already updated these, so use max to avoid double-counting
     po.quantity_completed = quantity_completed
-    po.quantity_scrapped = (po.quantity_scrapped or Decimal("0")) + quantity_scrapped
+    # Don't double-update quantity_scrapped - scrap_service handles this when called
+    if not scrap_result:
+        # Only update if scrap_service wasn't called
+        po.quantity_scrapped = (po.quantity_scrapped or Decimal("0")) + quantity_scrapped
 
     # Update PO status (uses quantity_completed to determine complete vs short)
-    update_po_status(db, po)
+    # Pass operator_name for inventory transaction attribution
+    update_po_status(db, po, created_by=op.operator_name or f"user:{user_id}" if user_id else None)
 
     db.flush()
-    return op
+    return op, scrap_result
 
 
 def auto_skip_downstream_operations(
@@ -492,7 +587,7 @@ def skip_operation(
     op.updated_at = datetime.utcnow()
 
     # Update PO status
-    update_po_status(db, po)
+    update_po_status(db, po, created_by=op.operator_name)
 
     db.flush()
     return op

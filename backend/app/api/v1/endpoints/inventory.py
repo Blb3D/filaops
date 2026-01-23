@@ -354,16 +354,21 @@ async def adjust_inventory_quantity(
     inventory.updated_at = datetime.utcnow()
     
     # Get cost per unit for accounting
-    # For materials: Cost is per-KG, so keep it as-is (even though transaction qty is in grams)
-    # For others: Cost is per product_unit
-    from app.services.inventory_service import get_effective_cost
+    # Use cost per inventory unit ($/gram for materials, $/unit for others)
+    # This matches the transaction quantity unit for correct total_cost calculation
+    from app.services.inventory_service import get_effective_cost_per_inventory_unit
     transaction_cost_per_unit = None
     if cost_per_unit is not None:
         transaction_cost_per_unit = Decimal(str(cost_per_unit))
     else:
-        # Use product's effective cost for accounting
-        transaction_cost_per_unit = get_effective_cost(product)
-    
+        # Use product's effective cost per inventory unit
+        transaction_cost_per_unit = get_effective_cost_per_inventory_unit(product)
+
+    # Calculate total_cost for UI display
+    total_cost = None
+    if transaction_cost_per_unit is not None:
+        total_cost = float(abs_adjustment_qty) * float(transaction_cost_per_unit)
+
     # Create inventory transaction record for audit trail
     # STAR SCHEMA: Store quantity in transaction unit (GRAMS for materials)
     transaction = InventoryTransaction(
@@ -373,7 +378,8 @@ async def adjust_inventory_quantity(
         quantity=float(abs_adjustment_qty),  # GRAMS for materials, product_unit for others
         reference_type="manual_adjustment",
         reference_id=0,  # No specific reference document
-        cost_per_unit=transaction_cost_per_unit,  # Cost per product_unit (KG for materials)
+        cost_per_unit=transaction_cost_per_unit,  # Cost per inventory unit ($/g for materials)
+        total_cost=total_cost,  # Pre-calculated for UI display
         notes=transaction_notes,
         created_by=current_user.email if current_user else "system",
         created_at=datetime.utcnow(),

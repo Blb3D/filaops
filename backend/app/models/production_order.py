@@ -54,6 +54,11 @@ class ProductionOrder(Base):
     # Source: manual, sales_order, mrp_planned
     source = Column(String(50), default='manual', nullable=False)
 
+    # Order Type: MAKE_TO_ORDER (MTO) or MAKE_TO_STOCK (MTS)
+    # MTO: Produced for a specific sales order, ships when complete
+    # MTS: Produced for inventory, FG sits on shelf until ordered
+    order_type = Column(String(20), default='MAKE_TO_ORDER', nullable=False)
+
     # Status (Manufacturing Workflow)
     # Lifecycle: draft → released → scheduled → in_progress → completed → closed
     # QC paths: completed → qc_hold → (scrapped | rework | closed)
@@ -207,7 +212,8 @@ class ProductionOrderOperation(Base):
     production_order_id = Column(Integer, ForeignKey('production_orders.id', ondelete='CASCADE'), nullable=False)
     routing_operation_id = Column(Integer, ForeignKey('routing_operations.id'), nullable=True)
     work_center_id = Column(Integer, ForeignKey('work_centers.id'), nullable=False)
-    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='SET NULL'), nullable=True)  # Specific printer/resource assigned
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='SET NULL'), nullable=True)  # Specific resource assigned
+    printer_id = Column(Integer, ForeignKey('printers.id', ondelete='SET NULL'), nullable=True)  # Specific printer assigned
 
     # Sequence and identification
     sequence = Column(Integer, nullable=False)
@@ -256,6 +262,7 @@ class ProductionOrderOperation(Base):
     routing_operation = relationship("RoutingOperation")
     work_center = relationship("WorkCenter")
     resource = relationship("Resource", foreign_keys=[resource_id])
+    printer = relationship("Printer", foreign_keys=[printer_id])
     materials = relationship("ProductionOrderOperationMaterial", back_populates="operation",
                             cascade="all, delete-orphan", order_by="ProductionOrderOperationMaterial.id")
 
@@ -398,3 +405,61 @@ class ProductionOrderOperationMaterial(Base):
         """Quantity short (if allocated < required)"""
         shortfall = float(self.quantity_required or 0) - float(self.quantity_allocated or 0)
         return max(0, shortfall)
+
+
+class ScrapRecord(Base):
+    """
+    Tracks scrapped materials and parts with cost and audit trail.
+
+    Created by TransactionService.scrap_materials() when:
+    - QC fails parts
+    - Print fails mid-job
+    - Material is damaged
+
+    Links to both the inventory transaction (physical) and
+    journal entry (accounting) for full auditability.
+
+    Pro tier: Enables scrap cost analysis, failure rate reporting
+    Enterprise tier: Full audit trail with user attribution
+    """
+    __tablename__ = "scrap_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Source tracking
+    production_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True, index=True)
+    production_operation_id = Column(Integer, ForeignKey('production_order_operations.id'), nullable=True, index=True)
+    operation_sequence = Column(Integer, nullable=True)  # Denormalized for reporting
+
+    # What was scrapped (uses products table, not items)
+    product_id = Column(Integer, ForeignKey('products.id'), nullable=False, index=True)
+    quantity = Column(Numeric(18, 4), nullable=False)
+
+    # Cost capture (at time of scrap - important for COGS accuracy)
+    unit_cost = Column(Numeric(18, 4), nullable=False)
+    total_cost = Column(Numeric(18, 4), nullable=False)  # qty * unit_cost
+
+    # Reason (FK to scrap_reasons or free text)
+    scrap_reason_id = Column(Integer, ForeignKey('scrap_reasons.id'), nullable=True)
+    scrap_reason_code = Column(String(50), nullable=True)  # Denormalized for reporting
+    notes = Column(Text, nullable=True)
+
+    # Transaction links (for audit trail)
+    inventory_transaction_id = Column(Integer, ForeignKey('inventory_transactions.id'), nullable=True)
+    journal_entry_id = Column(Integer, ForeignKey('gl_journal_entries.id'), nullable=True)
+
+    # Audit
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+
+    # Relationships
+    production_order = relationship("ProductionOrder", backref="scrap_records")
+    production_operation = relationship("ProductionOrderOperation", backref="scrap_records")
+    product = relationship("Product")
+    scrap_reason = relationship("ScrapReason")
+    inventory_transaction = relationship("InventoryTransaction")
+    journal_entry = relationship("GLJournalEntry")
+    created_by = relationship("User", foreign_keys=[created_by_user_id])
+
+    def __repr__(self):
+        return f"<ScrapRecord {self.id}: {self.quantity} x product {self.product_id} @ ${self.total_cost}>"

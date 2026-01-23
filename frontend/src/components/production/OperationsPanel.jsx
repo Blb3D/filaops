@@ -8,6 +8,8 @@ import { useState, useEffect } from 'react';
 import { API_URL } from '../../config/api';
 import OperationRow from './OperationRow';
 import SkipOperationModal from './SkipOperationModal';
+import ScrapEntryModal from './ScrapEntryModal';
+import OperationCompletionModal from './OperationCompletionModal';
 import { formatDuration } from '../../utils/formatting';
 
 /**
@@ -137,12 +139,16 @@ function EmptyOperations({ orderStatus }) {
 /**
  * Main OperationsPanel component
  */
-export default function OperationsPanel({ productionOrderId, orderStatus, onOperationClick }) {
+export default function OperationsPanel({ productionOrderId, productionOrder, orderStatus, onOperationClick }) {
   const [operations, setOperations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [skipModalOpen, setSkipModalOpen] = useState(false);
   const [operationToSkip, setOperationToSkip] = useState(null);
+  const [scrapModalOpen, setScrapModalOpen] = useState(false);
+  const [operationToScrap, setOperationToScrap] = useState(null);
+  const [completionModalOpen, setCompletionModalOpen] = useState(false);
+  const [operationToComplete, setOperationToComplete] = useState(null);
 
   const token = localStorage.getItem('adminToken');
 
@@ -201,6 +207,16 @@ export default function OperationsPanel({ productionOrderId, orderStatus, onOper
   const handleSkipClick = (operation) => {
     setOperationToSkip(operation);
     setSkipModalOpen(true);
+  };
+
+  const handleScrapClick = (operation) => {
+    setOperationToScrap(operation);
+    setScrapModalOpen(true);
+  };
+
+  const handleCompleteClick = (operation) => {
+    setOperationToComplete(operation);
+    setCompletionModalOpen(true);
   };
 
   // Find the active (running) operation
@@ -263,6 +279,8 @@ export default function OperationsPanel({ productionOrderId, orderStatus, onOper
                 onActionSuccess={handleActionSuccess}
                 onActionError={handleActionError}
                 onSkipClick={handleSkipClick}
+                onScrapClick={handleScrapClick}
+                onCompleteClick={handleCompleteClick}
                 onClick={onOperationClick}
               />
             ))}
@@ -281,6 +299,36 @@ export default function OperationsPanel({ productionOrderId, orderStatus, onOper
         operation={operationToSkip}
         productionOrderId={productionOrderId}
         onSkipped={() => {
+          fetchOperations();
+        }}
+      />
+
+      {/* Scrap Entry Modal */}
+      <ScrapEntryModal
+        isOpen={scrapModalOpen}
+        onClose={() => {
+          setScrapModalOpen(false);
+          setOperationToScrap(null);
+        }}
+        productionOrderId={productionOrderId}
+        operation={operationToScrap}
+        productionOrder={productionOrder}
+        onScrapComplete={() => {
+          fetchOperations();
+        }}
+      />
+
+      {/* Operation Completion Modal */}
+      <OperationCompletionModal
+        isOpen={completionModalOpen}
+        onClose={() => {
+          setCompletionModalOpen(false);
+          setOperationToComplete(null);
+        }}
+        productionOrderId={productionOrderId}
+        operation={operationToComplete}
+        productionOrder={productionOrder}
+        onComplete={() => {
           fetchOperations();
         }}
       />

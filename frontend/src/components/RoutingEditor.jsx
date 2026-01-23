@@ -4,8 +4,9 @@
  * Simple, focused editor for managing manufacturing routings.
  * Can be used from item detail pages or standalone.
  */
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { API_URL } from "../config/api";
+import OperationMaterialModal from "./OperationMaterialModal";
 
 export default function RoutingEditor({
   isOpen,
@@ -26,6 +27,13 @@ export default function RoutingEditor({
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [selectedProductId, setSelectedProductId] = useState(productId || "");
   const [productList, _setProductList] = useState(products || []); // Updated via props
+
+  // Materials state
+  const [operationMaterials, setOperationMaterials] = useState({}); // Map of operation_id -> materials[]
+  const [expandedOperations, setExpandedOperations] = useState({}); // Map of operation_id -> boolean
+  const [materialModalOpen, setMaterialModalOpen] = useState(false);
+  const [selectedOperationId, setSelectedOperationId] = useState(null);
+  const [selectedMaterial, setSelectedMaterial] = useState(null);
 
   const [newOperation, setNewOperation] = useState({
     work_center_id: "",
@@ -114,6 +122,37 @@ export default function RoutingEditor({
     }
   }, [token]);
 
+  // Fetch materials for a specific operation
+  const fetchOperationMaterials = useCallback(async (operationId) => {
+    if (!operationId) return;
+    try {
+      const res = await fetch(
+        `${API_URL}/api/v1/routings/operations/${operationId}/materials`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        setOperationMaterials(prev => ({
+          ...prev,
+          [operationId]: data || [],
+        }));
+      }
+    } catch {
+      // Material fetch failure - materials will show as empty
+    }
+  }, [token]);
+
+  // Fetch materials for all operations when routing loads
+  useEffect(() => {
+    if (operations.length > 0) {
+      operations.forEach(op => {
+        if (op.id) {
+          fetchOperationMaterials(op.id);
+        }
+      });
+    }
+  }, [operations, fetchOperationMaterials]);
+
   useEffect(() => {
     if (isOpen) {
       if (routingId) {
@@ -124,6 +163,9 @@ export default function RoutingEditor({
       fetchWorkCenters();
       fetchTemplates();
       setError(null);
+      // Reset materials state when modal opens
+      setOperationMaterials({});
+      setExpandedOperations({});
     }
   }, [
     isOpen,
@@ -391,6 +433,55 @@ export default function RoutingEditor({
     setOperations(updated);
   };
 
+  // Toggle operation materials expansion
+  const toggleOperationExpanded = (operationId) => {
+    setExpandedOperations(prev => ({
+      ...prev,
+      [operationId]: !prev[operationId],
+    }));
+  };
+
+  // Open material modal for adding
+  const handleAddMaterial = (operationId) => {
+    setSelectedOperationId(operationId);
+    setSelectedMaterial(null);
+    setMaterialModalOpen(true);
+  };
+
+  // Open material modal for editing
+  const handleEditMaterial = (operationId, material) => {
+    setSelectedOperationId(operationId);
+    setSelectedMaterial(material);
+    setMaterialModalOpen(true);
+  };
+
+  // Handle material save/delete
+  const handleMaterialSave = (savedMaterial) => {
+    if (savedMaterial === null) {
+      // Material was deleted - remove from state
+      setOperationMaterials(prev => ({
+        ...prev,
+        [selectedOperationId]: (prev[selectedOperationId] || []).filter(
+          m => m.id !== selectedMaterial?.id
+        ),
+      }));
+    } else if (selectedMaterial) {
+      // Material was updated - update in state
+      setOperationMaterials(prev => ({
+        ...prev,
+        [selectedOperationId]: (prev[selectedOperationId] || []).map(m =>
+          m.id === savedMaterial.id ? savedMaterial : m
+        ),
+      }));
+    } else {
+      // New material was added
+      setOperationMaterials(prev => ({
+        ...prev,
+        [selectedOperationId]: [...(prev[selectedOperationId] || []), savedMaterial],
+      }));
+    }
+  };
+
   if (!isOpen) return null;
 
   const totalSetup = operations.reduce(
@@ -561,107 +652,176 @@ export default function RoutingEditor({
                       </tr>
                     </thead>
                     <tbody>
-                      {operations.map((op, index) => (
-                        <tr
-                          key={index}
-                          className="border-b border-gray-800 hover:bg-gray-800/50"
-                        >
-                          <td className="border border-gray-700 p-2">
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={op.sequence || index + 1}
-                              onChange={(e) => {
-                                const newSequence = parseInt(e.target.value) || 1;
-                                updateOperation(index, "sequence", newSequence);
-                                // Auto-resequence other operations if needed
-                                const currentSeq = op.sequence || index + 1;
-                                if (newSequence !== currentSeq) {
-                                  operations.forEach((otherOp, otherIdx) => {
-                                    if (otherIdx !== index) {
-                                      const otherSeq = otherOp.sequence || otherIdx + 1;
-                                      if (otherSeq >= newSequence && otherSeq < currentSeq) {
-                                        updateOperation(otherIdx, "sequence", otherSeq + 1);
-                                      } else if (otherSeq <= newSequence && otherSeq > currentSeq) {
-                                        updateOperation(otherIdx, "sequence", otherSeq - 1);
+                      {operations.map((op, index) => {
+                        const materials = op.id ? (operationMaterials[op.id] || []) : [];
+                        const isExpanded = op.id && expandedOperations[op.id];
+
+                        return (
+                          <React.Fragment key={op.id || index}>
+                            <tr className="border-b border-gray-800 hover:bg-gray-800/50">
+                              <td className="border border-gray-700 p-2">
+                                <div className="flex items-center gap-2">
+                                  {op.id && (
+                                    <button
+                                      onClick={() => toggleOperationExpanded(op.id)}
+                                      className="text-gray-400 hover:text-white"
+                                      title={isExpanded ? "Collapse materials" : "Expand materials"}
+                                    >
+                                      <svg
+                                        className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    step="1"
+                                    value={op.sequence || index + 1}
+                                    onChange={(e) => {
+                                      const newSequence = parseInt(e.target.value) || 1;
+                                      updateOperation(index, "sequence", newSequence);
+                                      const currentSeq = op.sequence || index + 1;
+                                      if (newSequence !== currentSeq) {
+                                        operations.forEach((otherOp, otherIdx) => {
+                                          if (otherIdx !== index) {
+                                            const otherSeq = otherOp.sequence || otherIdx + 1;
+                                            if (otherSeq >= newSequence && otherSeq < currentSeq) {
+                                              updateOperation(otherIdx, "sequence", otherSeq + 1);
+                                            } else if (otherSeq <= newSequence && otherSeq > currentSeq) {
+                                              updateOperation(otherIdx, "sequence", otherSeq - 1);
+                                            }
+                                          }
+                                        });
                                       }
-                                    }
-                                  });
-                                }
-                              }}
-                              className="w-16 text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                            />
-                          </td>
-                          <td className="border border-gray-700 p-2">
-                            <div>
-                              <div className="font-medium text-white">
-                                {op.operation_name ||
-                                  op.operation_code ||
-                                  `OP${index + 1}`}
-                              </div>
-                              {op.operation_code && (
-                                <div className="text-sm text-gray-400">
-                                  {op.operation_code}
+                                    }}
+                                    className="w-12 text-center bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                                  />
                                 </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="border border-gray-700 p-2 text-white">
-                            {op.work_center_name || op.work_center?.name}
-                          </td>
-                          <td className="border border-gray-700 p-2">
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={op.setup_time_minutes || 0}
-                              onChange={(e) =>
-                                updateOperation(
-                                  index,
-                                  "setup_time_minutes",
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                            />
-                          </td>
-                          <td className="border border-gray-700 p-2">
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
-                              value={op.run_time_minutes || 0}
-                              onChange={(e) =>
-                                updateOperation(
-                                  index,
-                                  "run_time_minutes",
-                                  parseFloat(e.target.value) || 0
-                                )
-                              }
-                              className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
-                            />
-                          </td>
-                          <td className="border border-gray-700 p-2 text-right text-white">
-                            $
-                            {(
-                              (((parseFloat(op.setup_time_minutes) || 0) +
-                                (parseFloat(op.run_time_minutes) || 0)) /
-                                60) *
-                              (parseFloat(op.labor_rate) || 0)
-                            ).toFixed(2)}
-                          </td>
-                          <td className="border border-gray-700 p-2 text-center">
-                            <button
-                              onClick={() => removeOperation(index)}
-                              className="text-red-400 hover:text-red-300"
-                              disabled={loading}
-                            >
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                              </td>
+                              <td className="border border-gray-700 p-2">
+                                <div>
+                                  <div className="font-medium text-white">
+                                    {op.operation_name || op.operation_code || `OP${index + 1}`}
+                                  </div>
+                                  {op.operation_code && (
+                                    <div className="text-sm text-gray-400">{op.operation_code}</div>
+                                  )}
+                                  {materials.length > 0 && (
+                                    <div className="text-xs text-blue-400 mt-1">
+                                      {materials.length} material{materials.length !== 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="border border-gray-700 p-2 text-white">
+                                {op.work_center_name || op.work_center?.name}
+                              </td>
+                              <td className="border border-gray-700 p-2">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={op.setup_time_minutes || 0}
+                                  onChange={(e) =>
+                                    updateOperation(index, "setup_time_minutes", parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                                />
+                              </td>
+                              <td className="border border-gray-700 p-2">
+                                <input
+                                  type="number"
+                                  step="0.1"
+                                  min="0"
+                                  value={op.run_time_minutes || 0}
+                                  onChange={(e) =>
+                                    updateOperation(index, "run_time_minutes", parseFloat(e.target.value) || 0)
+                                  }
+                                  className="w-20 text-right bg-gray-800 border border-gray-700 rounded px-2 py-1 text-white"
+                                />
+                              </td>
+                              <td className="border border-gray-700 p-2 text-right text-white">
+                                ${(
+                                  (((parseFloat(op.setup_time_minutes) || 0) +
+                                    (parseFloat(op.run_time_minutes) || 0)) / 60) *
+                                  (parseFloat(op.labor_rate) || 0)
+                                ).toFixed(2)}
+                              </td>
+                              <td className="border border-gray-700 p-2 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  {op.id && (
+                                    <button
+                                      onClick={() => handleAddMaterial(op.id)}
+                                      className="text-blue-400 hover:text-blue-300 text-sm"
+                                      title="Add material"
+                                    >
+                                      +Mat
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => removeOperation(index)}
+                                    className="text-red-400 hover:text-red-300"
+                                    disabled={loading}
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                            {/* Expandable Materials Row */}
+                            {isExpanded && (
+                              <tr className="bg-gray-800/30">
+                                <td colSpan="7" className="border border-gray-700 p-3">
+                                  <div className="ml-6">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <h5 className="text-sm font-medium text-gray-300">Materials</h5>
+                                      <button
+                                        onClick={() => handleAddMaterial(op.id)}
+                                        className="text-xs px-2 py-1 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-600/30"
+                                      >
+                                        + Add Material
+                                      </button>
+                                    </div>
+                                    {materials.length === 0 ? (
+                                      <p className="text-sm text-gray-500 italic">No materials assigned to this operation</p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {materials.map((mat) => (
+                                          <div
+                                            key={mat.id}
+                                            className="flex items-center justify-between text-sm p-2 bg-gray-800/50 rounded cursor-pointer hover:bg-gray-800"
+                                            onClick={() => handleEditMaterial(op.id, mat)}
+                                          >
+                                            <div className="flex items-center gap-3">
+                                              <span className="text-gray-300">{mat.component_sku}</span>
+                                              <span className="text-gray-500">-</span>
+                                              <span className="text-gray-400">{mat.component_name}</span>
+                                            </div>
+                                            <div className="flex items-center gap-4 text-gray-400">
+                                              <span>{mat.quantity_per} {mat.unit}</span>
+                                              <span className="text-xs text-gray-500">
+                                                {mat.quantity_type === 'per_unit' ? '/unit' : mat.quantity_type === 'per_batch' ? '/batch' : '/order'}
+                                              </span>
+                                              {mat.is_optional && (
+                                                <span className="text-xs px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded">optional</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-800 font-semibold border-t border-gray-700">
@@ -848,6 +1008,18 @@ export default function RoutingEditor({
           )}
         </div>
       </div>
+
+      {/* Operation Material Modal */}
+      <OperationMaterialModal
+        isOpen={materialModalOpen}
+        onClose={() => {
+          setMaterialModalOpen(false);
+          setSelectedMaterial(null);
+        }}
+        operationId={selectedOperationId}
+        material={selectedMaterial}
+        onSave={handleMaterialSave}
+      />
     </div>
   );
 }

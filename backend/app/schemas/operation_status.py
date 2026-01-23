@@ -15,16 +15,33 @@ class OperationStartRequest(BaseModel):
 
 
 class OperationCompleteRequest(BaseModel):
-    """Request to complete an operation."""
-    quantity_completed: Decimal = Field(..., ge=0, description="Quantity completed")
-    quantity_scrapped: Decimal = Field(default=Decimal("0"), ge=0, description="Quantity scrapped")
+    """
+    Request to complete an operation with optional partial scrap.
+
+    When quantity_scrapped > 0 and scrap_reason is provided:
+    - Cascading scrap accounting is triggered
+    - ScrapRecords are created for materials from all prior operations
+    - GL entry: DR Scrap Expense (5020), CR WIP (1210)
+    - Optionally creates a replacement production order
+    """
+    quantity_completed: Decimal = Field(..., ge=0, description="Number of good units completed")
+    quantity_scrapped: Decimal = Field(default=Decimal("0"), ge=0, description="Number of units to scrap")
     scrap_reason: Optional[str] = Field(
         None,
         max_length=100,
-        description="Reason for scrap: adhesion, layer_shift, stringing, warping, nozzle_clog, damage, quality_fail, other"
+        description="Scrap reason code (required if quantity_scrapped > 0)"
+    )
+    scrap_notes: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Notes specific to the scrap event"
     )
     actual_run_minutes: Optional[int] = Field(None, ge=0, description="Override actual run time")
-    notes: Optional[str] = Field(None, description="Completion notes")
+    notes: Optional[str] = Field(None, description="General completion notes")
+    create_replacement: bool = Field(
+        default=False,
+        description="If True and scrapping, create a replacement production order"
+    )
 
 
 class OperationSkipRequest(BaseModel):

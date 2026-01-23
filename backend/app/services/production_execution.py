@@ -211,7 +211,10 @@ class ProductionExecutionService:
                 # Calculate what available will be after this update
                 new_available = float(inventory.on_hand_quantity) - new_allocated
 
-                # Create reservation transaction
+                # Create reservation transaction with cost for accounting
+                from app.services.inventory_service import get_effective_cost_per_inventory_unit
+                unit_cost = get_effective_cost_per_inventory_unit(component)
+                total_cost = Decimal(str(required_qty)) * unit_cost if unit_cost else None
                 transaction = InventoryTransaction(
                     product_id=line.component_id,
                     location_id=inventory.location_id,
@@ -219,6 +222,9 @@ class ProductionExecutionService:
                     reference_type="production_order",
                     reference_id=po.id,
                     quantity=Decimal(str(-required_qty)),  # Negative = reserved/out
+                    cost_per_unit=unit_cost,
+                    total_cost=total_cost,
+                    unit=component.unit,
                     notes=f"Reserved for {po.code}: {required_qty:.2f} units of {component_sku}",
                     created_by=created_by,
                 )
@@ -419,6 +425,7 @@ class ProductionExecutionService:
         production_cost_per_unit = get_effective_cost(product)
         
         # Create production transaction
+        total_cost = Decimal(str(good_quantity)) * production_cost_per_unit if production_cost_per_unit else None
         production_txn = InventoryTransaction(
             product_id=po.product_id,
             location_id=location_id,
@@ -427,6 +434,8 @@ class ProductionExecutionService:
             reference_id=po.id,
             quantity=Decimal(str(good_quantity)),
             cost_per_unit=production_cost_per_unit,  # Capture cost for accounting
+            total_cost=total_cost,
+            unit=product.unit or "EA",
             notes=f"Produced {good_quantity:.2f} units for {po.code}",
             created_by=created_by,
         )

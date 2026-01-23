@@ -90,193 +90,18 @@ function StartButton({ operation, productionOrderId, onSuccess, onError }) {
 }
 
 /**
- * Complete button with quantity input and validation
+ * Complete button - opens completion modal
  */
-function CompleteButton({ operation, productionOrderId, onSuccess, onError }) {
+function CompleteButton({ operation, onClick }) {
   const maxQty = Number(operation.quantity_input) || 1;
-  const [loading, setLoading] = useState(false);
-  const [showQtyInput, setShowQtyInput] = useState(false);
-  const [qtyGood, setQtyGood] = useState(maxQty);
-  const [qtyBad, setQtyBad] = useState(0);
-  const [validationError, setValidationError] = useState(null);
-  const token = localStorage.getItem('adminToken');
-
-  // Reset quantities when maxQty changes
-  useEffect(() => {
-    setQtyGood(maxQty);
-    setQtyBad(0);
-  }, [maxQty]);
-
-  // Validate quantities
-  const validateQuantities = () => {
-    const good = Number(qtyGood) || 0;
-    const bad = Number(qtyBad) || 0;
-    const total = good + bad;
-
-    if (good < 0 || bad < 0) {
-      return 'Quantities cannot be negative';
-    }
-    if (total > maxQty) {
-      return `Total (${total}) exceeds max allowed (${maxQty})`;
-    }
-    if (total === 0) {
-      return 'Total quantity must be greater than 0';
-    }
-    return null;
-  };
-
-  // Check validation on qty change
-  useEffect(() => {
-    setValidationError(validateQuantities());
-  }, [qtyGood, qtyBad]);
-
-  const handleComplete = async () => {
-    const error = validateQuantities();
-    if (error) {
-      setValidationError(error);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `${API_URL}/api/v1/production-orders/${productionOrderId}/operations/${operation.id}/complete`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            quantity_completed: Number(qtyGood),
-            quantity_scrapped: Number(qtyBad)
-          })
-        }
-      );
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.detail || 'Failed to complete operation');
-      }
-
-      setShowQtyInput(false);
-      onSuccess?.('Operation completed');
-    } catch (err) {
-      onError?.(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Handle quantity changes with auto-adjustment
-  const handleGoodChange = (value) => {
-    const good = Math.max(0, Number(value) || 0);
-    setQtyGood(good);
-    // Auto-adjust bad if total exceeds max
-    const currentBad = Number(qtyBad) || 0;
-    if (good + currentBad > maxQty) {
-      setQtyBad(Math.max(0, maxQty - good));
-    }
-  };
-
-  const handleBadChange = (value) => {
-    const bad = Math.max(0, Number(value) || 0);
-    setQtyBad(bad);
-    // Auto-adjust good if total exceeds max
-    const currentGood = Number(qtyGood) || 0;
-    if (currentGood + bad > maxQty) {
-      setQtyGood(Math.max(0, maxQty - bad));
-    }
-  };
-
-  // Show quantity input form
-  if (showQtyInput) {
-    const total = (Number(qtyGood) || 0) + (Number(qtyBad) || 0);
-    const isValid = !validationError;
-
-    return (
-      <div className="mt-2 p-3 bg-gray-800/50 rounded-lg border border-gray-700" onClick={(e) => e.stopPropagation()}>
-        {/* Header with max qty info */}
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs text-gray-400">
-            Input qty: <span className="text-white font-medium">{maxQty}</span>
-          </span>
-          <span className={`text-xs ${total === maxQty ? 'text-green-400' : total > maxQty ? 'text-red-400' : 'text-yellow-400'}`}>
-            Total: {total}/{maxQty}
-          </span>
-        </div>
-
-        {/* Quantity inputs */}
-        <div className="flex items-center gap-3 mb-2">
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-green-400">Good:</label>
-            <input
-              type="number"
-              min="0"
-              max={maxQty}
-              value={qtyGood}
-              onChange={(e) => handleGoodChange(e.target.value)}
-              className="w-16 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded text-white focus:border-green-500 focus:ring-1 focus:ring-green-500"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-          <div className="flex items-center gap-1.5">
-            <label className="text-xs text-red-400">Bad:</label>
-            <input
-              type="number"
-              min="0"
-              max={maxQty}
-              value={qtyBad}
-              onChange={(e) => handleBadChange(e.target.value)}
-              className="w-16 px-2 py-1 text-sm bg-gray-700 border border-gray-600 rounded text-white focus:border-red-500 focus:ring-1 focus:ring-red-500"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        </div>
-
-        {/* Validation error */}
-        {validationError && (
-          <div className="text-xs text-red-400 mb-2">
-            ⚠ {validationError}
-          </div>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleComplete();
-            }}
-            disabled={loading || !isValid}
-            className="flex-1 px-3 py-1.5 text-sm font-medium bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? 'Saving...' : `Complete (${Number(qtyGood) || 0} good)`}
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowQtyInput(false);
-              setQtyGood(maxQty);
-              setQtyBad(0);
-            }}
-            className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition-colors"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <button
       onClick={(e) => {
         e.stopPropagation();
-        setShowQtyInput(true);
+        onClick?.();
       }}
-      disabled={loading}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-green-600/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-600/30 disabled:opacity-50 transition-colors"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-green-600/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-600/30 transition-colors"
     >
       <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -307,6 +132,26 @@ function SkipButton({ onClick }) {
 }
 
 /**
+ * Scrap button (opens modal) - for running operations
+ */
+function ScrapButton({ onClick }) {
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-600/30 transition-colors"
+    >
+      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+      </svg>
+      Scrap
+    </button>
+  );
+}
+
+/**
  * Main component - shows appropriate buttons based on status
  */
 export default function OperationActions({
@@ -314,7 +159,9 @@ export default function OperationActions({
   productionOrderId,
   onSuccess,
   onError,
-  onSkipClick
+  onSkipClick,
+  onScrapClick,
+  onCompleteClick
 }) {
   if (!operation) return null;
 
@@ -340,14 +187,15 @@ export default function OperationActions({
         </>
       )}
 
-      {/* Running: Complete only */}
+      {/* Running: Complete and Scrap */}
       {status === 'running' && (
-        <CompleteButton
-          operation={operation}
-          productionOrderId={productionOrderId}
-          onSuccess={onSuccess}
-          onError={onError}
-        />
+        <>
+          <CompleteButton
+            operation={operation}
+            onClick={() => onCompleteClick?.(operation)}
+          />
+          <ScrapButton onClick={() => onScrapClick?.(operation)} />
+        </>
       )}
     </div>
   );

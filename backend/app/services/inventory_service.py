@@ -172,16 +172,24 @@ def get_allocations_by_production_order(
 # ============================================================================
 def get_effective_cost_per_inventory_unit(product: "Product") -> "Optional[Decimal]":
     """
-    Get the effective cost for a product, converted to cost per inventory unit.
+    Get the effective cost for a product in cost per inventory unit.
 
-    Product costs (standard_cost, average_cost, last_cost) are stored per the
-    PURCHASE unit (product.purchase_uom). When inventory tracks in a different
-    unit (product.unit), we must convert to $/storage_unit.
+    IMPORTANT: Different cost fields are stored differently:
+    - standard_cost: Stored per PURCHASE unit ($/KG) - needs conversion to $/G
+    - average_cost: Already stored per STORAGE unit ($/G) - NO conversion
+    - last_cost: Already stored per STORAGE unit ($/G) - NO conversion
 
-    Example:
+    This is because average_cost and last_cost are calculated from inventory
+    transactions which are already recorded in storage units.
+
+    Example (standard_cost):
         - Product has purchase_uom='KG', unit='G', standard_cost=20.00 ($/KG)
         - Returns: 0.02 ($/G)
         - So: 1000 G * $0.02/G = $20.00 (correct!)
+
+    Example (average_cost):
+        - Product has unit='G', average_cost=0.02 ($/G, already converted)
+        - Returns: 0.02 ($/G) - no conversion needed!
 
     Args:
         product: Product to get cost for
@@ -189,19 +197,27 @@ def get_effective_cost_per_inventory_unit(product: "Product") -> "Optional[Decim
     Returns:
         Cost per inventory unit (e.g., $/G), or None if no cost available
     """
-    base_cost = get_effective_cost(product)
-    if base_cost is None:
-        return None
+    method = (product.cost_method or "average").lower()
 
-    storage_unit = (product.unit or 'EA').upper().strip()
-    purchase_unit = (getattr(product, 'purchase_uom', None) or storage_unit).upper().strip()
+    # average_cost and last_cost are already stored in storage unit ($/G)
+    # Only standard_cost needs conversion from purchase unit
+    if method in ("average", "fifo", "last"):
+        if method == "average" and product.average_cost is not None:
+            return Decimal(str(product.average_cost))
+        if product.last_cost is not None:
+            return Decimal(str(product.last_cost))
+        # Fallback to standard if no average/last
 
-    # If purchase and storage units are the same, no conversion needed
-    if purchase_unit == storage_unit:
-        return base_cost
+    # standard_cost is stored in purchase unit - needs conversion
+    if product.standard_cost is not None:
+        base_cost = Decimal(str(product.standard_cost))
+        storage_unit = (product.unit or 'EA').upper().strip()
+        purchase_unit = (getattr(product, 'purchase_uom', None) or storage_unit).upper().strip()
+        if purchase_unit == storage_unit:
+            return base_cost
+        return convert_cost_for_unit(base_cost, purchase_unit, storage_unit)
 
-    # Convert cost from purchase unit to storage unit
-    return convert_cost_for_unit(base_cost, purchase_unit, storage_unit)
+    return None
 
 
 def convert_and_generate_notes(
@@ -431,6 +447,8 @@ def create_inventory_transaction(
                 )
 
     # Create transaction record
+    # total_cost = abs(quantity) * cost_per_unit for UI display
+    total_cost = abs(quantity) * cost_per_unit if cost_per_unit else None
     transaction = InventoryTransaction(
         product_id=product_id,
         location_id=location_id,
@@ -440,6 +458,7 @@ def create_inventory_transaction(
         reference_id=reference_id,
         notes=notes,
         cost_per_unit=cost_per_unit,
+        total_cost=total_cost,
         created_by=created_by,
         created_at=datetime.utcnow(),
         requires_approval=requires_approval,
@@ -565,6 +584,8 @@ def reserve_production_materials(
         inventory.updated_at = datetime.utcnow()
         
         # Create reservation transaction for audit trail
+        unit_cost = get_effective_cost_per_inventory_unit(component)
+        total_cost = abs(total_qty) * unit_cost if unit_cost else None
         txn = InventoryTransaction(
             product_id=line.component_id,
             location_id=location.id,
@@ -573,7 +594,9 @@ def reserve_production_materials(
             reference_type="production_order",
             reference_id=production_order.id,
             notes=f"Reserved for PO#{production_order.code}: {total_qty} {component_unit} of {component.name}",
-            cost_per_unit=get_effective_cost_per_inventory_unit(component),
+            cost_per_unit=unit_cost,
+            total_cost=total_cost,
+            unit=component_unit,
             created_by=created_by,
             created_at=datetime.utcnow(),
         )
@@ -652,7 +675,9 @@ def release_production_reservations(
             inventory.allocated_quantity = new_allocated
             inventory.updated_at = datetime.utcnow()
             
-            # Create release transaction for audit
+            # Create release transaction for audit - copy cost from original reservation
+            unit_cost = txn.cost_per_unit
+            total_cost = abs(release_qty) * unit_cost if unit_cost else None
             release_txn = InventoryTransaction(
                 product_id=txn.product_id,
                 location_id=txn.location_id,
@@ -661,6 +686,9 @@ def release_production_reservations(
                 reference_type="production_order",
                 reference_id=production_order.id,
                 notes=f"Released reservation for PO#{production_order.code}",
+                cost_per_unit=unit_cost,
+                total_cost=total_cost,
+                unit=txn.unit,
                 created_by=created_by,
                 created_at=datetime.utcnow(),
             )

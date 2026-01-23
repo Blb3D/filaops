@@ -160,6 +160,8 @@ export default function OperationRow({
   onActionSuccess,
   onActionError,
   onSkipClick,
+  onScrapClick,
+  onCompleteClick,
   onClick
 }) {
   const isClickable = onClick && ['pending', 'running'].includes(operation.status);
@@ -274,6 +276,8 @@ export default function OperationRow({
           onSuccess={onActionSuccess}
           onError={onActionError}
           onSkipClick={onSkipClick}
+          onScrapClick={onScrapClick}
+          onCompleteClick={onCompleteClick}
         />
       )}
     </div>

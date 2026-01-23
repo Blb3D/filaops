@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import ItemForm from "../../components/ItemForm";
 import MaterialForm from "../../components/MaterialForm";
 import RoutingEditor from "../../components/RoutingEditor";
 import StatCard from "../../components/StatCard";
 import { ItemCard } from "../../components/inventory/ItemCard";
+import ConfirmDialog from "../../components/ConfirmDialog";
 import { API_URL } from "../../config/api";
 import { useToast } from "../../components/Toast";
 import {
@@ -189,8 +189,13 @@ function BulkUpdateModal({ categories, selectedCount, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-md">
-        <h2 className="text-xl font-semibold text-white mb-4">
+      <div
+        className="bg-gray-900 border border-gray-800 rounded-xl p-6 w-full max-w-md"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bulk-update-modal-title"
+      >
+        <h2 id="bulk-update-modal-title" className="text-xl font-semibold text-white mb-4">
           Bulk Update {selectedCount} Item{selectedCount !== 1 ? "s" : ""}
         </h2>
         <p className="text-gray-400 text-sm mb-6">
@@ -361,9 +366,14 @@ function CategoryModal({ category, categories, onSave, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md">
+      <div
+        className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="category-modal-title"
+      >
         <div className="p-6 border-b border-gray-800">
-          <h2 className="text-xl font-bold text-white">
+          <h2 id="category-modal-title" className="text-xl font-bold text-white">
             {category ? "Edit Category" : "Add New Category"}
           </h2>
         </div>
@@ -513,7 +523,6 @@ function CategoryModal({ category, categories, onSave, onClose }) {
 }
 
 export default function AdminItems() {
-  const navigate = useNavigate();
   const toast = useToast();
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -578,6 +587,11 @@ export default function AdminItems() {
   const [adjustmentNotes, setAdjustmentNotes] = useState("");
   const [adjustingQty, setAdjustingQty] = useState(false);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+
+  // Confirm dialog states
+  const [showDeleteCategoryConfirm, setShowDeleteCategoryConfirm] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState(null);
+  const [showRecostConfirm, setShowRecostConfirm] = useState(false);
 
   // Adjustment reason codes
   const ADJUSTMENT_REASONS = [
@@ -834,18 +848,18 @@ export default function AdminItems() {
     });
   };
 
-  // Delete category handler
-  const handleDeleteCategory = async (category) => {
-    if (
-      !confirm(
-        `Delete category "${category.name}"? Items in this category will become uncategorized.`
-      )
-    ) {
-      return;
-    }
+  // Delete category handler - shows confirm dialog
+  const handleDeleteCategory = (category) => {
+    setCategoryToDelete(category);
+    setShowDeleteCategoryConfirm(true);
+  };
+
+  // Actual delete after confirmation
+  const confirmDeleteCategory = async () => {
+    if (!categoryToDelete) return;
     try {
       const res = await fetch(
-        `${API_URL}/api/v1/items/categories/${category.id}`,
+        `${API_URL}/api/v1/items/categories/${categoryToDelete.id}`,
         {
           method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
@@ -859,6 +873,9 @@ export default function AdminItems() {
       fetchCategories();
     } catch (err) {
       toast.error(err.message);
+    } finally {
+      setShowDeleteCategoryConfirm(false);
+      setCategoryToDelete(null);
     }
   };
 
@@ -1063,15 +1080,14 @@ export default function AdminItems() {
     }
   };
 
-  // Recost all items
-  const handleRecostAll = async () => {
-    if (
-      !confirm(
-        "Recost all items? This will update standard costs from BOM/Routing (manufactured) or average cost (purchased)."
-      )
-    ) {
-      return;
-    }
+  // Recost all items - shows confirm dialog
+  const handleRecostAll = () => {
+    setShowRecostConfirm(true);
+  };
+
+  // Actual recost after confirmation
+  const confirmRecostAll = async () => {
+    setShowRecostConfirm(false);
     setRecosting(true);
     setRecostResult(null);
     try {
@@ -1765,22 +1781,16 @@ export default function AdminItems() {
                         {(item.procurement_type === "make" ||
                           item.procurement_type === "make_or_buy") && (
                           <>
-                            <button
-                              onClick={() => navigate(`/admin/bom?product=${item.id}`)}
-                              className="text-purple-400 hover:text-purple-300 text-sm"
-                              title="Edit BOM"
-                            >
-                              BOM
-                            </button>
+                            {/* BOM button deprecated - materials now managed in Routing */}
                             <button
                               onClick={() => {
                                 setSelectedItemForRouting(item);
                                 setShowRoutingEditor(true);
                               }}
                               className="text-green-400 hover:text-green-300 text-sm"
-                              title="Edit Routing"
+                              title="Edit Routing & Materials (BOM is now integrated into Routing)"
                             >
-                              Route
+                              Route/BOM
                             </button>
                           </>
                         )}
@@ -1946,9 +1956,14 @@ export default function AdminItems() {
       {/* Adjustment Reason Modal */}
       {showAdjustmentModal && editingQtyItem && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6">
+          <div
+            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="adjustment-modal-title"
+          >
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold text-white">
+              <h2 id="adjustment-modal-title" className="text-xl font-bold text-white">
                 Adjustment Reason
               </h2>
               <button
@@ -2034,6 +2049,31 @@ export default function AdminItems() {
           </div>
         </div>
       )}
+
+      {/* Delete Category Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteCategoryConfirm}
+        title="Delete Category"
+        message={`Delete category "${categoryToDelete?.name}"? Items in this category will become uncategorized.`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onConfirm={confirmDeleteCategory}
+        onCancel={() => {
+          setShowDeleteCategoryConfirm(false);
+          setCategoryToDelete(null);
+        }}
+      />
+
+      {/* Recost All Confirm Dialog */}
+      <ConfirmDialog
+        isOpen={showRecostConfirm}
+        title="Recost All Items"
+        message="This will update standard costs from BOM/Routing (manufactured) or average cost (purchased). This action may take a moment."
+        confirmLabel="Recost All"
+        confirmVariant="warning"
+        onConfirm={confirmRecostAll}
+        onCancel={() => setShowRecostConfirm(false)}
+      />
 
       {/* Back to Top Button */}
       {showBackToTop && (

@@ -87,6 +87,9 @@ class Product(Base):
     # 3D Printing
     gcode_file_path = Column(String(500), nullable=True)  # Path to GCODE file
 
+    # Product Image
+    image_url = Column(String(500), nullable=True)  # URL to product image (Portal display, Shopify sync)
+
     # Visibility & Sales Channels
     is_public = Column(Boolean, default=True)  # Show on public storefront?
     sales_channel = Column(String(20), default='public')  # 'public' | 'b2b' | 'internal'
@@ -124,6 +127,9 @@ class Product(Base):
 
     # Catalog relationships (for B2B product visibility)
     catalog_products = relationship("CatalogProduct", back_populates="product", cascade="all, delete-orphan")
+
+    # Shopify integration
+    shopify_mapping = relationship("ShopifyProductMapping", back_populates="product", uselist=False)
 
     def __repr__(self):
         return f"<Product {self.sku}: {self.name}>"
