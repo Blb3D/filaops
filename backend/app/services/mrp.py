@@ -637,6 +637,10 @@ class MRPService:
             # NOTE: We use on_hand (not available) because allocations represent
             # the SAME demand we're calculating - using available would double-count.
             # Allocations are for reservation (preventing over-promising), not MRP.
+            # Known limitation: this assumes allocations come only from demand included
+            # in the current MRP run. Allocations from outside this scope (for example,
+            # production orders beyond the planning horizon or manual reservations)
+            # will still be treated as available here, which can lead to over-promising.
             available_supply = inv["on_hand"] + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 
