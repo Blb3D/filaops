@@ -28,9 +28,7 @@ from app.models.purchasing_event import PurchasingEvent
 from app.models.shipping_event import ShippingEvent
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
 from app.models.maintenance import MaintenanceLog
-from app.models.price_level import PriceLevel
 from app.models.customer import Customer
-from app.models.catalog import Catalog, CatalogProduct, CustomerCatalog
 from app.models.accounting import GLAccount, GLFiscalPeriod, GLJournalEntry, GLJournalEntryLine
 from app.models.entity_member import EntityMember
 from app.models.user_customer_access import UserCustomerAccess
@@ -108,11 +106,7 @@ __all__ = [
     # Maintenance
     "MaintenanceLog",
     # CRM / B2B
-    "PriceLevel",
     "Customer",
-    "Catalog",
-    "CatalogProduct",
-    "CustomerCatalog",
     # Accounting / GL
     "GLAccount",
     "GLFiscalPeriod",

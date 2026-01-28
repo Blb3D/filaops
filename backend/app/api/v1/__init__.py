@@ -19,9 +19,7 @@ from app.api.v1.endpoints import (
     po_documents,
     low_stock,
     vendor_items,
-    invoice_import,
     exports,
-    amazon_import,
     work_centers,
     resources,
     routings,
@@ -92,14 +90,8 @@ router.include_router(low_stock.router, prefix="/purchase-orders", tags=["purcha
 # Vendor Items (SKU mapping for invoice parsing)
 router.include_router(vendor_items.router, prefix="/purchase-orders", tags=["purchase-orders"])
 
-# Invoice Import (parse invoices to create POs)
-router.include_router(invoice_import.router, prefix="/purchase-orders", tags=["purchase-orders"])
-
 # Exports (QuickBooks, etc.)
 router.include_router(exports.router, prefix="/exports", tags=["exports"])
-
-# Amazon Import
-router.include_router(amazon_import.router, prefix="/import/amazon", tags=["import"])
 
 # Work Centers
 router.include_router(work_centers.router, prefix="/work-centers", tags=["manufacturing"])

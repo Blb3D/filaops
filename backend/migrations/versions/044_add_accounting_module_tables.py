@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "044_gl_tables"
-down_revision = "042_add_catalog_system"
+down_revision = "040_update_material_item_types"
 branch_labels = None
 depends_on = None
 
