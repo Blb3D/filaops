@@ -3,9 +3,8 @@ Manufacturing Routes Models
 
 Work Centers, Resources, Routings, and Routing Operations.
 """
-from sqlalchemy import (
-    Column, Integer, String, Numeric, Boolean, DateTime, Text, Date, ForeignKey
-)
+
+from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, Text, Date, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -18,6 +17,7 @@ class Resource(Base):
 
     Allows tracking of individual machines, their status, and Bambu integration.
     """
+
     __tablename__ = "resources"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -77,6 +77,7 @@ class Routing(Base):
     Like a BOM, routings have versions. Each product should have one active routing.
     Templates (is_template=True) have no product_id and can be assigned to products.
     """
+
     __tablename__ = "routings"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -105,8 +106,9 @@ class Routing(Base):
 
     # Relationships
     product = relationship("Product", back_populates="routings")
-    operations = relationship("RoutingOperation", back_populates="routing",
-                              cascade="all, delete-orphan", order_by="RoutingOperation.sequence")
+    operations = relationship(
+        "RoutingOperation", back_populates="routing", cascade="all, delete-orphan", order_by="RoutingOperation.sequence"
+    )
 
     def __repr__(self):
         return f"<Routing {self.code} for product_id={self.product_id}>"
@@ -145,6 +147,7 @@ class RoutingOperation(Base):
     - QC Inspect (QC Station, 5 min)
     - Assembly (Assembly Station, 10 min)
     """
+
     __tablename__ = "routing_operations"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -188,8 +191,12 @@ class RoutingOperation(Base):
     routing = relationship("Routing", back_populates="operations")
     work_center = relationship("WorkCenter", back_populates="routing_operations")
     predecessor = relationship("RoutingOperation", remote_side=[id], foreign_keys=[predecessor_operation_id])
-    materials = relationship("RoutingOperationMaterial", back_populates="routing_operation",
-                            cascade="all, delete-orphan", order_by="RoutingOperationMaterial.id")
+    materials = relationship(
+        "RoutingOperationMaterial",
+        back_populates="routing_operation",
+        cascade="all, delete-orphan",
+        order_by="RoutingOperationMaterial.id",
+    )
 
     def __repr__(self):
         return f"<RoutingOperation {self.sequence}: {self.operation_name}>"
@@ -198,10 +205,10 @@ class RoutingOperation(Base):
     def total_time_minutes(self):
         """Total time for this operation (setup + run + wait + move)"""
         return (
-            float(self.setup_time_minutes or 0) +
-            float(self.run_time_minutes or 0) +
-            float(self.wait_time_minutes or 0) +
-            float(self.move_time_minutes or 0)
+            float(self.setup_time_minutes or 0)
+            + float(self.run_time_minutes or 0)
+            + float(self.wait_time_minutes or 0)
+            + float(self.move_time_minutes or 0)
         )
 
     @property
@@ -226,54 +233,58 @@ class RoutingOperation(Base):
 class RoutingOperationMaterial(Base):
     """
     Material required for a specific routing operation.
-    
+
     This is the TEMPLATE - defines what materials are needed per unit.
-    When a Production Order is released, these are copied to 
+    When a Production Order is released, these are copied to
     ProductionOrderOperationMaterial with calculated quantities.
-    
+
     Examples:
     - OP-10 Print: Black PLA 37g per unit
     - OP-40 Pack: Part Label 1 EA per unit
     - OP-50 Ship: 6x6x6 Box 1 EA per unit
     """
+
     __tablename__ = "routing_operation_materials"
 
     id = Column(Integer, primary_key=True, index=True)
-    routing_operation_id = Column(Integer, ForeignKey("routing_operations.id", ondelete="CASCADE"), 
-                                  nullable=False, index=True)
+    routing_operation_id = Column(
+        Integer, ForeignKey("routing_operations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     component_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
-    
+
     # Quantity per unit/batch/order
     quantity = Column(Numeric(18, 6), nullable=False)
     quantity_per = Column(String(20), default="unit", nullable=False)  # unit, batch, order
     unit = Column(String(20), default="EA", nullable=False)
-    
+
     # Scrap/waste allowance (percentage)
     scrap_factor = Column(Numeric(5, 2), default=0, nullable=True)
-    
+
     # Flags
     is_cost_only = Column(Boolean, default=False, nullable=False)  # Don't consume inventory
-    is_optional = Column(Boolean, default=False, nullable=False)   # Not required to complete op
-    
+    is_optional = Column(Boolean, default=False, nullable=False)  # Not required to complete op
+
     # Notes
     notes = Column(Text, nullable=True)
-    
+
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     routing_operation = relationship("RoutingOperation", back_populates="materials")
     component = relationship("Product", foreign_keys=[component_id])
 
     def __repr__(self):
-        return f"<RoutingOperationMaterial {self.component.sku if self.component else 'N/A'}: {self.quantity} {self.unit}>"
+        return (
+            f"<RoutingOperationMaterial {self.component.sku if self.component else 'N/A'}: {self.quantity} {self.unit}>"
+        )
 
     @property
     def unit_cost(self):
         """
         Cost per unit of this material.
-        
+
         Component costs are stored per USAGE unit (e.g., $/G for filament).
         All UOM conversion happens at PO receiving, so no conversion needed here.
         """
@@ -294,19 +305,19 @@ class RoutingOperationMaterial(Base):
     def calculate_required_quantity(self, order_quantity: int) -> float:
         """
         Calculate total quantity required for a production order.
-        
+
         Args:
             order_quantity: Number of units being produced
-            
+
         Returns:
             Total quantity needed including scrap allowance
         """
         base_qty = float(self.quantity or 0)
         scrap = float(self.scrap_factor or 0) / 100
-        
-        if self.quantity_per == 'unit':
+
+        if self.quantity_per == "unit":
             gross_qty = base_qty * order_quantity
         else:  # batch or order
             gross_qty = base_qty
-        
+
         return gross_qty * (1 + scrap)

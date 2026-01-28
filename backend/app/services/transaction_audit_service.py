@@ -10,6 +10,7 @@ Expected Transaction Flow (per ACCOUNTING_ARCHITECTURE.md):
 3. Shipping: consumption (packaging), adjustment (finished goods out)
 4. Scrap/Fail: scrap transaction (write off WIP)
 """
+
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -25,6 +26,7 @@ from app.models.bom import BOM
 @dataclass
 class TransactionGap:
     """Represents a missing or incomplete transaction"""
+
     order_id: int
     order_number: str
     order_status: str
@@ -40,6 +42,7 @@ class TransactionGap:
 @dataclass
 class AuditResult:
     """Results of a transaction audit"""
+
     audit_timestamp: datetime
     total_orders_checked: int
     orders_with_gaps: int
@@ -79,9 +82,7 @@ class TransactionAuditService:
     def __init__(self, db: Session):
         self.db = db
 
-    def run_full_audit(self,
-                       include_statuses: List[str] = None,
-                       order_ids: List[int] = None) -> AuditResult:
+    def run_full_audit(self, include_statuses: List[str] = None, order_ids: List[int] = None) -> AuditResult:
         """
         Run a full audit of all orders or specific orders.
 
@@ -105,9 +106,7 @@ class TransactionAuditService:
             query = query.filter(SalesOrder.status.in_(include_statuses))
         else:
             # Default: check orders that should have transactions
-            query = query.filter(SalesOrder.status.in_([
-                'in_production', 'ready_to_ship', 'shipped', 'delivered'
-            ]))
+            query = query.filter(SalesOrder.status.in_(["in_production", "ready_to_ship", "shipped", "delivered"]))
 
         orders = query.all()
         result.total_orders_checked = len(orders)
@@ -134,23 +133,23 @@ class TransactionAuditService:
         gaps = []
 
         # Get production orders for this sales order
-        production_orders = self.db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order.id
-        ).all()
+        production_orders = self.db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order.id).all()
 
-        if not production_orders and order.status in ['in_production', 'ready_to_ship', 'shipped']:
-            gaps.append(TransactionGap(
-                order_id=order.id,
-                order_number=order.order_number,
-                order_status=order.status,
-                production_order_id=None,
-                production_status=None,
-                gap_type='missing_production_order',
-                expected_product_id=None,
-                expected_sku=None,
-                expected_quantity=None,
-                details=f"Order {order.order_number} is {order.status} but has no production order"
-            ))
+        if not production_orders and order.status in ["in_production", "ready_to_ship", "shipped"]:
+            gaps.append(
+                TransactionGap(
+                    order_id=order.id,
+                    order_number=order.order_number,
+                    order_status=order.status,
+                    production_order_id=None,
+                    production_status=None,
+                    gap_type="missing_production_order",
+                    expected_product_id=None,
+                    expected_sku=None,
+                    expected_quantity=None,
+                    details=f"Order {order.order_number} is {order.status} but has no production order",
+                )
+            )
             return gaps
 
         for po in production_orders:
@@ -166,28 +165,30 @@ class TransactionAuditService:
         # Get BOM for this production order
         bom = self._get_bom_for_po(po)
 
-        if not bom and po.status not in ['pending', 'scheduled']:
-            gaps.append(TransactionGap(
-                order_id=order.id,
-                order_number=order.order_number,
-                order_status=order.status,
-                production_order_id=po.id,
-                production_status=po.status,
-                gap_type='missing_bom',
-                expected_product_id=po.product_id,
-                expected_sku=None,
-                expected_quantity=None,
-                details=f"Production order {po.code} has no BOM"
-            ))
+        if not bom and po.status not in ["pending", "scheduled"]:
+            gaps.append(
+                TransactionGap(
+                    order_id=order.id,
+                    order_number=order.order_number,
+                    order_status=order.status,
+                    production_order_id=po.id,
+                    production_status=po.status,
+                    gap_type="missing_bom",
+                    expected_product_id=po.product_id,
+                    expected_sku=None,
+                    expected_quantity=None,
+                    details=f"Production order {po.code} has no BOM",
+                )
+            )
             return gaps
 
         # Check transactions based on production order status
-        if po.status in ['in_progress', 'printed', 'completed']:
+        if po.status in ["in_progress", "printed", "completed"]:
             # Should have reservations from start_production
             reservation_gaps = self._check_reservations(order, po, bom)
             gaps.extend(reservation_gaps)
 
-        if po.status in ['printed', 'completed']:
+        if po.status in ["printed", "completed"]:
             # Should have material consumption from complete_print
             consumption_gaps = self._check_material_consumption(order, po, bom)
             gaps.extend(consumption_gaps)
@@ -196,7 +197,7 @@ class TransactionAuditService:
             receipt_gaps = self._check_finished_goods_receipt(order, po)
             gaps.extend(receipt_gaps)
 
-        if order.status == 'shipped':
+        if order.status == "shipped":
             # Should have packaging consumption from buy_label
             packaging_gaps = self._check_packaging_consumption(order, po, bom)
             gaps.extend(packaging_gaps)
@@ -208,10 +209,7 @@ class TransactionAuditService:
         if po.bom_id:
             return self.db.query(BOM).filter(BOM.id == po.bom_id).first()
         elif po.product_id:
-            return self.db.query(BOM).filter(
-                BOM.product_id == po.product_id,
-                BOM.active.is_(True)
-            ).first()
+            return self.db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
         return None
 
     def _check_reservations(self, order: SalesOrder, po: ProductionOrder, bom: Optional[BOM]) -> List[TransactionGap]:
@@ -225,8 +223,8 @@ class TransactionAuditService:
 
         for line in bom.lines:
             # Check production-stage items (materials)
-            consume_stage = getattr(line, 'consume_stage', 'production')
-            if consume_stage != 'production':
+            consume_stage = getattr(line, "consume_stage", "production")
+            if consume_stage != "production":
                 continue
 
             # Skip non-inventory cost items - they're for job costing, not physical inventory
@@ -236,33 +234,42 @@ class TransactionAuditService:
                 continue
 
             # Look for reservation transaction
-            reservation = self.db.query(InventoryTransaction).filter(
-                InventoryTransaction.reference_type == 'production_order',
-                InventoryTransaction.reference_id == po.id,
-                InventoryTransaction.product_id == line.component_id,
-                InventoryTransaction.transaction_type == 'reservation'
-            ).first()
+            reservation = (
+                self.db.query(InventoryTransaction)
+                .filter(
+                    InventoryTransaction.reference_type == "production_order",
+                    InventoryTransaction.reference_id == po.id,
+                    InventoryTransaction.product_id == line.component_id,
+                    InventoryTransaction.transaction_type == "reservation",
+                )
+                .first()
+            )
 
             if not reservation:
                 from app.models.product import Product
+
                 component = self.db.query(Product).filter(Product.id == line.component_id).first()
 
-                gaps.append(TransactionGap(
-                    order_id=order.id,
-                    order_number=order.order_number,
-                    order_status=order.status,
-                    production_order_id=po.id,
-                    production_status=po.status,
-                    gap_type='missing_material_reservation',
-                    expected_product_id=line.component_id,
-                    expected_sku=component.sku if component else None,
-                    expected_quantity=line.quantity,
-                    details=f"Missing reservation for {component.sku if component else line.component_id}"
-                ))
+                gaps.append(
+                    TransactionGap(
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        order_status=order.status,
+                        production_order_id=po.id,
+                        production_status=po.status,
+                        gap_type="missing_material_reservation",
+                        expected_product_id=line.component_id,
+                        expected_sku=component.sku if component else None,
+                        expected_quantity=line.quantity,
+                        details=f"Missing reservation for {component.sku if component else line.component_id}",
+                    )
+                )
 
         return gaps
 
-    def _check_material_consumption(self, order: SalesOrder, po: ProductionOrder, bom: Optional[BOM]) -> List[TransactionGap]:
+    def _check_material_consumption(
+        self, order: SalesOrder, po: ProductionOrder, bom: Optional[BOM]
+    ) -> List[TransactionGap]:
         """Check that material consumption transactions exist after print completion."""
         gaps = []
 
@@ -272,8 +279,8 @@ class TransactionAuditService:
         from app.models.product import Product
 
         for line in bom.lines:
-            consume_stage = getattr(line, 'consume_stage', 'production')
-            if consume_stage != 'production':
+            consume_stage = getattr(line, "consume_stage", "production")
+            if consume_stage != "production":
                 continue
 
             # Skip non-inventory cost items (SVC-*, MFG-*)
@@ -281,29 +288,36 @@ class TransactionAuditService:
             if component and component.sku.startswith(("SVC-", "MFG-")):
                 continue
 
-            consumption = self.db.query(InventoryTransaction).filter(
-                InventoryTransaction.reference_type == 'production_order',
-                InventoryTransaction.reference_id == po.id,
-                InventoryTransaction.product_id == line.component_id,
-                InventoryTransaction.transaction_type == 'consumption'
-            ).first()
+            consumption = (
+                self.db.query(InventoryTransaction)
+                .filter(
+                    InventoryTransaction.reference_type == "production_order",
+                    InventoryTransaction.reference_id == po.id,
+                    InventoryTransaction.product_id == line.component_id,
+                    InventoryTransaction.transaction_type == "consumption",
+                )
+                .first()
+            )
 
             if not consumption:
                 from app.models.product import Product
+
                 component = self.db.query(Product).filter(Product.id == line.component_id).first()
 
-                gaps.append(TransactionGap(
-                    order_id=order.id,
-                    order_number=order.order_number,
-                    order_status=order.status,
-                    production_order_id=po.id,
-                    production_status=po.status,
-                    gap_type='missing_material_consumption',
-                    expected_product_id=line.component_id,
-                    expected_sku=component.sku if component else None,
-                    expected_quantity=line.quantity,
-                    details=f"Missing consumption for {component.sku if component else line.component_id}"
-                ))
+                gaps.append(
+                    TransactionGap(
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        order_status=order.status,
+                        production_order_id=po.id,
+                        production_status=po.status,
+                        gap_type="missing_material_consumption",
+                        expected_product_id=line.component_id,
+                        expected_sku=component.sku if component else None,
+                        expected_quantity=line.quantity,
+                        details=f"Missing consumption for {component.sku if component else line.component_id}",
+                    )
+                )
 
         return gaps
 
@@ -312,32 +326,41 @@ class TransactionAuditService:
         gaps = []
 
         # Look for receipt of finished goods
-        receipt = self.db.query(InventoryTransaction).filter(
-            InventoryTransaction.reference_type == 'production_order',
-            InventoryTransaction.reference_id == po.id,
-            InventoryTransaction.transaction_type == 'receipt'
-        ).first()
+        receipt = (
+            self.db.query(InventoryTransaction)
+            .filter(
+                InventoryTransaction.reference_type == "production_order",
+                InventoryTransaction.reference_id == po.id,
+                InventoryTransaction.transaction_type == "receipt",
+            )
+            .first()
+        )
 
         if not receipt:
             from app.models.product import Product
+
             product = self.db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
 
-            gaps.append(TransactionGap(
-                order_id=order.id,
-                order_number=order.order_number,
-                order_status=order.status,
-                production_order_id=po.id,
-                production_status=po.status,
-                gap_type='missing_finished_goods_receipt',
-                expected_product_id=po.product_id,
-                expected_sku=product.sku if product else None,
-                expected_quantity=Decimal(str(po.quantity)),
-                details=f"No finished goods receipt for {product.sku if product else 'unknown product'}"
-            ))
+            gaps.append(
+                TransactionGap(
+                    order_id=order.id,
+                    order_number=order.order_number,
+                    order_status=order.status,
+                    production_order_id=po.id,
+                    production_status=po.status,
+                    gap_type="missing_finished_goods_receipt",
+                    expected_product_id=po.product_id,
+                    expected_sku=product.sku if product else None,
+                    expected_quantity=Decimal(str(po.quantity)),
+                    details=f"No finished goods receipt for {product.sku if product else 'unknown product'}",
+                )
+            )
 
         return gaps
 
-    def _check_packaging_consumption(self, order: SalesOrder, po: ProductionOrder, bom: Optional[BOM]) -> List[TransactionGap]:
+    def _check_packaging_consumption(
+        self, order: SalesOrder, po: ProductionOrder, bom: Optional[BOM]
+    ) -> List[TransactionGap]:
         """Check that shipping-stage items (packaging) were consumed at shipping."""
         gaps = []
 
@@ -345,34 +368,41 @@ class TransactionAuditService:
             return gaps
 
         for line in bom.lines:
-            consume_stage = getattr(line, 'consume_stage', 'production')
-            if consume_stage != 'shipping':
+            consume_stage = getattr(line, "consume_stage", "production")
+            if consume_stage != "shipping":
                 continue
 
             # Look for consumption at shipping (reference_type = 'shipment')
-            consumption = self.db.query(InventoryTransaction).filter(
-                InventoryTransaction.reference_type.in_(['shipment', 'consolidated_shipment']),
-                InventoryTransaction.reference_id == order.id,
-                InventoryTransaction.product_id == line.component_id,
-                InventoryTransaction.transaction_type == 'consumption'
-            ).first()
+            consumption = (
+                self.db.query(InventoryTransaction)
+                .filter(
+                    InventoryTransaction.reference_type.in_(["shipment", "consolidated_shipment"]),
+                    InventoryTransaction.reference_id == order.id,
+                    InventoryTransaction.product_id == line.component_id,
+                    InventoryTransaction.transaction_type == "consumption",
+                )
+                .first()
+            )
 
             if not consumption:
                 from app.models.product import Product
+
                 component = self.db.query(Product).filter(Product.id == line.component_id).first()
 
-                gaps.append(TransactionGap(
-                    order_id=order.id,
-                    order_number=order.order_number,
-                    order_status=order.status,
-                    production_order_id=po.id,
-                    production_status=po.status,
-                    gap_type='missing_packaging_consumption',
-                    expected_product_id=line.component_id,
-                    expected_sku=component.sku if component else None,
-                    expected_quantity=line.quantity,
-                    details=f"Missing packaging consumption for {component.sku if component else line.component_id}"
-                ))
+                gaps.append(
+                    TransactionGap(
+                        order_id=order.id,
+                        order_number=order.order_number,
+                        order_status=order.status,
+                        production_order_id=po.id,
+                        production_status=po.status,
+                        gap_type="missing_packaging_consumption",
+                        expected_product_id=line.component_id,
+                        expected_sku=component.sku if component else None,
+                        expected_quantity=line.quantity,
+                        details=f"Missing packaging consumption for {component.sku if component else line.component_id}",
+                    )
+                )
 
         return gaps
 
@@ -390,21 +420,29 @@ class TransactionAuditService:
             return []
 
         # Get production orders
-        production_orders = self.db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order_id
-        ).all()
+        production_orders = self.db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()
 
         po_ids = [po.id for po in production_orders]
 
         # Get all related transactions
-        transactions = self.db.query(InventoryTransaction).filter(
-            # Production order related
-            ((InventoryTransaction.reference_type == 'production_order') &
-             (InventoryTransaction.reference_id.in_(po_ids))) |
-            # Shipment related
-            ((InventoryTransaction.reference_type.in_(['shipment', 'consolidated_shipment'])) &
-             (InventoryTransaction.reference_id == order_id))
-        ).order_by(InventoryTransaction.created_at).all()
+        transactions = (
+            self.db.query(InventoryTransaction)
+            .filter(
+                # Production order related
+                (
+                    (InventoryTransaction.reference_type == "production_order")
+                    & (InventoryTransaction.reference_id.in_(po_ids))
+                )
+                |
+                # Shipment related
+                (
+                    (InventoryTransaction.reference_type.in_(["shipment", "consolidated_shipment"]))
+                    & (InventoryTransaction.reference_id == order_id)
+                )
+            )
+            .order_by(InventoryTransaction.created_at)
+            .all()
+        )
 
         from app.models.product import Product
 
@@ -412,15 +450,17 @@ class TransactionAuditService:
         for txn in transactions:
             product = self.db.query(Product).filter(Product.id == txn.product_id).first()
 
-            timeline.append({
-                "timestamp": txn.created_at.isoformat() if txn.created_at else None,
-                "transaction_type": txn.transaction_type,
-                "reference_type": txn.reference_type,
-                "reference_id": txn.reference_id,
-                "product_id": txn.product_id,
-                "product_sku": product.sku if product else None,
-                "quantity": float(txn.quantity) if txn.quantity else 0,
-                "notes": txn.notes,
-            })
+            timeline.append(
+                {
+                    "timestamp": txn.created_at.isoformat() if txn.created_at else None,
+                    "transaction_type": txn.transaction_type,
+                    "reference_type": txn.reference_type,
+                    "reference_id": txn.reference_id,
+                    "product_id": txn.product_id,
+                    "product_sku": product.sku if product else None,
+                    "quantity": float(txn.quantity) if txn.quantity else 0,
+                    "notes": txn.notes,
+                }
+            )
 
         return timeline

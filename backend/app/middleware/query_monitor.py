@@ -6,6 +6,7 @@ Monitors database query performance and logs slow queries for optimization.
 Sprint 1 - Agent 1: Backend Performance
 Target: Log queries >1s, warn on queries >500ms
 """
+
 import time
 import logging
 from typing import Callable
@@ -53,14 +54,12 @@ class QueryPerformanceMonitor(BaseHTTPMiddleware):
                 log_level,
                 f"Request performance: {request.method} {request.url.path} | "
                 f"Total: {total_time:.3f}s | Queries: {query_count} ({query_time:.3f}s) | "
-                f"Slow queries: {len(slow_queries)}"
+                f"Slow queries: {len(slow_queries)}",
             )
 
             # Log details of slow queries
             for sql, duration in slow_queries:
-                logger.error(
-                    f"SLOW QUERY ({duration:.3f}s): {sql[:200]}{'...' if len(sql) > 200 else ''}"
-                )
+                logger.error(f"SLOW QUERY ({duration:.3f}s): {sql[:200]}{'...' if len(sql) > 200 else ''}")
 
         # Add performance headers for debugging
         response.headers["X-Query-Count"] = str(query_count)
@@ -93,13 +92,9 @@ def setup_query_logging(engine: Engine):
 
         # Log slow queries
         if total > SLOW_QUERY_THRESHOLD:
-            logger.error(
-                f"SLOW QUERY ({total:.3f}s): {statement[:500]}{'...' if len(statement) > 500 else ''}"
-            )
+            logger.error(f"SLOW QUERY ({total:.3f}s): {statement[:500]}{'...' if len(statement) > 500 else ''}")
         elif total > WARN_QUERY_THRESHOLD:
-            logger.warning(
-                f"Slow query ({total:.3f}s): {statement[:200]}{'...' if len(statement) > 200 else ''}"
-            )
+            logger.warning(f"Slow query ({total:.3f}s): {statement[:200]}{'...' if len(statement) > 200 else ''}")
 
         # Track query performance in request context (if available)
         # This allows per-request aggregation of query stats

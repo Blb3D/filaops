@@ -55,15 +55,17 @@ class KlipperAdapter(PrinterDiscoveryAdapter):
                 def add_service(self, zc, type_, name):
                     info = zc.get_service_info(type_, name)
                     if info:
-                        self.found.append({
-                            "name": name,
-                            "addresses": [socket.inet_ntoa(addr) for addr in info.addresses],
-                            "port": info.port,
-                            "properties": {
-                                k.decode(): v.decode() if isinstance(v, bytes) else v
-                                for k, v in info.properties.items()
+                        self.found.append(
+                            {
+                                "name": name,
+                                "addresses": [socket.inet_ntoa(addr) for addr in info.addresses],
+                                "port": info.port,
+                                "properties": {
+                                    k.decode(): v.decode() if isinstance(v, bytes) else v
+                                    for k, v in info.properties.items()
+                                },
                             }
-                        })
+                        )
 
                 def remove_service(self, zc, type_, name):
                     pass
@@ -106,10 +108,7 @@ class KlipperAdapter(PrinterDiscoveryAdapter):
 
         return discovered
 
-    async def test_connection(
-        self,
-        config: PrinterConnectionConfig
-    ) -> tuple[bool, Optional[str]]:
+    async def test_connection(self, config: PrinterConnectionConfig) -> tuple[bool, Optional[str]]:
         """Test connection to Moonraker API"""
         if not config.ip_address:
             return False, "IP address is required"
@@ -147,10 +146,7 @@ class KlipperAdapter(PrinterDiscoveryAdapter):
         except Exception as e:
             return False, str(e)
 
-    async def get_status(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterStatus]:
+    async def get_status(self, config: PrinterConnectionConfig) -> Optional[PrinterStatus]:
         """Get printer status from Moonraker API"""
         if not config.ip_address:
             return PrinterStatus.OFFLINE
@@ -188,10 +184,7 @@ class KlipperAdapter(PrinterDiscoveryAdapter):
             logger.debug(f"Error getting Klipper status: {e}")
             return PrinterStatus.OFFLINE
 
-    async def get_capabilities(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterCapabilities]:
+    async def get_capabilities(self, config: PrinterConnectionConfig) -> Optional[PrinterCapabilities]:
         """Query Moonraker for printer capabilities"""
         if not config.ip_address:
             return None

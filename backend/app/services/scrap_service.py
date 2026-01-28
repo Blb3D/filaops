@@ -23,6 +23,7 @@ Usage:
     )
     db.commit()
 """
+
 import logging
 from datetime import datetime
 from decimal import Decimal
@@ -48,17 +49,14 @@ logger = logging.getLogger(__name__)
 
 class ScrapError(Exception):
     """Custom exception for scrap processing errors."""
+
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
         super().__init__(self.message)
 
 
-def get_operation_with_po(
-    db: Session,
-    po_id: int,
-    op_id: int
-) -> Tuple[ProductionOrder, ProductionOrderOperation]:
+def get_operation_with_po(db: Session, po_id: int, op_id: int) -> Tuple[ProductionOrder, ProductionOrderOperation]:
     """
     Get operation and validate it belongs to the specified PO.
 
@@ -77,17 +75,13 @@ def get_operation_with_po(
         raise ScrapError(f"Operation {op_id} not found", 404)
 
     if op.production_order_id != po_id:
-        raise ScrapError(
-            f"Operation {op_id} does not belong to production order {po_id}",
-            400
-        )
+        raise ScrapError(f"Operation {op_id} does not belong to production order {po_id}", 400)
 
     return po, op
 
 
 def get_prior_operations_inclusive(
-    po: ProductionOrder,
-    target_op: ProductionOrderOperation
+    po: ProductionOrder, target_op: ProductionOrderOperation
 ) -> List[ProductionOrderOperation]:
     """
     Get all operations up to and including the target operation.
@@ -152,9 +146,11 @@ def calculate_scrap_cascade(
 
     for affected_op in affected_ops:
         # Get materials for this operation
-        op_materials = db.query(ProductionOrderOperationMaterial).filter(
-            ProductionOrderOperationMaterial.production_order_operation_id == affected_op.id
-        ).all()
+        op_materials = (
+            db.query(ProductionOrderOperationMaterial)
+            .filter(ProductionOrderOperationMaterial.production_order_operation_id == affected_op.id)
+            .all()
+        )
 
         for mat in op_materials:
             # Get the component product
@@ -180,18 +176,20 @@ def calculate_scrap_cascade(
             cost = scrap_qty * unit_cost
             total_cost += cost
 
-            materials_consumed.append({
-                "operation_id": affected_op.id,
-                "operation_sequence": affected_op.sequence,
-                "operation_name": affected_op.operation_name,
-                "component_id": mat.component_id,
-                "component_sku": component.sku,
-                "component_name": component.name,
-                "quantity": float(scrap_qty),
-                "unit": mat.unit or "EA",
-                "unit_cost": float(unit_cost),
-                "cost": float(cost),
-            })
+            materials_consumed.append(
+                {
+                    "operation_id": affected_op.id,
+                    "operation_sequence": affected_op.sequence,
+                    "operation_name": affected_op.operation_name,
+                    "component_id": mat.component_id,
+                    "component_sku": component.sku,
+                    "component_name": component.name,
+                    "quantity": float(scrap_qty),
+                    "unit": mat.unit or "EA",
+                    "unit_cost": float(unit_cost),
+                    "cost": float(cost),
+                }
+            )
 
     return {
         "production_order_id": po_id,
@@ -245,10 +243,7 @@ def process_operation_scrap(
     po, op = get_operation_with_po(db, po_id, op_id)
 
     # Validate scrap reason
-    reason = db.query(ScrapReason).filter(
-        ScrapReason.code == scrap_reason_code,
-        ScrapReason.active == True
-    ).first()
+    reason = db.query(ScrapReason).filter(ScrapReason.code == scrap_reason_code, ScrapReason.active == True).first()
 
     if not reason:
         raise ScrapError(f"Invalid or inactive scrap reason: {scrap_reason_code}", 400)
@@ -256,10 +251,11 @@ def process_operation_scrap(
     # Validate quantity doesn't exceed what's available
     # For running operations, max is what was started
     # For completed operations, max is what was completed
-    max_scrappable = (op.quantity_completed or Decimal("0"))
-    if op.status == 'running':
+    max_scrappable = op.quantity_completed or Decimal("0")
+    if op.status == "running":
         # If running, can scrap up to the max from previous operation
         from app.services.operation_status import get_operation_max_quantity
+
         max_scrappable = get_operation_max_quantity(po, op)
 
     already_scrapped = op.quantity_scrapped or Decimal("0")
@@ -267,9 +263,7 @@ def process_operation_scrap(
 
     if Decimal(str(quantity_scrapped)) > available_to_scrap:
         raise ScrapError(
-            f"Cannot scrap {quantity_scrapped} units. "
-            f"Only {available_to_scrap} units available to scrap.",
-            400
+            f"Cannot scrap {quantity_scrapped} units. " f"Only {available_to_scrap} units available to scrap.", 400
         )
 
     # Get all operations up to current
@@ -287,9 +281,11 @@ def process_operation_scrap(
 
     for affected_op in affected_ops:
         # Get materials for this operation
-        op_materials = db.query(ProductionOrderOperationMaterial).filter(
-            ProductionOrderOperationMaterial.production_order_operation_id == affected_op.id
-        ).all()
+        op_materials = (
+            db.query(ProductionOrderOperationMaterial)
+            .filter(ProductionOrderOperationMaterial.production_order_operation_id == affected_op.id)
+            .all()
+        )
 
         for mat in op_materials:
             component = db.get(Product, mat.component_id)
@@ -306,13 +302,15 @@ def process_operation_scrap(
 
             unit_cost = get_effective_cost_per_inventory_unit(component)
 
-            materials_to_scrap.append({
-                "operation": affected_op,
-                "material": mat,
-                "component": component,
-                "scrap_qty": scrap_qty,
-                "unit_cost": unit_cost,
-            })
+            materials_to_scrap.append(
+                {
+                    "operation": affected_op,
+                    "material": mat,
+                    "component": component,
+                    "scrap_qty": scrap_qty,
+                    "unit_cost": unit_cost,
+                }
+            )
 
             total_scrap_cost += scrap_qty * unit_cost
 
@@ -373,7 +371,7 @@ def process_operation_scrap(
     remaining_good = (op.quantity_completed or Decimal("0")) - (op.quantity_scrapped or Decimal("0"))
     skipped_ops = 0
 
-    if remaining_good <= 0 and op.status == 'complete':
+    if remaining_good <= 0 and op.status == "complete":
         skipped_ops = auto_skip_downstream_operations(db, po, op)
         if skipped_ops > 0:
             logger.info(f"Auto-skipped {skipped_ops} downstream operations due to 0 good pieces")
@@ -402,15 +400,13 @@ def process_operation_scrap(
         "replacement_order": {
             "id": replacement_po.id,
             "code": replacement_po.code,
-        } if replacement_po else None,
+        }
+        if replacement_po
+        else None,
     }
 
 
-def auto_skip_downstream_operations(
-    db: Session,
-    po: ProductionOrder,
-    completed_op: ProductionOrderOperation
-) -> int:
+def auto_skip_downstream_operations(db: Session, po: ProductionOrder, completed_op: ProductionOrderOperation) -> int:
     """
     Auto-skip all downstream operations when no good pieces remain.
 
@@ -439,8 +435,8 @@ def auto_skip_downstream_operations(
             continue
 
         # Only skip pending/queued ops
-        if op.status in ('pending', 'queued'):
-            op.status = 'skipped'
+        if op.status in ("pending", "queued"):
+            op.status = "skipped"
             op.notes = f"SKIPPED: Auto-skipped - no good pieces from operation {completed_op.sequence}"
             op.updated_at = datetime.utcnow()
             skipped_count += 1
@@ -513,9 +509,7 @@ def _generate_production_order_code(db: Session) -> str:
 
     # Find max code for this year
     pattern = f"PO-{year}-%"
-    result = db.query(func.max(ProductionOrder.code)).filter(
-        ProductionOrder.code.like(pattern)
-    ).scalar()
+    result = db.query(func.max(ProductionOrder.code)).filter(ProductionOrder.code.like(pattern)).scalar()
 
     if result:
         try:

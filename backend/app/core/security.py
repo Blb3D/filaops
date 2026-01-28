@@ -3,6 +3,7 @@ Security utilities for authentication
 
 Provides password hashing, JWT token generation, and validation
 """
+
 import hashlib
 import uuid
 import re
@@ -16,22 +17,23 @@ import bcrypt
 # JWT Configuration
 import os
 
+
 def _get_secret_key() -> str:
     """Get SECRET_KEY from environment, fail loudly if not set."""
     key = os.environ.get("SECRET_KEY")
     if not key:
         raise RuntimeError(
             "SECRET_KEY environment variable is not set. "
-            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+            'Generate one with: python -c "import secrets; print(secrets.token_hex(32))"'
         )
     if key == "dev-only-change-in-production" or len(key) < 32:
         import warnings
+
         warnings.warn(
-            "SECRET_KEY is weak or using default value. "
-            "Generate a secure key for production.",
-            RuntimeWarning
+            "SECRET_KEY is weak or using default value. " "Generate a secure key for production.", RuntimeWarning
         )
     return key
+
 
 SECRET_KEY = _get_secret_key()
 ALGORITHM = "HS256"
@@ -43,41 +45,43 @@ REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 days
 # PASSWORD VALIDATION
 # ============================================================================
 
+
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """
     Validate password meets security requirements.
-    
+
     Requirements:
     - At least 8 characters
     - At least one uppercase letter
     - At least one lowercase letter
     - At least one number
     - At least one special character
-    
+
     Returns:
         Tuple of (is_valid, error_message)
     """
     if len(password) < 8:
         return False, "Password must be at least 8 characters"
-    
-    if not re.search(r'[A-Z]', password):
+
+    if not re.search(r"[A-Z]", password):
         return False, "Password must contain at least one uppercase letter"
-    
-    if not re.search(r'[a-z]', password):
+
+    if not re.search(r"[a-z]", password):
         return False, "Password must contain at least one lowercase letter"
-    
-    if not re.search(r'\d', password):
+
+    if not re.search(r"\d", password):
         return False, "Password must contain at least one number"
-    
+
     if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/`~]', password):
         return False, "Password must contain at least one special character (!@#$%^&*etc)"
-    
+
     return True, ""
 
 
 # ============================================================================
 # PASSWORD HASHING (using bcrypt directly)
 # ============================================================================
+
 
 def hash_password(password: str) -> str:
     """
@@ -90,11 +94,11 @@ def hash_password(password: str) -> str:
         Hashed password (bcrypt format, 60 chars)
     """
     # bcrypt requires bytes
-    password_bytes = password.encode('utf-8')
+    password_bytes = password.encode("utf-8")
     # Generate salt and hash
     salt = bcrypt.gensalt(rounds=12)
     hashed = bcrypt.hashpw(password_bytes, salt)
-    return hashed.decode('utf-8')
+    return hashed.decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -109,8 +113,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         True if password matches, False otherwise
     """
     try:
-        password_bytes = plain_password.encode('utf-8')
-        hashed_bytes = hashed_password.encode('utf-8')
+        password_bytes = plain_password.encode("utf-8")
+        hashed_bytes = hashed_password.encode("utf-8")
         return bcrypt.checkpw(password_bytes, hashed_bytes)
     except Exception:
         return False
@@ -120,10 +124,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # JWT TOKEN GENERATION
 # ============================================================================
 
-def create_access_token(
-    user_id: int,
-    expires_delta: Optional[timedelta] = None
-) -> str:
+
+def create_access_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
     """
     Create JWT access token for user authentication
 
@@ -152,10 +154,7 @@ def create_access_token(
     return token
 
 
-def create_refresh_token(
-    user_id: int,
-    expires_delta: Optional[timedelta] = None
-) -> str:
+def create_refresh_token(user_id: int, expires_delta: Optional[timedelta] = None) -> str:
     """
     Create JWT refresh token for token rotation
 
@@ -188,6 +187,7 @@ def create_refresh_token(
 # JWT TOKEN VALIDATION
 # ============================================================================
 
+
 def decode_token(token: str) -> Optional[Dict[str, Any]]:
     """
     Decode and validate JWT token
@@ -210,10 +210,7 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_user_from_token(
-    token: str,
-    expected_type: Optional[str] = None
-) -> Optional[int]:
+def get_user_from_token(token: str, expected_type: Optional[str] = None) -> Optional[int]:
     """
     Extract user ID from JWT token with optional type validation
 
@@ -250,6 +247,7 @@ def get_user_from_token(
 # ============================================================================
 # REFRESH TOKEN HELPERS
 # ============================================================================
+
 
 def hash_refresh_token(token: str) -> str:
     """

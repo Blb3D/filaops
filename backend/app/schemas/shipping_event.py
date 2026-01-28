@@ -3,6 +3,7 @@ Shipping Event Schemas
 
 Pydantic models for the Shipping Event API endpoints
 """
+
 from datetime import datetime, date
 from enum import Enum
 from typing import Optional
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class ShippingEventType(str, Enum):
     """Types of shipping events"""
+
     LABEL_PURCHASED = "label_purchased"
     PICKED_UP = "picked_up"
     IN_TRANSIT = "in_transit"
@@ -26,6 +28,7 @@ class ShippingEventType(str, Enum):
 
 class ShippingEventSource(str, Enum):
     """Source of shipping event"""
+
     MANUAL = "manual"
     CARRIER_API = "carrier_api"
     WEBHOOK = "webhook"
@@ -33,6 +36,7 @@ class ShippingEventSource(str, Enum):
 
 class ShippingEventCreate(BaseModel):
     """Schema for creating a shipping event"""
+
     event_type: ShippingEventType
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -50,6 +54,7 @@ class ShippingEventCreate(BaseModel):
 
 class ShippingEventResponse(BaseModel):
     """Schema for shipping event response"""
+
     id: int
     sales_order_id: int
     user_id: Optional[int] = None
@@ -75,5 +80,6 @@ class ShippingEventResponse(BaseModel):
 
 class ShippingEventListResponse(BaseModel):
     """Schema for list of shipping events"""
+
     items: list[ShippingEventResponse]
     total: int

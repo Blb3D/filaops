@@ -3,6 +3,7 @@ Work Centers API Endpoints
 
 CRUD operations for work centers and resources (machines).
 """
+
 from fastapi import APIRouter, HTTPException, Depends, status
 from typing import Optional, List
 from datetime import datetime
@@ -35,6 +36,7 @@ logger = get_logger(__name__)
 # Work Center CRUD
 # ============================================================================
 
+
 @router.get("/", response_model=List[WorkCenterListResponse])
 async def list_work_centers(
     center_type: Optional[str] = None,
@@ -61,21 +63,23 @@ async def list_work_centers(
     result = []
     for wc in work_centers:
         total_rate = (
-            float(wc.machine_rate_per_hour or 0) +
-            float(wc.labor_rate_per_hour or 0) +
-            float(wc.overhead_rate_per_hour or 0)
+            float(wc.machine_rate_per_hour or 0)
+            + float(wc.labor_rate_per_hour or 0)
+            + float(wc.overhead_rate_per_hour or 0)
         )
-        result.append(WorkCenterListResponse(
-            id=wc.id,
-            code=wc.code,
-            name=wc.name,
-            center_type=wc.center_type,
-            capacity_hours_per_day=wc.capacity_hours_per_day,
-            total_rate_per_hour=Decimal(str(total_rate)),
-            resource_count=len([r for r in wc.resources if r.is_active]),
-            is_bottleneck=wc.is_bottleneck,
-            is_active=wc.is_active,
-        ))
+        result.append(
+            WorkCenterListResponse(
+                id=wc.id,
+                code=wc.code,
+                name=wc.name,
+                center_type=wc.center_type,
+                capacity_hours_per_day=wc.capacity_hours_per_day,
+                total_rate_per_hour=Decimal(str(total_rate)),
+                resource_count=len([r for r in wc.resources if r.is_active]),
+                is_bottleneck=wc.is_bottleneck,
+                is_active=wc.is_active,
+            )
+        )
 
     return result
 
@@ -91,8 +95,7 @@ async def create_work_center(
     existing = db.query(WorkCenter).filter(WorkCenter.code == data.code).first()
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Work center with code '{data.code}' already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Work center with code '{data.code}' already exists"
         )
 
     work_center = WorkCenter(
@@ -125,9 +128,7 @@ async def get_work_center(
     db: Session = Depends(get_db),
 ):
     """Get a work center by ID."""
-    work_center = db.query(WorkCenter).options(
-        joinedload(WorkCenter.resources)
-    ).filter(WorkCenter.id == wc_id).first()
+    work_center = db.query(WorkCenter).options(joinedload(WorkCenter.resources)).filter(WorkCenter.id == wc_id).first()
 
     if not work_center:
         raise HTTPException(status_code=404, detail="Work center not found")
@@ -152,8 +153,7 @@ async def update_work_center(
         existing = db.query(WorkCenter).filter(WorkCenter.code == data.code).first()
         if existing:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Work center with code '{data.code}' already exists"
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Work center with code '{data.code}' already exists"
             )
 
     # Update fields
@@ -193,6 +193,7 @@ async def delete_work_center(
 # ============================================================================
 # Resources (Machines) CRUD
 # ============================================================================
+
 
 @router.get("/{wc_id}/resources", response_model=List[ResourceResponse])
 async def list_resources(
@@ -256,9 +257,7 @@ async def get_resource(
     db: Session = Depends(get_db),
 ):
     """Get a resource by ID."""
-    resource = db.query(Resource).options(
-        joinedload(Resource.work_center)
-    ).filter(Resource.id == resource_id).first()
+    resource = db.query(Resource).options(joinedload(Resource.work_center)).filter(Resource.id == resource_id).first()
 
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -274,9 +273,7 @@ async def update_resource(
     db: Session = Depends(get_db),
 ):
     """Update a resource."""
-    resource = db.query(Resource).options(
-        joinedload(Resource.work_center)
-    ).filter(Resource.id == resource_id).first()
+    resource = db.query(Resource).options(joinedload(Resource.work_center)).filter(Resource.id == resource_id).first()
 
     if not resource:
         raise HTTPException(status_code=404, detail="Resource not found")
@@ -285,9 +282,7 @@ async def update_resource(
     update_data = data.model_dump(exclude_unset=True)
     new_work_center = None
     if "work_center_id" in update_data and update_data["work_center_id"] != resource.work_center_id:
-        new_work_center = db.query(WorkCenter).filter(
-            WorkCenter.id == update_data["work_center_id"]
-        ).first()
+        new_work_center = db.query(WorkCenter).filter(WorkCenter.id == update_data["work_center_id"]).first()
         if not new_work_center:
             raise HTTPException(status_code=404, detail="Target work center not found")
 
@@ -354,6 +349,7 @@ async def update_resource_status(
 # Printers linked to Work Center
 # ============================================================================
 
+
 @router.get("/{wc_id}/printers")
 async def list_work_center_printers(
     wc_id: int,
@@ -396,12 +392,13 @@ async def list_work_center_printers(
 # Helper Functions
 # ============================================================================
 
+
 def _build_work_center_response(wc: WorkCenter) -> WorkCenterResponse:
     """Build a work center response object."""
     total_rate = (
-        float(wc.machine_rate_per_hour or 0) +
-        float(wc.labor_rate_per_hour or 0) +
-        float(wc.overhead_rate_per_hour or 0)
+        float(wc.machine_rate_per_hour or 0)
+        + float(wc.labor_rate_per_hour or 0)
+        + float(wc.overhead_rate_per_hour or 0)
     )
     resource_count = len([r for r in wc.resources if r.is_active]) if wc.resources else 0
 
@@ -493,10 +490,7 @@ async def sync_bambu_printers(
     # Find FDM-POOL work center
     fdm_pool = db.query(WorkCenter).filter(WorkCenter.code == "FDM-POOL").first()
     if not fdm_pool:
-        raise HTTPException(
-            status_code=404,
-            detail="FDM-POOL work center not found. Create it first."
-        )
+        raise HTTPException(status_code=404, detail="FDM-POOL work center not found. Create it first.")
 
     created = []
     updated = []
@@ -504,9 +498,7 @@ async def sync_bambu_printers(
 
     for serial, printer_info in BAMBU_PRINTERS.items():
         # Check if resource already exists (by serial number)
-        existing = db.query(Resource).filter(
-            Resource.serial_number == serial
-        ).first()
+        existing = db.query(Resource).filter(Resource.serial_number == serial).first()
 
         if existing:
             # Update existing resource

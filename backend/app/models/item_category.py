@@ -1,6 +1,7 @@
 """
 Item Category model - hierarchical categories for products/items
 """
+
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -18,6 +19,7 @@ class ItemCategory(Base):
         PACKAGING > Boxes
         FINISHED_GOODS > Standard Products
     """
+
     __tablename__ = "item_categories"
 
     id = Column(Integer, primary_key=True, index=True)

@@ -4,6 +4,7 @@ Transaction Audit Endpoints
 Provides endpoints for auditing inventory transactions and finding gaps
 in the order-to-ship lifecycle.
 """
+
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -52,10 +53,7 @@ async def run_transaction_audit(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid order_ids format")
 
-    result = service.run_full_audit(
-        include_statuses=status_list,
-        order_ids=id_list
-    )
+    result = service.run_full_audit(include_statuses=status_list, order_ids=id_list)
 
     return result.to_dict()
 
@@ -110,16 +108,12 @@ async def get_audit_summary(
     - shipped
     """
     service = TransactionAuditService(db)
-    result = service.run_full_audit(
-        include_statuses=['in_production', 'ready_to_ship', 'shipped']
-    )
+    result = service.run_full_audit(include_statuses=["in_production", "ready_to_ship", "shipped"])
 
     return {
         "total_orders": result.total_orders_checked,
         "orders_with_issues": result.orders_with_gaps,
         "total_gaps": result.total_gaps,
         "gaps_by_type": result.summary_by_type,
-        "health_score": round(
-            (1 - (result.orders_with_gaps / max(result.total_orders_checked, 1))) * 100, 1
-        ),
+        "health_score": round((1 - (result.orders_with_gaps / max(result.total_orders_checked, 1))) * 100, 1),
     }

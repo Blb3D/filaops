@@ -1,4 +1,5 @@
 """Database models"""
+
 from app.models.item_category import ItemCategory
 from app.models.product import Product
 from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
@@ -17,9 +18,7 @@ from app.models.purchase_order_document import PurchaseOrderDocument, VendorItem
 from app.models.work_center import WorkCenter, Machine
 from app.models.manufacturing import Routing, RoutingOperation, Resource, RoutingOperationMaterial
 from app.models.mrp import MRPRun, PlannedOrder
-from app.models.traceability import (
-    SerialNumber, MaterialLot, ProductionLotConsumption, CustomerTraceabilityProfile
-)
+from app.models.traceability import SerialNumber, MaterialLot, ProductionLotConsumption, CustomerTraceabilityProfile
 from app.models.company_settings import CompanySettings
 from app.models.uom import UnitOfMeasure
 from app.models.uom import UnitOfMeasure as UOM
@@ -78,7 +77,7 @@ __all__ = [
     "VendorItem",
     # Manufacturing Routes
     "WorkCenter",
-    "Machine", 
+    "Machine",
     "Resource",
     "Routing",
     "RoutingOperation",

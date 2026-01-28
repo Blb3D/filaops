@@ -16,6 +16,7 @@ Test Scenario:
 
 Each step has assertions. First failure = where the system is broken.
 """
+
 import pytest
 from decimal import Decimal
 from datetime import datetime, date, timedelta
@@ -23,12 +24,10 @@ from datetime import datetime, date, timedelta
 from tests.factories import (
     reset_sequences,
     create_test_user,
-    create_test_vendor,
     create_test_product,
     create_test_material,
     create_test_bom,
     create_test_inventory,
-    create_test_location,
     get_or_create_default_location,
 )
 
@@ -36,7 +35,7 @@ from tests.factories import (
 class TestCriticalPathQuoteToShip:
     """
     The critical path test from the functional spec.
-    
+
     This tests the HAPPY PATH - everything should work.
     Failures here indicate broken core functionality.
     """
@@ -50,24 +49,22 @@ class TestCriticalPathQuoteToShip:
     def test_full_quote_to_ship_flow(self, db_session, admin_user):
         """
         COMPLETE END-TO-END TEST: Quote -> SO -> WO -> Ship
-        
+
         This runs the entire workflow in a single test so data persists.
         """
         from app.models.quote import Quote
         from app.models.sales_order import SalesOrder
         from app.models.production_order import ProductionOrder
-        from app.models.inventory import Inventory, InventoryTransaction
-        from app.models.product import Product
-        from app.models.bom import BOM, BOMLine
+        from app.models.bom import BOMLine
         from app.services.quote_conversion_service import convert_quote_to_order
-        
-        print("\n" + "="*60)
+
+        print("\n" + "=" * 60)
         print("CRITICAL PATH TEST: Quote -> SO -> WO -> Ship")
-        print("="*60)
-        
+        print("=" * 60)
+
         # === STEP 0: SETUP ===
         print("\n[STEP 0] Creating products, BOM, and inventory...")
-        
+
         widget = create_test_product(
             db_session,
             sku="WIDGET-E2E",
@@ -78,7 +75,7 @@ class TestCriticalPathQuoteToShip:
             selling_price=Decimal("29.99"),
             standard_cost=Decimal("10.00"),
         )
-        
+
         pla = create_test_material(
             db_session,
             sku="PLA-E2E",
@@ -86,7 +83,7 @@ class TestCriticalPathQuoteToShip:
             unit="G",
             standard_cost=Decimal("20.00"),  # $/KG
         )
-        
+
         box = create_test_material(
             db_session,
             sku="BOX-E2E",
@@ -94,7 +91,7 @@ class TestCriticalPathQuoteToShip:
             unit="EA",
             standard_cost=Decimal("0.50"),
         )
-        
+
         bom = create_test_bom(
             db_session,
             product=widget,
@@ -104,23 +101,25 @@ class TestCriticalPathQuoteToShip:
             ],
         )
         widget.bom_id = bom.id
-        
+
         location = get_or_create_default_location(db_session)
         pla_inv = create_test_inventory(db_session, pla, Decimal("1000"), location)
         box_inv = create_test_inventory(db_session, box, Decimal("20"), location)
         widget_inv = create_test_inventory(db_session, widget, Decimal("0"), location)
         db_session.commit()
-        
+
         print(f"   Created: {widget.sku}, {pla.sku}, {box.sku}")
-        print(f"   BOM: 50g PLA + 1 Box per widget")
-        print(f"   Inventory: PLA={pla_inv.on_hand_quantity}g, Box={box_inv.on_hand_quantity}, Widget={widget_inv.on_hand_quantity}")
+        print("   BOM: 50g PLA + 1 Box per widget")
+        print(
+            f"   Inventory: PLA={pla_inv.on_hand_quantity}g, Box={box_inv.on_hand_quantity}, Widget={widget_inv.on_hand_quantity}"
+        )
         print("[PASS] STEP 0")
-        
+
         # === STEP 1: CREATE QUOTE ===
         print("\n[STEP 1] Creating quote for 10 widgets...")
-        
+
         customer = create_test_user(db_session, email="e2e-customer@test.com", account_type="customer")
-        
+
         quote = Quote(
             user_id=customer.id,
             quote_number="Q-E2E-001",
@@ -139,25 +138,25 @@ class TestCriticalPathQuoteToShip:
         )
         db_session.add(quote)
         db_session.commit()
-        
+
         assert quote.id is not None
         print(f"   Quote: {quote.quote_number} for {quote.quantity}x {quote.product_name}")
         print("[PASS] STEP 1")
-        
+
         # === STEP 2: SEND QUOTE ===
         print("\n[STEP 2] Sending quote...")
         quote.status = "sent"
         quote.sent_at = datetime.utcnow()
         db_session.commit()
         print("[PASS] STEP 2")
-        
+
         # === STEP 3: CONVERT QUOTE TO SO ===
         print("\n[STEP 3] Converting quote to sales order...")
         quote.status = "accepted"
         db_session.flush()
-        
+
         result = convert_quote_to_order(quote=quote, db=db_session, auto_confirm=True)
-        
+
         if not result.success:
             # Fallback to manual conversion
             print(f"   [WARN] Service failed: {result.error_message}")
@@ -182,18 +181,18 @@ class TestCriticalPathQuoteToShip:
             quote.status = "converted"
         else:
             so = result.sales_order
-        
+
         db_session.commit()
         assert so.id is not None
         print(f"   SO: {so.order_number} status={so.status}")
         print("[PASS] STEP 3")
-        
+
         # === STEP 4: CREATE PRODUCTION ORDER ===
         print("\n[STEP 4] Creating production order...")
-        
+
         # Check if service already created one
         wo = db_session.query(ProductionOrder).filter_by(sales_order_id=so.id).first()
-        
+
         if not wo:
             wo = ProductionOrder(
                 code="WO-E2E-001",
@@ -209,109 +208,109 @@ class TestCriticalPathQuoteToShip:
             )
             db_session.add(wo)
             db_session.commit()
-        
+
         assert wo.id is not None
         print(f"   WO: {wo.code} for {wo.quantity_ordered}x")
         print("[PASS] STEP 4")
-        
+
         # === STEP 5: RELEASE WO ===
         print("\n[STEP 5] Releasing production order...")
         wo.status = "released"
         wo.released_at = datetime.utcnow()
         db_session.commit()
         print("[PASS] STEP 5")
-        
+
         # === STEP 6: COMPLETE PRODUCTION ===
         print("\n[STEP 6] Completing production (consume materials, add FG)...")
-        
+
         db_session.refresh(pla_inv)
         db_session.refresh(box_inv)
         db_session.refresh(widget_inv)
-        
+
         initial_pla = pla_inv.on_hand_quantity
         initial_box = box_inv.on_hand_quantity
         initial_widget = widget_inv.on_hand_quantity
-        
+
         pla_line = db_session.query(BOMLine).filter_by(bom_id=bom.id, component_id=pla.id).first()
         box_line = db_session.query(BOMLine).filter_by(bom_id=bom.id, component_id=box.id).first()
-        
+
         qty_to_complete = wo.quantity_ordered
         pla_consumption = pla_line.quantity * qty_to_complete * (1 + pla_line.scrap_factor / 100)
         box_consumption = box_line.quantity * qty_to_complete
-        
+
         # Consume materials
         pla_inv.on_hand_quantity -= pla_consumption
         box_inv.on_hand_quantity -= box_consumption
-        
+
         # Add finished goods
         widget_inv.on_hand_quantity += qty_to_complete
-        
+
         # Update WO
         wo.quantity_completed = qty_to_complete
         wo.status = "completed"
         wo.completed_at = datetime.utcnow()
-        
+
         db_session.commit()
         db_session.refresh(pla_inv)
         db_session.refresh(box_inv)
         db_session.refresh(widget_inv)
-        
+
         print(f"   PLA: {initial_pla}g -> {pla_inv.on_hand_quantity}g (consumed {pla_consumption}g)")
         print(f"   Box: {initial_box} -> {box_inv.on_hand_quantity} (consumed {box_consumption})")
         print(f"   Widget: {initial_widget} -> {widget_inv.on_hand_quantity} (produced {qty_to_complete})")
         print("[PASS] STEP 6")
-        
+
         # === STEP 7: UPDATE SO TO READY ===
         print("\n[STEP 7] Updating SO to ready_to_ship...")
         so.status = "ready_to_ship"
         db_session.commit()
         print("[PASS] STEP 7")
-        
+
         # === STEP 8: SHIP ORDER ===
         print("\n[STEP 8] Shipping order...")
-        
+
         db_session.refresh(widget_inv)
         initial_widget = widget_inv.on_hand_quantity
         ship_qty = Decimal(str(so.quantity))
-        
+
         widget_inv.on_hand_quantity -= ship_qty
         so.status = "shipped"
         so.shipped_at = datetime.utcnow()
         so.tracking_number = "E2E1234567890"
-        
+
         db_session.commit()
         db_session.refresh(widget_inv)
-        
+
         print(f"   Widget: {initial_widget} -> {widget_inv.on_hand_quantity} (shipped {ship_qty})")
         print("[PASS] STEP 8")
-        
+
         # === STEP 9: VERIFY FINAL INVENTORY ===
         print("\n[STEP 9] Final inventory verification...")
-        
+
         expected_pla = Decimal("1000") - (Decimal("50") * 10 * Decimal("1.05"))  # 475g
         expected_box = Decimal("20") - Decimal("10")  # 10
         expected_widget = Decimal("0")  # Produced and shipped
-        
+
         db_session.refresh(pla_inv)
         db_session.refresh(box_inv)
         db_session.refresh(widget_inv)
-        
+
         print(f"   PLA:    Expected {expected_pla}g, Actual {pla_inv.on_hand_quantity}g")
         print(f"   Box:    Expected {expected_box}, Actual {box_inv.on_hand_quantity}")
         print(f"   Widget: Expected {expected_widget}, Actual {widget_inv.on_hand_quantity}")
-        
-        assert pla_inv.on_hand_quantity == expected_pla, f"PLA mismatch"
-        assert box_inv.on_hand_quantity == expected_box, f"Box mismatch"
-        assert widget_inv.on_hand_quantity == expected_widget, f"Widget mismatch"
-        
-        print("\n" + "="*60)
+
+        assert pla_inv.on_hand_quantity == expected_pla, "PLA mismatch"
+        assert box_inv.on_hand_quantity == expected_box, "Box mismatch"
+        assert widget_inv.on_hand_quantity == expected_widget, "Widget mismatch"
+
+        print("\n" + "=" * 60)
         print("CRITICAL PATH TEST COMPLETE - ALL STEPS PASSED!")
-        print("="*60 + "\n")
+        print("=" * 60 + "\n")
 
     def test_step0_setup_products_and_inventory(self, db_session):
         """
         STEP 0: Create the test data
-        
+
         - Finished good: WIDGET-TEST (what we sell)
         - Material: PLA-BLACK-TEST (filament, in grams)
         - Packaging: BOX-SMALL-TEST (shipping box)
@@ -390,7 +389,7 @@ class TestCriticalPathQuoteToShip:
     def test_step1_create_quote(self, db_session, admin_user):
         """
         STEP 1: Create a quote for 10 widgets
-        
+
         Customer requests quote for 10 widgets.
         Quote should be created with status 'draft'.
         """
@@ -436,7 +435,7 @@ class TestCriticalPathQuoteToShip:
     def test_step2_send_quote(self, db_session):
         """
         STEP 2: Send the quote to customer
-        
+
         Quote status should change from 'draft' to 'sent'.
         """
         from app.models.quote import Quote
@@ -457,7 +456,7 @@ class TestCriticalPathQuoteToShip:
     def test_step3_convert_quote_to_sales_order(self, db_session):
         """
         STEP 3: Customer accepts quote -> Convert to Sales Order
-        
+
         This is the critical conversion. Should:
         - Create SO with same product/qty
         - Link SO back to quote
@@ -478,11 +477,11 @@ class TestCriticalPathQuoteToShip:
         # Convert quote to sales order using service
         try:
             result = convert_quote_to_order(quote=quote, db=db_session, auto_confirm=True)
-            
+
             if not result.success:
                 # Service failed, do manual conversion
                 print(f"[WARN] Service failed ({result.error_message}), doing manual conversion")
-                
+
                 so = SalesOrder(
                     user_id=quote.user_id,
                     quote_id=quote.id,
@@ -505,7 +504,7 @@ class TestCriticalPathQuoteToShip:
                 db_session.flush()
             else:
                 so = result.sales_order
-                
+
         except Exception as e:
             pytest.fail(f"Quote conversion failed: {e}")
 
@@ -519,14 +518,17 @@ class TestCriticalPathQuoteToShip:
 
         # Verify quote was updated
         db_session.refresh(quote)
-        assert quote.status in ["accepted", "converted"], f"Quote status should be accepted/converted, got: {quote.status}"
+        assert quote.status in [
+            "accepted",
+            "converted",
+        ], f"Quote status should be accepted/converted, got: {quote.status}"
 
         print(f"[PASS] STEP 3: Quote converted to SO {so.order_number}")
 
     def test_step4_create_production_order(self, db_session):
         """
         STEP 4: Create Production Order from Sales Order
-        
+
         Should:
         - Create WO linked to SO
         - WO for 10 widgets
@@ -536,15 +538,13 @@ class TestCriticalPathQuoteToShip:
         from app.models.production_order import ProductionOrder
         from app.models.bom import BOM
 
-        so = db_session.query(SalesOrder).filter(
-            SalesOrder.order_number.like("SO-2025-TEST%")
-        ).first()
+        so = db_session.query(SalesOrder).filter(SalesOrder.order_number.like("SO-2025-TEST%")).first()
         if not so:
             pytest.skip("Run test_step3 first - SO not found")
 
         # Get BOM for the product
         bom = db_session.query(BOM).filter_by(product_id=so.product_id, active=True).first()
-        
+
         # Create production order
         wo = ProductionOrder(
             code=f"WO-{so.order_number.replace('SO-', '')}",
@@ -571,7 +571,7 @@ class TestCriticalPathQuoteToShip:
     def test_step5_release_production_order(self, db_session):
         """
         STEP 5: Release Production Order
-        
+
         Should:
         - Change status to 'released'
         - Allocate materials (reserve inventory)
@@ -580,22 +580,20 @@ class TestCriticalPathQuoteToShip:
         from app.models.inventory import Inventory
         from app.models.product import Product
 
-        wo = db_session.query(ProductionOrder).filter(
-            ProductionOrder.code.like("WO-2025-TEST%")
-        ).first()
+        wo = db_session.query(ProductionOrder).filter(ProductionOrder.code.like("WO-2025-TEST%")).first()
         if not wo:
             pytest.skip("Run test_step4 first - WO not found")
 
         # Release the WO
         wo.status = "released"
         wo.released_at = datetime.utcnow()
-        
+
         # Check material availability before release
         # BOM: 50g PLA * 10 qty * 1.05 scrap = 525g needed
         # BOM: 1 box * 10 qty = 10 boxes needed
         pla = db_session.query(Product).filter_by(sku="PLA-BLACK-TEST").first()
         box = db_session.query(Product).filter_by(sku="BOX-SMALL-TEST").first()
-        
+
         pla_inv = db_session.query(Inventory).filter_by(product_id=pla.id).first()
         box_inv = db_session.query(Inventory).filter_by(product_id=box.id).first()
 
@@ -603,8 +601,12 @@ class TestCriticalPathQuoteToShip:
         pla_needed = Decimal("50") * 10 * Decimal("1.05")  # 525g
         box_needed = Decimal("10")
 
-        assert pla_inv.on_hand_quantity >= pla_needed, f"Not enough PLA: have {pla_inv.on_hand_quantity}, need {pla_needed}"
-        assert box_inv.on_hand_quantity >= box_needed, f"Not enough boxes: have {box_inv.on_hand_quantity}, need {box_needed}"
+        assert (
+            pla_inv.on_hand_quantity >= pla_needed
+        ), f"Not enough PLA: have {pla_inv.on_hand_quantity}, need {pla_needed}"
+        assert (
+            box_inv.on_hand_quantity >= box_needed
+        ), f"Not enough boxes: have {box_inv.on_hand_quantity}, need {box_needed}"
 
         # TODO: Actual allocation should happen here via service
         # For now we just mark as released
@@ -618,7 +620,7 @@ class TestCriticalPathQuoteToShip:
     def test_step6_complete_production(self, db_session):
         """
         STEP 6: Complete Production Order
-        
+
         Should:
         - Consume materials from inventory (BOM explosion)
         - Add finished goods to inventory
@@ -630,9 +632,7 @@ class TestCriticalPathQuoteToShip:
         from app.models.product import Product
         from app.models.bom import BOM, BOMLine
 
-        wo = db_session.query(ProductionOrder).filter(
-            ProductionOrder.code.like("WO-2025-TEST%")
-        ).first()
+        wo = db_session.query(ProductionOrder).filter(ProductionOrder.code.like("WO-2025-TEST%")).first()
         if not wo:
             pytest.skip("Run test_step5 first - WO not found")
 
@@ -718,10 +718,12 @@ class TestCriticalPathQuoteToShip:
 
         assert pla_inv.on_hand_quantity == expected_pla, f"PLA wrong: {pla_inv.on_hand_quantity} != {expected_pla}"
         assert box_inv.on_hand_quantity == expected_box, f"Box wrong: {box_inv.on_hand_quantity} != {expected_box}"
-        assert widget_inv.on_hand_quantity == expected_widget, f"Widget wrong: {widget_inv.on_hand_quantity} != {expected_widget}"
+        assert (
+            widget_inv.on_hand_quantity == expected_widget
+        ), f"Widget wrong: {widget_inv.on_hand_quantity} != {expected_widget}"
         assert wo.status == "completed", "WO should be completed"
 
-        print(f"[PASS] STEP 6: Production complete")
+        print("[PASS] STEP 6: Production complete")
         print(f"   PLA: {initial_pla} -> {pla_inv.on_hand_quantity} (consumed {pla_consumption}g)")
         print(f"   Box: {initial_box} -> {box_inv.on_hand_quantity} (consumed {box_consumption})")
         print(f"   Widget: {initial_widget} -> {widget_inv.on_hand_quantity} (produced {qty_to_complete})")
@@ -729,15 +731,13 @@ class TestCriticalPathQuoteToShip:
     def test_step7_update_sales_order_status(self, db_session):
         """
         STEP 7: Update Sales Order to 'ready_to_ship'
-        
+
         After production is complete, SO should be ready to ship.
         """
         from app.models.sales_order import SalesOrder
         from app.models.production_order import ProductionOrder
 
-        so = db_session.query(SalesOrder).filter(
-            SalesOrder.order_number.like("SO-2025-TEST%")
-        ).first()
+        so = db_session.query(SalesOrder).filter(SalesOrder.order_number.like("SO-2025-TEST%")).first()
         if not so:
             pytest.skip("Run test_step3 first - SO not found")
 
@@ -759,7 +759,7 @@ class TestCriticalPathQuoteToShip:
     def test_step8_ship_order(self, db_session):
         """
         STEP 8: Ship the order
-        
+
         Should:
         - Deduct finished goods from inventory
         - Update SO status to 'shipped'
@@ -769,9 +769,7 @@ class TestCriticalPathQuoteToShip:
         from app.models.inventory import Inventory, InventoryTransaction
         from app.models.product import Product
 
-        so = db_session.query(SalesOrder).filter(
-            SalesOrder.order_number.like("SO-2025-TEST%")
-        ).first()
+        so = db_session.query(SalesOrder).filter(SalesOrder.order_number.like("SO-2025-TEST%")).first()
         if not so:
             pytest.skip("Run test_step7 first - SO not found")
 
@@ -811,22 +809,22 @@ class TestCriticalPathQuoteToShip:
         db_session.refresh(widget_inv)
         expected_widget = initial_widget - ship_qty
 
-        assert widget_inv.on_hand_quantity == expected_widget, f"Widget inventory wrong after ship"
+        assert widget_inv.on_hand_quantity == expected_widget, "Widget inventory wrong after ship"
         assert so.status == "shipped", "SO should be shipped"
         assert so.tracking_number is not None, "Should have tracking number"
 
-        print(f"[PASS] STEP 8: Order shipped")
+        print("[PASS] STEP 8: Order shipped")
         print(f"   Widget: {initial_widget} -> {widget_inv.on_hand_quantity} (shipped {ship_qty})")
 
     def test_step9_final_inventory_verification(self, db_session):
         """
         STEP 9: Final verification of all inventory
-        
+
         Starting inventory:
         - PLA: 1000g
         - Box: 20
         - Widget: 0
-        
+
         After producing and shipping 10 widgets:
         - PLA: 1000 - (50 * 10 * 1.05) = 1000 - 525 = 475g
         - Box: 20 - 10 = 10
@@ -853,14 +851,16 @@ class TestCriticalPathQuoteToShip:
         expected_box = Decimal("20") - Decimal("10")  # 10
         expected_widget = Decimal("0")  # Produced and shipped
 
-        print(f"\n=== FINAL INVENTORY CHECK ===")
+        print("\n=== FINAL INVENTORY CHECK ===")
         print(f"   PLA:    Expected {expected_pla}g, Actual {pla_inv.on_hand_quantity}g")
         print(f"   Box:    Expected {expected_box}, Actual {box_inv.on_hand_quantity}")
         print(f"   Widget: Expected {expected_widget}, Actual {widget_inv.on_hand_quantity}")
 
         assert pla_inv.on_hand_quantity == expected_pla, f"PLA final: {pla_inv.on_hand_quantity} != {expected_pla}"
         assert box_inv.on_hand_quantity == expected_box, f"Box final: {box_inv.on_hand_quantity} != {expected_box}"
-        assert widget_inv.on_hand_quantity == expected_widget, f"Widget final: {widget_inv.on_hand_quantity} != {expected_widget}"
+        assert (
+            widget_inv.on_hand_quantity == expected_widget
+        ), f"Widget final: {widget_inv.on_hand_quantity} != {expected_widget}"
 
         print("\n[PASS] STEP 9: All inventory balances correct!")
         print("\n=== CRITICAL PATH TEST COMPLETE - SYSTEM WORKS! ===")
@@ -869,7 +869,7 @@ class TestCriticalPathQuoteToShip:
 class TestCriticalPathWithServices:
     """
     Same test but using actual service layer instead of direct DB manipulation.
-    
+
     This will expose if services are broken even when DB works.
     """
 
@@ -881,7 +881,6 @@ class TestCriticalPathWithServices:
     def test_quote_conversion_service(self, db_session, admin_user):
         """Test that quote_conversion_service actually works"""
         from app.models.quote import Quote
-        from app.models.product import Product
         from app.models.material import MaterialType, Color, MaterialColor
         from app.services.quote_conversion_service import convert_quote_to_order
 
@@ -894,42 +893,26 @@ class TestCriticalPathWithServices:
             density=Decimal("1.24"),
             base_price_per_kg=Decimal("25.00"),
             price_multiplier=Decimal("1.0"),
-            active=True
+            active=True,
         )
         db_session.add(material_type)
 
         # Create color
-        color = Color(
-            code="BLK",
-            name="Black",
-            hex_code="#000000",
-            active=True
-        )
+        color = Color(code="BLK", name="Black", hex_code="#000000", active=True)
         db_session.add(color)
         db_session.flush()  # Get IDs for the junction table
 
         # Link material type to color via MaterialColor junction
-        material_color = MaterialColor(
-            material_type_id=material_type.id,
-            color_id=color.id,
-            active=True
-        )
+        material_color = MaterialColor(material_type_id=material_type.id, color_id=color.id, active=True)
         db_session.add(material_color)
         db_session.commit()
 
         # Create a simple product
-        product = create_test_product(
-            db_session,
-            sku="SVC-TEST-001",
-            selling_price=Decimal("50.00")
-        )
+        product = create_test_product(db_session, sku="SVC-TEST-001", selling_price=Decimal("50.00"))
 
         # Create a shipping box product (required for quote validation)
         box_product = create_test_product(
-            db_session,
-            sku="BOX-8x8x8",
-            name="8x8x8in box",
-            selling_price=Decimal("2.00")
+            db_session, sku="BOX-8x8x8", name="8x8x8in box", selling_price=Decimal("2.00")
         )
 
         customer = create_test_user(db_session, account_type="customer")
@@ -963,14 +946,16 @@ class TestCriticalPathWithServices:
         try:
             result = convert_quote_to_order(quote=quote, db=db_session, auto_confirm=True)
             db_session.commit()
-            
+
             if result.success:
                 assert result.sales_order is not None, "Service returned None SO"
                 assert result.sales_order.quote_id == quote.id, "SO not linked to quote"
-                print(f"[PASS] Quote conversion service works: {quote.quote_number} -> {result.sales_order.order_number}")
+                print(
+                    f"[PASS] Quote conversion service works: {quote.quote_number} -> {result.sales_order.order_number}"
+                )
             else:
                 pytest.fail(f"[FAIL] Quote conversion service returned error: {result.error_message}")
-            
+
         except Exception as e:
             pytest.fail(f"[FAIL] Quote conversion service FAILED: {e}")
 
@@ -978,8 +963,6 @@ class TestCriticalPathWithServices:
         """Test that production execution service works"""
         from app.services.production_execution import ProductionExecutionService
         from app.models.production_order import ProductionOrder
-        from app.models.product import Product
-        from app.models.bom import BOM
 
         # Setup: product with BOM and inventory
         product = create_test_product(
@@ -988,11 +971,7 @@ class TestCriticalPathWithServices:
             has_bom=True,
         )
         material = create_test_material(db_session, sku="MAT-SVC-001", unit="G")
-        bom = create_test_bom(
-            db_session,
-            product=product,
-            lines=[{"component": material, "quantity": Decimal("10")}]
-        )
+        bom = create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("10")}])
         product.bom_id = bom.id
 
         # Add inventory
@@ -1015,20 +994,18 @@ class TestCriticalPathWithServices:
         # Try to explode BOM and reserve using service
         try:
             reserved, insufficient, lot_reqs = ProductionExecutionService.explode_bom_and_reserve_materials(
-                po=wo,
-                db=db_session,
-                created_by="test"
+                po=wo, db=db_session, created_by="test"
             )
             db_session.commit()
-            
+
             # Check results
             if reserved:
                 print(f"[PASS] Production execution service works: reserved {len(reserved)} materials")
             elif insufficient:
                 print(f"[WARN] Insufficient materials: {insufficient}")
             else:
-                print(f"[INFO] No materials reserved (possibly no BOM lines)")
-            
+                print("[INFO] No materials reserved (possibly no BOM lines)")
+
         except Exception as e:
             pytest.fail(f"[FAIL] Production execution service FAILED: {e}")
 
@@ -1045,11 +1022,7 @@ class TestCriticalPathWithServices:
             has_bom=True,
         )
         material = create_test_material(db_session, sku="MAT-MRP-001", unit="G")
-        bom = create_test_bom(
-            db_session,
-            product=product,
-            lines=[{"component": material, "quantity": Decimal("100")}]
-        )
+        bom = create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("100")}])
         product.bom_id = bom.id
 
         # NO inventory for material - should cause shortage
@@ -1073,18 +1046,20 @@ class TestCriticalPathWithServices:
         try:
             mrp = MRPService(db_session)
             result = mrp.run_mrp(planning_horizon_days=30)
-            
-            print(f"[INFO] MRP Result: orders={result.orders_processed}, components={result.components_analyzed}, shortages={result.shortages_found}")
-            
+
+            print(
+                f"[INFO] MRP Result: orders={result.orders_processed}, components={result.components_analyzed}, shortages={result.shortages_found}"
+            )
+
             if result.orders_processed == 0:
-                pytest.fail(f"[FAIL] MRP found 0 orders - WO not picked up (check status/due_date filters)")
-            
+                pytest.fail("[FAIL] MRP found 0 orders - WO not picked up (check status/due_date filters)")
+
             if result.shortages_found > 0:
                 print(f"[PASS] MRP shortage detection works: found {result.shortages_found} shortages")
             else:
                 # This might be OK if there's incoming supply
                 print(f"[WARN] MRP found 0 shortages but processed {result.orders_processed} orders")
-            
+
         except Exception as e:
             pytest.fail(f"[FAIL] MRP service FAILED: {e}")
 
@@ -1101,11 +1076,7 @@ class TestCriticalPathWithServices:
             has_bom=True,
         )
         material = create_test_material(db_session, sku="MAT-BLOCK-001", unit="G")
-        bom = create_test_bom(
-            db_session,
-            product=product,
-            lines=[{"component": material, "quantity": Decimal("50")}]
-        )
+        bom = create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("50")}])
         product.bom_id = bom.id
 
         # NO inventory
@@ -1137,10 +1108,10 @@ class TestCriticalPathWithServices:
         # Check blocking issues
         try:
             issues = get_sales_order_blocking_issues(db_session, so.id)
-            
+
             assert issues is not None, "Should return issues object"
             assert not issues.status_summary.can_fulfill, "Should NOT be able to fulfill"
             print(f"[PASS] Blocking issues service works: {issues.status_summary.blocking_count} issues found")
-            
+
         except Exception as e:
             pytest.fail(f"[FAIL] Blocking issues service FAILED: {e}")

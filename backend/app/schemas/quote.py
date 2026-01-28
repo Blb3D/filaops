@@ -3,6 +3,7 @@ Pydantic schemas for customer quote system
 
 Request and response models for quote creation, file uploads, and workflow
 """
+
 from typing import Optional, List
 from datetime import datetime, date
 from decimal import Decimal
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class QuoteFileUpload(BaseModel):
     """Schema for file upload metadata (internal use)"""
+
     original_filename: str
     stored_filename: str
     file_path: str
@@ -22,6 +24,7 @@ class QuoteFileUpload(BaseModel):
 
 class QuoteFileResponse(BaseModel):
     """Schema for quote file data response"""
+
     id: int
     quote_id: int
     original_filename: str
@@ -43,6 +46,7 @@ class QuoteFileResponse(BaseModel):
 
 class QuoteCreate(BaseModel):
     """Schema for creating a new quote request"""
+
     product_name: Optional[str] = Field(None, max_length=255, description="Customer-provided product name")
     quantity: int = Field(1, ge=1, le=1000, description="Number of units to print")
     material_type: str = Field(..., max_length=50, description="Material: PLA, PETG, ABS, ASA, TPU")
@@ -51,31 +55,31 @@ class QuoteCreate(BaseModel):
     requested_delivery_date: Optional[date] = Field(None, description="Customer requested delivery date")
     customer_notes: Optional[str] = Field(None, max_length=1000, description="Special requests or notes")
 
-    @field_validator('material_type')
+    @field_validator("material_type")
     @classmethod
     def validate_material_type(cls, v: str) -> str:
         """Validate material type is supported"""
-        allowed_materials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU']
+        allowed_materials = ["PLA", "PETG", "ABS", "ASA", "TPU"]
         v_upper = v.upper()
         if v_upper not in allowed_materials:
             raise ValueError(f"Invalid material type. Allowed: {', '.join(allowed_materials)}")
         return v_upper
 
-    @field_validator('finish')
+    @field_validator("finish")
     @classmethod
     def validate_finish(cls, v: str) -> str:
         """Validate finish type is supported"""
-        allowed_finishes = ['standard', 'smooth', 'painted']
+        allowed_finishes = ["standard", "smooth", "painted"]
         v_lower = v.lower()
         if v_lower not in allowed_finishes:
             raise ValueError(f"Invalid finish type. Allowed: {', '.join(allowed_finishes)}")
         return v_lower
 
-    @field_validator('rush_level')
+    @field_validator("rush_level")
     @classmethod
     def validate_rush_level(cls, v: str) -> str:
         """Validate rush level is supported"""
-        allowed_rush = ['standard', 'rush', 'super_rush', 'urgent']
+        allowed_rush = ["standard", "rush", "super_rush", "urgent"]
         v_lower = v.lower()
         if v_lower not in allowed_rush:
             raise ValueError(f"Invalid rush level. Allowed: {', '.join(allowed_rush)}")
@@ -84,6 +88,7 @@ class QuoteCreate(BaseModel):
 
 class QuoteResponse(BaseModel):
     """Schema for quote data response"""
+
     id: int
     user_id: int
     quote_number: str
@@ -158,6 +163,7 @@ class QuoteResponse(BaseModel):
 
 class QuoteListResponse(BaseModel):
     """Schema for quote list item (minimal data for listing)"""
+
     id: int
     quote_number: str
     product_name: Optional[str] = None
@@ -184,15 +190,16 @@ class QuoteListResponse(BaseModel):
 
 class QuoteUpdateStatus(BaseModel):
     """Schema for updating quote status (admin only)"""
+
     status: str = Field(..., description="New status: approved, rejected, cancelled")
     rejection_reason: Optional[str] = Field(None, max_length=500, description="Reason for rejection")
     admin_notes: Optional[str] = Field(None, max_length=1000, description="Internal admin notes")
 
-    @field_validator('status')
+    @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
         """Validate status transition is allowed"""
-        allowed_statuses = ['approved', 'rejected', 'cancelled']
+        allowed_statuses = ["approved", "rejected", "cancelled"]
         v_lower = v.lower()
         if v_lower not in allowed_statuses:
             raise ValueError(f"Invalid status. Allowed for manual update: {', '.join(allowed_statuses)}")
@@ -201,12 +208,14 @@ class QuoteUpdateStatus(BaseModel):
 
 class QuoteAccept(BaseModel):
     """Schema for customer accepting a quote"""
+
     accepted: bool = Field(True, description="Customer acceptance confirmation")
     customer_notes: Optional[str] = Field(None, max_length=1000, description="Additional notes from customer")
 
 
 class QuotePricingResponse(BaseModel):
     """Schema for Bambu Suite pricing response"""
+
     material_grams: Decimal
     print_time_hours: Decimal
     unit_price: Decimal
@@ -221,6 +230,7 @@ class QuotePricingResponse(BaseModel):
 
 class QuoteStatsResponse(BaseModel):
     """Schema for quote statistics (admin dashboard)"""
+
     total_quotes: int
     pending_quotes: int
     approved_quotes: int
@@ -235,6 +245,7 @@ class QuoteStatsResponse(BaseModel):
 
 class BambuQuoteRequest(BaseModel):
     """Schema for quote request to Bambu Suite API"""
+
     file_path: str
     material_type: str
     quantity: int
@@ -244,6 +255,7 @@ class BambuQuoteRequest(BaseModel):
 
 class BambuQuoteResponse(BaseModel):
     """Schema for quote response from Bambu Suite API"""
+
     success: bool
     material_grams: Optional[Decimal] = None
     print_time_hours: Optional[Decimal] = None
@@ -262,8 +274,10 @@ class BambuQuoteResponse(BaseModel):
 # PORTAL QUOTE SCHEMAS (Public/Anonymous)
 # ============================================================================
 
+
 class QuoteMaterialCreate(BaseModel):
     """Schema for per-filament material breakdown (multi-material quotes)"""
+
     slot_number: int = Field(..., ge=1, le=16, description="AMS slot number (1-indexed)")
     material_type: str = Field(..., max_length=50, description="Material type code: PLA_BASIC, PETG_HF, etc.")
     color_code: Optional[str] = Field(None, max_length=30, description="Color code: BLK, WHT, etc.")
@@ -275,6 +289,7 @@ class QuoteMaterialCreate(BaseModel):
 
 class MultiMaterialData(BaseModel):
     """Schema for multi-material quote data from slicer"""
+
     is_multi_material: bool = Field(False, description="Whether this is a multi-material print")
     material_count: int = Field(1, ge=1, description="Number of materials/colors used")
     filament_types: Optional[List[str]] = Field(None, description="List of material types per slot")
@@ -287,10 +302,11 @@ class MultiMaterialData(BaseModel):
 
 class PortalQuoteCreate(BaseModel):
     """Schema for creating a quote from the public portal (no auth required)"""
+
     # File info
     filename: str = Field(..., max_length=255, description="Original filename")
     file_format: str = Field(..., max_length=10, description="File extension: .3mf or .stl")
-    
+
     # Quote details
     material: str = Field(..., max_length=50, description="Material: PLA, PETG, ABS, ASA, TPU")
     quality: str = Field("standard", max_length=50, description="Quality level")
@@ -298,34 +314,36 @@ class PortalQuoteCreate(BaseModel):
     color: Optional[str] = Field(None, max_length=50, description="Selected color code")
     color_name: Optional[str] = Field(None, max_length=100, description="Selected color display name")
     quantity: int = Field(1, ge=1, le=1000, description="Number of units")
-    
+
     # Pricing from Print Suite
     unit_price: Decimal = Field(..., description="Price per unit")
     total_price: Decimal = Field(..., description="Total price (unit_price * quantity)")
     material_grams: Decimal = Field(..., description="Material weight in grams")
     print_time_minutes: Decimal = Field(..., description="Print time in minutes")
-    
+
     # Dimensions
     dimensions_x: Optional[Decimal] = Field(None, description="X dimension in mm")
     dimensions_y: Optional[Decimal] = Field(None, description="Y dimension in mm")
     dimensions_z: Optional[Decimal] = Field(None, description="Z dimension in mm")
-    
+
     # Stock status
     material_in_stock: Optional[bool] = Field(True, description="Whether material/color is in stock")
-    
+
     # Customer info
     customer_id: Optional[int] = Field(None, description="Logged-in customer ID")
     customer_email: Optional[str] = Field(None, max_length=255, description="Customer email for follow-up")
     customer_notes: Optional[str] = Field(None, max_length=1000, description="Special requests")
 
     # Multi-material data (from slicer output)
-    multi_material: Optional[MultiMaterialData] = Field(None, description="Multi-material/multi-color breakdown from slicer")
+    multi_material: Optional[MultiMaterialData] = Field(
+        None, description="Multi-material/multi-color breakdown from slicer"
+    )
 
-    @field_validator('material')
+    @field_validator("material")
     @classmethod
     def validate_material(cls, v: str) -> str:
         # Accept base materials and specific variants
-        base_materials = ['PLA', 'PETG', 'ABS', 'ASA', 'TPU']
+        base_materials = ["PLA", "PETG", "ABS", "ASA", "TPU"]
         v_upper = v.upper()
 
         # Check if it's a base material
@@ -333,7 +351,7 @@ class PortalQuoteCreate(BaseModel):
             return v_upper
 
         # Check if it's a variant (e.g., PLA_BASIC, PLA_SILK, PETG_HF)
-        base = v_upper.split('_')[0]
+        base = v_upper.split("_")[0]
         if base in base_materials:
             return v_upper
 
@@ -342,6 +360,7 @@ class PortalQuoteCreate(BaseModel):
 
 class PortalQuoteResponse(BaseModel):
     """Response for portal quote creation"""
+
     id: int
     quote_number: str
     filename: str
@@ -365,6 +384,7 @@ class PortalQuoteResponse(BaseModel):
 
 class MultiColorSlot(BaseModel):
     """Color selection for a single slot in multi-color print"""
+
     slot: int
     color_code: str
     color_name: Optional[str] = None
@@ -374,12 +394,14 @@ class MultiColorSlot(BaseModel):
 
 class MultiColorInfo(BaseModel):
     """Multi-color print configuration"""
+
     primary_slot: Optional[int] = Field(None, description="1-indexed slot number for the primary/main color")
     slot_colors: List[MultiColorSlot]
 
 
 class PortalAcceptQuote(BaseModel):
     """Schema for customer accepting a quote with shipping info"""
+
     # Shipping address fields
     shipping_name: Optional[str] = Field(None, max_length=200)
     shipping_address_line1: str = Field(..., max_length=255)
@@ -402,6 +424,7 @@ class PortalAcceptQuote(BaseModel):
 
 class PortalSubmitForReview(BaseModel):
     """Schema for submitting a quote for engineer review"""
+
     # Customer contact (required for follow-up)
     customer_email: str = Field(..., max_length=255, description="Customer email for payment link")
     customer_name: Optional[str] = Field(None, max_length=200, description="Customer name")

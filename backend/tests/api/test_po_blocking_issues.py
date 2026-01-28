@@ -3,6 +3,7 @@ Tests for GET /api/v1/production-orders/{id}/blocking-issues endpoint.
 
 API-202: Production Order Blocking Issues Endpoint
 """
+
 from decimal import Decimal
 
 from tests.factories import (
@@ -36,16 +37,9 @@ class TestProductionOrderBlockingIssues:
         create_test_inventory(db_session, product=material, quantity=Decimal("1000"))
 
         product = create_test_product(db_session, sku="PROD-AVAIL", name="Available Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("1")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("1")}])
 
-        wo = create_test_production_order(
-            db_session,
-            product=product,
-            quantity=50,
-            status="released"
-        )
+        wo = create_test_production_order(db_session, product=product, quantity=50, status="released")
         db_session.commit()
 
         # Execute
@@ -70,16 +64,15 @@ class TestProductionOrderBlockingIssues:
         create_test_inventory(db_session, product=material, quantity=Decimal("30"))
 
         product = create_test_product(db_session, sku="PROD-SHORT", name="Short Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("2")}  # 2 units per product
-        ])
-
-        wo = create_test_production_order(
+        create_test_bom(
             db_session,
             product=product,
-            quantity=50,
-            status="released"
+            lines=[
+                {"component": material, "quantity": Decimal("2")}  # 2 units per product
+            ],
         )
+
+        wo = create_test_production_order(db_session, product=product, quantity=50, status="released")
         db_session.commit()
 
         # Execute
@@ -107,24 +100,14 @@ class TestProductionOrderBlockingIssues:
         create_test_inventory(db_session, product=material, quantity=Decimal("20"))
 
         product = create_test_product(db_session, sku="PROD-PEND", name="Pending Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("1")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("1")}])
 
-        wo = create_test_production_order(
-            db_session,
-            product=product,
-            quantity=50,
-            status="released"
-        )
+        wo = create_test_production_order(db_session, product=product, quantity=50, status="released")
 
         # Incoming PO
         vendor = create_test_vendor(db_session, name="Test Vendor")
         po = create_test_purchase_order(
-            db_session,
-            vendor=vendor,
-            status="ordered",
-            lines=[{"product": material, "quantity": 100}]
+            db_session, vendor=vendor, status="ordered", lines=[{"product": material, "quantity": 100}]
         )
         db_session.commit()
 
@@ -148,32 +131,15 @@ class TestProductionOrderBlockingIssues:
         create_test_inventory(db_session, product=material, quantity=Decimal("1000"))
 
         product = create_test_product(db_session, sku="MTO-PROD", name="MTO Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("1")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("1")}])
 
         customer = create_test_user(
-            db_session,
-            email="customer@test.com",
-            account_type="customer",
-            company_name="Test Customer Inc"
+            db_session, email="customer@test.com", account_type="customer", company_name="Test Customer Inc"
         )
 
-        so = create_test_sales_order(
-            db_session,
-            user=customer,
-            product=product,
-            quantity=25,
-            status="confirmed"
-        )
+        so = create_test_sales_order(db_session, user=customer, product=product, quantity=25, status="confirmed")
 
-        wo = create_test_production_order(
-            db_session,
-            product=product,
-            quantity=25,
-            sales_order=so,
-            status="released"
-        )
+        wo = create_test_production_order(db_session, product=product, quantity=25, sales_order=so, status="released")
         db_session.commit()
 
         # Execute
@@ -195,23 +161,13 @@ class TestProductionOrderBlockingIssues:
         create_test_inventory(db_session, product=material, quantity=Decimal("10"))
 
         product = create_test_product(db_session, sku="ACTION-PROD", name="Action Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("1")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("1")}])
 
-        wo = create_test_production_order(
-            db_session,
-            product=product,
-            quantity=50,
-            status="released"
-        )
+        wo = create_test_production_order(db_session, product=product, quantity=50, status="released")
 
         vendor = create_test_vendor(db_session)
         po = create_test_purchase_order(
-            db_session,
-            vendor=vendor,
-            status="ordered",
-            lines=[{"product": material, "quantity": 100}]
+            db_session, vendor=vendor, status="ordered", lines=[{"product": material, "quantity": 100}]
         )
         db_session.commit()
 
@@ -240,18 +196,17 @@ class TestProductionOrderBlockingIssues:
         # mat_zero has no inventory
 
         product = create_test_product(db_session, sku="MULTI-PROD", name="Multi Material Product")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": mat_ok, "quantity": Decimal("1")},
-            {"component": mat_short, "quantity": Decimal("1")},
-            {"component": mat_zero, "quantity": Decimal("1")},
-        ])
-
-        wo = create_test_production_order(
+        create_test_bom(
             db_session,
             product=product,
-            quantity=50,
-            status="released"
+            lines=[
+                {"component": mat_ok, "quantity": Decimal("1")},
+                {"component": mat_short, "quantity": Decimal("1")},
+                {"component": mat_zero, "quantity": Decimal("1")},
+            ],
         )
+
+        wo = create_test_production_order(db_session, product=product, quantity=50, status="released")
         db_session.commit()
 
         # Execute

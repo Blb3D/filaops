@@ -3,6 +3,7 @@ Production Order Pydantic Schemas
 
 Manufacturing Orders (MOs) for tracking production of finished goods.
 """
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime, date
@@ -14,8 +15,10 @@ from enum import Enum
 # Enums
 # ============================================================================
 
+
 class ProductionOrderStatus(str, Enum):
     """Production order status"""
+
     DRAFT = "draft"
     RELEASED = "released"
     SCHEDULED = "scheduled"
@@ -30,6 +33,7 @@ class ProductionOrderStatus(str, Enum):
 
 class ProductionOrderSource(str, Enum):
     """How the production order was created"""
+
     MANUAL = "manual"
     SALES_ORDER = "sales_order"
     MRP_PLANNED = "mrp_planned"
@@ -37,12 +41,14 @@ class ProductionOrderSource(str, Enum):
 
 class ProductionOrderType(str, Enum):
     """Production order type - determines fulfillment flow"""
+
     MAKE_TO_ORDER = "MAKE_TO_ORDER"  # MTO: Produced for specific sales order, ships when complete
     MAKE_TO_STOCK = "MAKE_TO_STOCK"  # MTS: Produced for inventory, FG sits on shelf until ordered
 
 
 class OperationStatus(str, Enum):
     """Operation execution status"""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -52,6 +58,7 @@ class OperationStatus(str, Enum):
 
 class QCStatus(str, Enum):
     """Quality Control status"""
+
     NOT_REQUIRED = "not_required"
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
@@ -64,8 +71,10 @@ class QCStatus(str, Enum):
 # Production Order Operation Schemas
 # ============================================================================
 
+
 class ProductionOrderOperationBase(BaseModel):
     """Base operation fields"""
+
     work_center_id: int
     resource_id: Optional[int] = None
     sequence: int = Field(..., ge=1)
@@ -78,11 +87,13 @@ class ProductionOrderOperationBase(BaseModel):
 
 class ProductionOrderOperationCreate(ProductionOrderOperationBase):
     """Create a new operation (usually auto-created from routing)"""
+
     routing_operation_id: Optional[int] = None
 
 
 class ProductionOrderOperationUpdate(BaseModel):
     """Update an operation - typically during execution"""
+
     resource_id: Optional[int] = None
     status: Optional[OperationStatus] = None
     quantity_completed: Optional[Decimal] = Field(None, ge=0)
@@ -101,6 +112,7 @@ class ProductionOrderOperationUpdate(BaseModel):
 
 class ProductionOrderOperationResponse(BaseModel):
     """Operation response with full details"""
+
     id: int
     production_order_id: int
     routing_operation_id: Optional[int] = None
@@ -151,6 +163,7 @@ class ProductionOrderOperationResponse(BaseModel):
 
 class OperationMaterialResponse(BaseModel):
     """Material requirement for a production order operation"""
+
     id: int
     component_id: int
     component_sku: Optional[str] = None
@@ -169,8 +182,10 @@ class OperationMaterialResponse(BaseModel):
 # Production Order Schemas
 # ============================================================================
 
+
 class ProductionOrderBase(BaseModel):
     """Base production order fields"""
+
     product_id: int
     quantity_ordered: Decimal = Field(..., gt=0)
     due_date: Optional[date] = None
@@ -180,6 +195,7 @@ class ProductionOrderBase(BaseModel):
 
 class ProductionOrderCreate(ProductionOrderBase):
     """Create a new production order"""
+
     bom_id: Optional[int] = None
     routing_id: Optional[int] = None
     sales_order_id: Optional[int] = None
@@ -191,6 +207,7 @@ class ProductionOrderCreate(ProductionOrderBase):
 
 class ProductionOrderUpdate(BaseModel):
     """Update a production order"""
+
     quantity_ordered: Optional[Decimal] = Field(None, gt=0)
     quantity_completed: Optional[Decimal] = Field(None, ge=0)
     quantity_scrapped: Optional[Decimal] = Field(None, ge=0)
@@ -206,6 +223,7 @@ class ProductionOrderUpdate(BaseModel):
 
 class ProductionOrderScheduleRequest(BaseModel):
     """Schedule a production order to a specific resource and time"""
+
     scheduled_start: datetime
     scheduled_end: datetime
     resource_id: Optional[int] = Field(None, description="Resource/machine ID to assign")
@@ -214,12 +232,14 @@ class ProductionOrderScheduleRequest(BaseModel):
 
 class ProductionOrderStatusUpdate(BaseModel):
     """Update just the status (with optional timestamps)"""
+
     status: ProductionOrderStatus
     notes: Optional[str] = None
 
 
 class ProductionOrderListResponse(BaseModel):
     """Summary for list views"""
+
     id: int
     code: str
     product_id: int
@@ -258,6 +278,7 @@ class ProductionOrderListResponse(BaseModel):
 
 class ProductionOrderResponse(BaseModel):
     """Full production order details"""
+
     id: int
     code: str
 
@@ -336,43 +357,43 @@ class ProductionOrderResponse(BaseModel):
 
 class ProductionOrderScrapResponse(ProductionOrderResponse):
     """Response schema for production order scrap operations.
-    
+
     This schema extends ProductionOrderResponse to provide comprehensive information
     when a production order is scrapped, including details about automatically created
     remake orders when applicable.
-    
+
     Used by the scrap endpoint to return the updated production order state along with
     information about any automatically generated remake orders that replace the scrapped
     quantity.
-    
+
     Attributes:
-        remake_order_id (Optional[int]): The unique identifier of the automatically 
-            created remake production order. This field is populated when the system 
-            automatically creates a new order to replace scrapped quantity. None if no 
+        remake_order_id (Optional[int]): The unique identifier of the automatically
+            created remake production order. This field is populated when the system
+            automatically creates a new order to replace scrapped quantity. None if no
             remake order was created.
-            
-        remake_order_code (Optional[str]): The human-readable code/reference number 
-            assigned to the remake production order (e.g., "MO-2024-001234"). None if 
+
+        remake_order_code (Optional[str]): The human-readable code/reference number
+            assigned to the remake production order (e.g., "MO-2024-001234"). None if
             no remake order was created.
-    
+
     Inherited Attributes (from ProductionOrderResponse):
         All attributes from ProductionOrderResponse are inherited, including:
-        
+
         - **Identification**: id, code
         - **Product References**: product_id, product_sku, product_name
         - **BOM/Routing**: bom_id, bom_code, routing_id, routing_code
         - **Sales Order Links**: sales_order_id, sales_order_code, sales_order_line_id
-        - **Quantities**: quantity_ordered, quantity_completed, quantity_scrapped, 
+        - **Quantities**: quantity_ordered, quantity_completed, quantity_scrapped,
           quantity_remaining, completion_percent
         - **Status & Priority**: source, status, priority
         - **Scheduling**: due_date, scheduled_start, scheduled_end, actual_start, actual_end
         - **Time Tracking**: estimated_time_minutes, actual_time_minutes
-        - **Cost Tracking**: estimated_material_cost, estimated_labor_cost, 
+        - **Cost Tracking**: estimated_material_cost, estimated_labor_cost,
           estimated_total_cost, actual_material_cost, actual_labor_cost, actual_total_cost
         - **Assignment**: assigned_to, notes
         - **Operations**: operations (list of ProductionOrderOperationResponse)
         - **Metadata**: created_at, updated_at, created_by, released_at, completed_at
-    
+
     Example:
         ```json
         {
@@ -388,12 +409,13 @@ class ProductionOrderScrapResponse(ProductionOrderResponse):
             ...
         }
         ```
-    
+
     See Also:
         - ProductionOrderResponse: Parent class with full production order details
         - ProductionOrderStatus: Enum for valid status values
         - ProductionOrderOperationResponse: Schema for operation details
     """
+
     remake_order_id: Optional[int] = None
     remake_order_code: Optional[str] = None
 
@@ -402,13 +424,16 @@ class ProductionOrderScrapResponse(ProductionOrderResponse):
 # Bulk Operations
 # ============================================================================
 
+
 class ProductionOrderBulkCreate(BaseModel):
     """Create multiple production orders"""
+
     orders: List[ProductionOrderCreate]
 
 
 class ProductionOrderBulkStatusUpdate(BaseModel):
     """Update status of multiple orders"""
+
     order_ids: List[int]
     status: ProductionOrderStatus
 
@@ -417,8 +442,10 @@ class ProductionOrderBulkStatusUpdate(BaseModel):
 # Schedule/Queue Views
 # ============================================================================
 
+
 class ProductionQueueItem(BaseModel):
     """Item for the production queue/kanban view"""
+
     id: int
     code: str
     product_sku: str
@@ -439,6 +466,7 @@ class ProductionQueueItem(BaseModel):
 
 class WorkCenterQueue(BaseModel):
     """Operations queued at a work center"""
+
     work_center_id: int
     work_center_code: str
     work_center_name: str
@@ -449,6 +477,7 @@ class WorkCenterQueue(BaseModel):
 
 class ProductionScheduleSummary(BaseModel):
     """Summary stats for the production schedule"""
+
     total_orders: int = 0
     orders_by_status: dict = {}
     orders_due_today: int = 0
@@ -461,32 +490,27 @@ class ProductionScheduleSummary(BaseModel):
 # Split Order Schemas
 # ============================================================================
 
+
 class SplitQuantity(BaseModel):
     """Quantity for a single split order"""
+
     quantity: int = Field(..., gt=0, description="Quantity for this split")
 
 
 class ProductionOrderSplitRequest(BaseModel):
     """Request to split a production order into multiple child orders"""
+
     splits: List[SplitQuantity] = Field(
-        ...,
-        min_length=2,
-        description="List of quantities for each split (must have at least 2)"
+        ..., min_length=2, description="List of quantities for each split (must have at least 2)"
     )
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "splits": [
-                    {"quantity": 25},
-                    {"quantity": 25}
-                ]
-            }
-        }
+        json_schema_extra = {"example": {"splits": [{"quantity": 25}, {"quantity": 25}]}}
 
 
 class ProductionOrderSplitResponse(BaseModel):
     """Response from splitting a production order"""
+
     parent_order_id: int
     parent_order_code: str
     parent_status: str
@@ -498,8 +522,10 @@ class ProductionOrderSplitResponse(BaseModel):
 # Scrap Reason Schemas
 # ============================================================================
 
+
 class ScrapReasonCreate(BaseModel):
     """Create schema for scrap reasons"""
+
     code: str = Field(..., min_length=1, max_length=50, description="Unique code for the scrap reason")
     name: str = Field(..., min_length=1, max_length=100, description="Display name")
     description: Optional[str] = Field(None, description="Detailed description")
@@ -508,6 +534,7 @@ class ScrapReasonCreate(BaseModel):
 
 class ScrapReasonDetail(BaseModel):
     """Detailed scrap reason information"""
+
     id: int
     code: str
     name: str
@@ -520,6 +547,7 @@ class ScrapReasonDetail(BaseModel):
 
 class ScrapReasonUpdate(BaseModel):
     """Update schema for scrap reasons"""
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     active: Optional[bool] = None
@@ -531,6 +559,7 @@ class ScrapReasonUpdate(BaseModel):
 
 class ScrapReasonsResponse(BaseModel):
     """Response for scrap reasons endpoint"""
+
     reasons: List[str] = Field(..., description="List of scrap reason codes")
     details: List[ScrapReasonDetail] = Field(..., description="Detailed scrap reason information")
     descriptions: dict[str, str] = Field(..., description="Map of code to description")
@@ -543,29 +572,22 @@ class ScrapReasonsResponse(BaseModel):
 # QC Inspection Schemas
 # ============================================================================
 
+
 class QCInspectionRequest(BaseModel):
     """Request to perform QC inspection on a production order"""
-    result: QCStatus = Field(
-        ...,
-        description="QC result: 'passed' or 'failed'"
-    )
-    notes: Optional[str] = Field(
-        None,
-        max_length=2000,
-        description="Inspector notes about the QC inspection"
-    )
+
+    result: QCStatus = Field(..., description="QC result: 'passed' or 'failed'")
+    notes: Optional[str] = Field(None, max_length=2000, description="Inspector notes about the QC inspection")
 
     class Config:
         json_schema_extra = {
-            "example": {
-                "result": "passed",
-                "notes": "All units inspected. Surface finish acceptable."
-            }
+            "example": {"result": "passed", "notes": "All units inspected. Surface finish acceptable."}
         }
 
 
 class QCInspectionResponse(BaseModel):
     """Response from QC inspection"""
+
     production_order_id: int
     production_order_code: str
     qc_status: str
@@ -581,8 +603,10 @@ class QCInspectionResponse(BaseModel):
 # Spool Consumption Schemas
 # ============================================================================
 
+
 class SpoolUsage(BaseModel):
     """Record of spool used during production - enables material traceability"""
+
     product_id: int = Field(..., description="Material product ID from BOM")
     spool_id: int = Field(..., description="Spool ID being consumed")
     weight_consumed_g: Optional[Decimal] = Field(
@@ -592,6 +616,7 @@ class SpoolUsage(BaseModel):
 
 class ProductionOrderCompleteRequest(BaseModel):
     """Request body for completing a production order with optional spool tracking"""
+
     quantity_completed: Optional[Decimal] = Field(None, ge=0)
     quantity_scrapped: Optional[Decimal] = Field(None, ge=0)
     force_close_short: bool = Field(False, description="Explicitly close order short without producing all units")
@@ -604,9 +629,7 @@ class ProductionOrderCompleteRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "quantity_completed": 10,
-                "spools_used": [
-                    {"product_id": 5, "spool_id": 12, "weight_consumed_g": 150.5}
-                ]
+                "spools_used": [{"product_id": 5, "spool_id": 12, "weight_consumed_g": 150.5}],
             }
         }
 
@@ -615,14 +638,15 @@ class ProductionOrderCompleteRequest(BaseModel):
 # Operation-Level Scrap Schemas
 # ============================================================================
 
+
 class OperationScrapRequest(BaseModel):
     """Request to scrap units at a specific operation with cascading material accounting"""
+
     quantity_scrapped: int = Field(..., ge=1, description="Number of units to scrap")
     scrap_reason_code: str = Field(..., min_length=1, max_length=50, description="Scrap reason code")
     notes: Optional[str] = Field(None, max_length=2000, description="Optional notes about the scrap")
     create_replacement: bool = Field(
-        True,
-        description="If True, create a replacement production order for the scrapped quantity"
+        True, description="If True, create a replacement production order for the scrapped quantity"
     )
 
     class Config:
@@ -631,13 +655,14 @@ class OperationScrapRequest(BaseModel):
                 "quantity_scrapped": 2,
                 "scrap_reason_code": "layer_shift",
                 "notes": "Layer shift detected at z=50mm",
-                "create_replacement": True
+                "create_replacement": True,
             }
         }
 
 
 class ScrapCascadeMaterial(BaseModel):
     """Material consumed in the scrap cascade"""
+
     operation_id: int
     operation_sequence: int
     operation_name: str
@@ -652,6 +677,7 @@ class ScrapCascadeMaterial(BaseModel):
 
 class ScrapCascadeResponse(BaseModel):
     """Response from scrap cascade calculation (preview before scrap)"""
+
     production_order_id: int
     production_order_code: str
     operation_id: int
@@ -680,23 +706,25 @@ class ScrapCascadeResponse(BaseModel):
                         "quantity": 100.0,
                         "unit": "G",
                         "unit_cost": 0.02,
-                        "cost": 2.0
+                        "cost": 2.0,
                     }
                 ],
                 "total_cost": 5.50,
-                "operations_affected": 3
+                "operations_affected": 3,
             }
         }
 
 
 class ReplacementOrderInfo(BaseModel):
     """Info about a created replacement production order"""
+
     id: int
     code: str
 
 
 class OperationScrapResponse(BaseModel):
     """Response from operation-level scrap execution"""
+
     success: bool
     scrap_records_created: int
     operations_affected: int
@@ -714,10 +742,7 @@ class OperationScrapResponse(BaseModel):
                 "total_scrap_cost": 12.50,
                 "journal_entry_number": "JE-2026-000042",
                 "downstream_ops_skipped": 2,
-                "replacement_order": {
-                    "id": 124,
-                    "code": "PO-2026-0002"
-                }
+                "replacement_order": {"id": 124, "code": "PO-2026-0002"},
             }
         }
 
@@ -726,22 +751,17 @@ class OperationScrapResponse(BaseModel):
 # Partial Operation Completion Schemas
 # ============================================================================
 
+
 class OperationPartialCompleteRequest(BaseModel):
     """Request to partially complete an operation with optional scrap"""
+
     quantity_completed: int = Field(..., ge=0, description="Number of good units completed")
     quantity_scrapped: int = Field(0, ge=0, description="Number of units scrapped at this operation")
-    scrap_reason_code: Optional[str] = Field(
-        None,
-        max_length=50,
-        description="Required if quantity_scrapped > 0"
-    )
+    scrap_reason_code: Optional[str] = Field(None, max_length=50, description="Required if quantity_scrapped > 0")
     scrap_notes: Optional[str] = Field(None, max_length=2000, description="Notes about the scrap")
     actual_run_minutes: Optional[int] = Field(None, ge=0, description="Actual run time in minutes")
     notes: Optional[str] = Field(None, max_length=2000, description="General operation notes")
-    create_replacement: bool = Field(
-        True,
-        description="If scrapping, create replacement PO for scrapped qty"
-    )
+    create_replacement: bool = Field(True, description="If scrapping, create replacement PO for scrapped qty")
 
     class Config:
         json_schema_extra = {
@@ -751,6 +771,6 @@ class OperationPartialCompleteRequest(BaseModel):
                 "scrap_reason_code": "layer_shift",
                 "scrap_notes": "Layer shift on 2 parts",
                 "actual_run_minutes": 45,
-                "create_replacement": True
+                "create_replacement": True,
             }
         }

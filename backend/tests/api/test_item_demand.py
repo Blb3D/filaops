@@ -3,6 +3,7 @@ Tests for GET /api/v1/items/{id}/demand-summary endpoint.
 
 TDD: Write tests first, then implement to make them pass.
 """
+
 from decimal import Decimal
 
 from tests.factories import (
@@ -69,28 +70,14 @@ class TestItemDemandSummary:
         product = create_test_product(db_session, sku="PROD-USES-MAT", name="Product Using Material")
 
         # 3. Create BOM linking product to material (2 units per product)
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("2")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("2")}])
 
         # 4. Create a customer and sales order
         customer = create_test_user(db_session, email="customer@example.com", account_type="customer")
-        so = create_test_sales_order(
-            db_session,
-            user=customer,
-            product=product,
-            status="confirmed",
-            quantity=25
-        )
+        so = create_test_sales_order(db_session, user=customer, product=product, status="confirmed", quantity=25)
 
         # 5. Create production order linked to sales order
-        po = create_test_production_order(
-            db_session,
-            product=product,
-            quantity=25,
-            sales_order=so,
-            status="released"
-        )
+        po = create_test_production_order(db_session, product=product, quantity=25, sales_order=so, status="released")
         db_session.commit()
 
         # Execute
@@ -126,7 +113,7 @@ class TestItemDemandSummary:
             db_session,
             vendor=vendor,
             status="ordered",
-            lines=[{"product": material, "quantity": 100, "unit_cost": Decimal("10.00")}]
+            lines=[{"product": material, "quantity": 100, "unit_cost": Decimal("10.00")}],
         )
         db_session.commit()
 
@@ -157,9 +144,7 @@ class TestItemDemandSummary:
         create_test_inventory(db_session, product=material, quantity=Decimal("30"))
 
         product = create_test_product(db_session, sku="PROD-NEEDS-MAT")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("1")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("1")}])
 
         # Two production orders consuming more than available
         create_test_production_order(db_session, product=product, quantity=25, status="released")
@@ -192,26 +177,13 @@ class TestItemDemandSummary:
         create_test_inventory(db_session, product=material, quantity=Decimal("100"))
 
         product = create_test_product(db_session, sku="PROD-COMPLETE-TEST")
-        create_test_bom(db_session, product=product, lines=[
-            {"component": material, "quantity": Decimal("5")}
-        ])
+        create_test_bom(db_session, product=product, lines=[{"component": material, "quantity": Decimal("5")}])
 
         # Create completed production order (should NOT be counted)
-        create_test_production_order(
-            db_session,
-            product=product,
-            quantity=10,
-            status="closed",
-            quantity_completed=10
-        )
+        create_test_production_order(db_session, product=product, quantity=10, status="closed", quantity_completed=10)
 
         # Create active production order (SHOULD be counted)
-        create_test_production_order(
-            db_session,
-            product=product,
-            quantity=5,
-            status="released"
-        )
+        create_test_production_order(db_session, product=product, quantity=5, status="released")
         db_session.commit()
 
         # Execute
@@ -242,15 +214,12 @@ class TestItemDemandSummary:
             db_session,
             vendor=vendor,
             status="received",  # Fully received
-            lines=[{"product": material, "quantity": 100}]
+            lines=[{"product": material, "quantity": 100}],
         )
 
         # Create ordered PO (SHOULD be counted as incoming)
         create_test_purchase_order(
-            db_session,
-            vendor=vendor,
-            status="ordered",
-            lines=[{"product": material, "quantity": 75}]
+            db_session, vendor=vendor, status="ordered", lines=[{"product": material, "quantity": 75}]
         )
         db_session.commit()
 

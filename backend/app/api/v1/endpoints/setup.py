@@ -4,6 +4,7 @@ First-run setup endpoint for FilaOps
 Allows creating the initial admin account when no users exist.
 This endpoint is disabled once any user has been created.
 """
+
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -19,12 +20,14 @@ router = APIRouter(prefix="/setup", tags=["setup"])
 
 class SetupStatusResponse(BaseModel):
     """Response for setup status check"""
+
     needs_setup: bool
     message: str
 
 
 class InitialAdminCreate(BaseModel):
     """Schema for creating the initial admin user"""
+
     email: EmailStr
     password: str = Field(..., min_length=8, description="Password must meet strength requirements")
     full_name: str = Field(..., min_length=1, max_length=100)
@@ -33,6 +36,7 @@ class InitialAdminCreate(BaseModel):
 
 class SetupCompleteResponse(BaseModel):
     """Response after successful setup"""
+
     message: str
     email: str
     access_token: str
@@ -43,67 +47,51 @@ class SetupCompleteResponse(BaseModel):
 def get_setup_status(db: Session = Depends(get_db)):
     """
     Check if first-run setup is needed.
-    
+
     Returns needs_setup=True if no users exist in the database.
     Frontend should redirect to setup page if this returns True.
     """
     user_count = db.query(User).count()
-    
+
     if user_count == 0:
         return SetupStatusResponse(
-            needs_setup=True,
-            message="Welcome to FilaOps! Create your admin account to get started."
+            needs_setup=True, message="Welcome to FilaOps! Create your admin account to get started."
         )
-    
-    return SetupStatusResponse(
-        needs_setup=False,
-        message="Setup complete. Please log in."
-    )
+
+    return SetupStatusResponse(needs_setup=False, message="Setup complete. Please log in.")
 
 
 @router.post("/initial-admin", response_model=SetupCompleteResponse)
-def create_initial_admin(
-    admin_data: InitialAdminCreate,
-    db: Session = Depends(get_db)
-):
+def create_initial_admin(admin_data: InitialAdminCreate, db: Session = Depends(get_db)):
     """
     Create the initial admin user during first-run setup.
-    
+
     This endpoint ONLY works when no users exist in the database.
     Once any user is created, this endpoint returns 403 Forbidden.
-    
+
     Security: This prevents unauthorized admin creation after initial setup.
     """
     # Check if any users already exist
     user_count = db.query(User).count()
     if user_count > 0:
-        raise HTTPException(
-            status_code=403,
-            detail="Setup already complete. Admin creation is disabled."
-        )
-    
+        raise HTTPException(status_code=403, detail="Setup already complete. Admin creation is disabled.")
+
     # Check if email already exists (shouldn't happen, but be safe)
     existing = db.query(User).filter(User.email == admin_data.email).first()
     if existing:
-        raise HTTPException(
-            status_code=400,
-            detail="Email already registered"
-        )
-    
+        raise HTTPException(status_code=400, detail="Email already registered")
+
     # Validate password strength
     is_valid, error_msg = validate_password_strength(admin_data.password)
     if not is_valid:
-        raise HTTPException(
-            status_code=400,
-            detail=error_msg
-        )
-    
+        raise HTTPException(status_code=400, detail=error_msg)
+
     # Create the admin user
     # Parse full_name into first/last
-    name_parts = admin_data.full_name.strip().split(' ', 1)
+    name_parts = admin_data.full_name.strip().split(" ", 1)
     first_name = name_parts[0]
-    last_name = name_parts[1] if len(name_parts) > 1 else ''
-    
+    last_name = name_parts[1] if len(name_parts) > 1 else ""
+
     admin = User(
         email=admin_data.email,
         password_hash=hash_password(admin_data.password),
@@ -112,25 +100,24 @@ def create_initial_admin(
         company_name=admin_data.company_name or None,
         account_type="admin",
         status="active",
-        email_verified=True
+        email_verified=True,
     )
-    
+
     db.add(admin)
     db.commit()
     db.refresh(admin)
-    
+
     # Generate access token so they're logged in immediately
     access_token = create_access_token(user_id=admin.id)
-    
+
     return SetupCompleteResponse(
-        message="Admin account created successfully! Welcome to FilaOps.",
-        email=admin.email,
-        access_token=access_token
+        message="Admin account created successfully! Welcome to FilaOps.", email=admin.email, access_token=access_token
     )
 
 
 class SeedDataResponse(BaseModel):
     """Response after seeding example data"""
+
     message: str
     items_created: int
     items_skipped: int
@@ -141,12 +128,10 @@ class SeedDataResponse(BaseModel):
 
 
 @router.post("/seed-example-data", response_model=SeedDataResponse)
-def seed_example_data(
-    db: Session = Depends(get_db)
-):
+def seed_example_data(db: Session = Depends(get_db)):
     """
     Seed the database with example items and materials.
-    
+
     This can be called during onboarding to populate example data.
     Safe to run multiple times - won't duplicate existing data.
     """
@@ -154,14 +139,14 @@ def seed_example_data(
         # Import seed functions directly from the script
         # Use absolute import path
         from pathlib import Path
-        
+
         # Add backend to path if needed
         backend_path = Path(__file__).parent.parent.parent.parent
         if str(backend_path) not in sys.path:
             sys.path.insert(0, str(backend_path))
-        
+
         from scripts.seed_example_data import seed_example_items, seed_materials
-        
+
         # Run seed functions with error handling
         try:
             items_created, items_skipped = seed_example_items(db)
@@ -169,20 +154,18 @@ def seed_example_data(
             db.rollback()
             error_trace = traceback.format_exc()
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to seed example items: {str(e)}\n\nTraceback:\n{error_trace}"
+                status_code=500, detail=f"Failed to seed example items: {str(e)}\n\nTraceback:\n{error_trace}"
             )
-        
+
         try:
             mt_created, colors_created, links_created, mat_products_created = seed_materials(db)
         except Exception as e:
             db.rollback()
             error_trace = traceback.format_exc()
             raise HTTPException(
-                status_code=500,
-                detail=f"Failed to seed materials: {str(e)}\n\nTraceback:\n{error_trace}"
+                status_code=500, detail=f"Failed to seed materials: {str(e)}\n\nTraceback:\n{error_trace}"
             )
-        
+
         return SeedDataResponse(
             message="Example data seeded successfully!",
             items_created=items_created,
@@ -190,18 +173,17 @@ def seed_example_data(
             materials_created=mt_created,
             colors_created=colors_created,
             links_created=links_created,
-            material_products_created=mat_products_created
+            material_products_created=mat_products_created,
         )
     except HTTPException:
         raise  # Re-raise HTTP exceptions
     except ImportError as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Seed script not found. Please ensure backend/scripts/seed_example_data.py exists. Error: {str(e)}"
+            detail=f"Seed script not found. Please ensure backend/scripts/seed_example_data.py exists. Error: {str(e)}",
         )
     except Exception as e:
         error_trace = traceback.format_exc()
         raise HTTPException(
-            status_code=500,
-            detail=f"Failed to seed example data: {str(e)}\n\nTraceback:\n{error_trace}"
+            status_code=500, detail=f"Failed to seed example data: {str(e)}\n\nTraceback:\n{error_trace}"
         )

@@ -4,6 +4,7 @@ Entity Member Model
 Stores LLC members/partners for multi-member LLCs and S-corps.
 Used for K-1 allocation and capital account tracking.
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, Date, DateTime, func
 
 from app.db.base import Base
@@ -23,6 +24,7 @@ class EntityMember(Base):
         - inactive: Temporarily not participating
         - withdrawn: No longer a member (end_date set)
     """
+
     __tablename__ = "entity_members"
 
     id = Column(Integer, primary_key=True)

@@ -4,6 +4,7 @@ Maintenance API Endpoints
 Provides CRUD operations for printer maintenance logging and tracking.
 Freemium feature: Basic maintenance logging and scheduling.
 """
+
 from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import Optional
 from datetime import datetime, timedelta
@@ -51,6 +52,7 @@ def _maintenance_to_response(log: MaintenanceLog) -> MaintenanceLogResponse:
 # ============================================================================
 # Maintenance Log CRUD
 # ============================================================================
+
 
 @router.get("/", response_model=MaintenanceLogListResponse)
 async def list_maintenance_logs(
@@ -126,9 +128,12 @@ async def get_maintenance_due(
 
     for printer in printers:
         # Get the most recent maintenance log for this printer
-        latest_log = db.query(MaintenanceLog).filter(
-            MaintenanceLog.printer_id == printer.id
-        ).order_by(desc(MaintenanceLog.performed_at)).first()
+        latest_log = (
+            db.query(MaintenanceLog)
+            .filter(MaintenanceLog.printer_id == printer.id)
+            .order_by(desc(MaintenanceLog.performed_at))
+            .first()
+        )
 
         if latest_log and latest_log.next_due_at:
             # Calculate days overdue (positive = overdue, negative = future)
@@ -136,15 +141,17 @@ async def get_maintenance_due(
 
             # Include if overdue or due soon
             if latest_log.next_due_at <= future_date:
-                printers_due.append(PrinterMaintenanceDue(
-                    printer_id=printer.id,
-                    printer_code=printer.code,
-                    printer_name=printer.name,
-                    last_maintenance_date=latest_log.performed_at,
-                    next_due_date=latest_log.next_due_at,
-                    days_overdue=days_diff,
-                    last_maintenance_type=MaintenanceType(latest_log.maintenance_type),
-                ))
+                printers_due.append(
+                    PrinterMaintenanceDue(
+                        printer_id=printer.id,
+                        printer_code=printer.code,
+                        printer_name=printer.name,
+                        last_maintenance_date=latest_log.performed_at,
+                        next_due_date=latest_log.next_due_at,
+                        days_overdue=days_diff,
+                        last_maintenance_type=MaintenanceType(latest_log.maintenance_type),
+                    )
+                )
 
                 if days_diff > 0:
                     total_overdue += 1
@@ -177,6 +184,7 @@ async def get_maintenance_log(
 # ============================================================================
 # Printer-specific Maintenance
 # ============================================================================
+
 
 @router.get("/printers/{printer_id}/maintenance", response_model=MaintenanceLogListResponse)
 async def list_printer_maintenance(

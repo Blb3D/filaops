@@ -4,6 +4,7 @@ Unit of Measure (UOM) model
 Provides standardized units with conversion factors for proper
 inventory consumption across different measurement systems.
 """
+
 from decimal import Decimal
 
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, ForeignKey, CheckConstraint
@@ -25,10 +26,9 @@ class UnitOfMeasure(Base):
         - G has to_base_factor = 0.001 (1g = 0.001kg)
         - LB has to_base_factor = 0.453592 (1lb = 0.453592kg)
     """
+
     __tablename__ = "units_of_measure"
-    __table_args__ = (
-        CheckConstraint('to_base_factor > 0', name='check_to_base_factor_positive'),
-    )
+    __table_args__ = (CheckConstraint("to_base_factor > 0", name="check_to_base_factor_positive"),)
 
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(10), unique=True, nullable=False, index=True)  # EA, KG, G, LB, M, FT

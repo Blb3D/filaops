@@ -1,6 +1,7 @@
 """
 Amazon Business CSV Import Endpoints
 """
+
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -27,8 +28,10 @@ logger = get_logger(__name__)
 # Pydantic Models
 # ============================================================================
 
+
 class AmazonProduct(BaseModel):
     """Unique product from Amazon CSV"""
+
     asin: str
     title: str
     brand: str
@@ -39,6 +42,7 @@ class AmazonProduct(BaseModel):
 
 class AmazonOrder(BaseModel):
     """Order from Amazon CSV"""
+
     order_id: str
     order_date: str
     items: List[Dict[str, Any]]
@@ -50,6 +54,7 @@ class AmazonOrder(BaseModel):
 
 class ParseResult(BaseModel):
     """Result of parsing Amazon CSV"""
+
     order_count: int
     product_count: int
     total_spend: float
@@ -59,6 +64,7 @@ class ParseResult(BaseModel):
 
 class ProductMapping(BaseModel):
     """Mapping an Amazon product to a system product"""
+
     asin: str
     product_id: Optional[int] = None  # None = create as MISC
     category: str = "misc"  # "filament", "subscription", "misc", "skip"
@@ -67,12 +73,14 @@ class ProductMapping(BaseModel):
 
 class ImportRequest(BaseModel):
     """Request to import orders"""
+
     orders: List[AmazonOrder]
     mappings: Dict[str, ProductMapping]  # ASIN -> mapping
 
 
 class ImportResult(BaseModel):
     """Result of import"""
+
     pos_created: int
     lines_created: int
     skipped_orders: int
@@ -83,11 +91,12 @@ class ImportResult(BaseModel):
 # Helper Functions
 # ============================================================================
 
+
 def clean_price(val: str) -> float:
     """Clean a price string to float"""
     if not val:
         return 0.0
-    return float(str(val).replace(',', '').replace('"', '').replace('$', '').strip() or 0)
+    return float(str(val).replace(",", "").replace('"', "").replace("$", "").strip() or 0)
 
 
 def suggest_category(title: str, brand: str) -> str:
@@ -96,8 +105,8 @@ def suggest_category(title: str, brand: str) -> str:
     brand_lower = brand.lower()
 
     # Filament brands and keywords
-    filament_brands = ['elegoo', 'overture', 'esun', 'polymaker', 'bambulab', 'sunlu', 'hp3df']
-    filament_keywords = ['pla', 'petg', 'abs', 'asa', 'filament', 'tpu']
+    filament_brands = ["elegoo", "overture", "esun", "polymaker", "bambulab", "sunlu", "hp3df"]
+    filament_keywords = ["pla", "petg", "abs", "asa", "filament", "tpu"]
 
     if any(b in brand_lower for b in filament_brands):
         return "filament"
@@ -105,12 +114,12 @@ def suggest_category(title: str, brand: str) -> str:
         return "filament"
 
     # Subscriptions
-    subscription_keywords = ['subscription', 'membership', 'music unlimited', 'prime', 'kindle unlimited', 'audible']
+    subscription_keywords = ["subscription", "membership", "music unlimited", "prime", "kindle unlimited", "audible"]
     if any(k in title_lower for k in subscription_keywords):
         return "subscription"
 
     # 3D printing related
-    if any(k in title_lower for k in ['nozzle', 'hotend', 'build plate', 'bed', 'extruder']):
+    if any(k in title_lower for k in ["nozzle", "hotend", "build plate", "bed", "extruder"]):
         return "printer_parts"
 
     return "misc"
@@ -118,83 +127,78 @@ def suggest_category(title: str, brand: str) -> str:
 
 def parse_amazon_csv(content: str) -> ParseResult:
     """Parse Amazon Business CSV content"""
-    orders = defaultdict(lambda: {
-        'items': [],
-        'date': None,
-        'subtotal': 0.0,
-        'tax': 0.0,
-        'shipping': 0.0,
-        'total': 0.0
-    })
+    orders = defaultdict(
+        lambda: {"items": [], "date": None, "subtotal": 0.0, "tax": 0.0, "shipping": 0.0, "total": 0.0}
+    )
     unique_products = {}
 
     reader = csv.DictReader(io.StringIO(content))
 
     for row in reader:
-        order_id = row.get('Order ID', '')
+        order_id = row.get("Order ID", "")
         if not order_id:
             continue
 
-        asin = row.get('ASIN', '')
-        title = (row.get('Title', '') or 'Unknown')[:100]
-        brand = row.get('Brand', '') or 'Unknown'
+        asin = row.get("ASIN", "")
+        title = (row.get("Title", "") or "Unknown")[:100]
+        brand = row.get("Brand", "") or "Unknown"
 
-        qty = int(row.get('Item Quantity', '1') or '1')
-        unit_cost = clean_price(row.get('Purchase PPU', '')) or clean_price(row.get('Item Subtotal', ''))
-        item_total = clean_price(row.get('Item Net Total', ''))
-        item_tax = clean_price(row.get('Item Tax', ''))
-        item_shipping = clean_price(row.get('Item Shipping & Handling', ''))
-        item_subtotal = clean_price(row.get('Item Subtotal', ''))
+        qty = int(row.get("Item Quantity", "1") or "1")
+        unit_cost = clean_price(row.get("Purchase PPU", "")) or clean_price(row.get("Item Subtotal", ""))
+        item_total = clean_price(row.get("Item Net Total", ""))
+        item_tax = clean_price(row.get("Item Tax", ""))
+        item_shipping = clean_price(row.get("Item Shipping & Handling", ""))
+        item_subtotal = clean_price(row.get("Item Subtotal", ""))
 
         # Track unique products
         if asin and asin not in unique_products:
             unique_products[asin] = {
-                'asin': asin,
-                'title': title,
-                'brand': brand,
-                'total_qty': 0,
-                'total_spent': 0.0,
-                'suggested_category': suggest_category(title, brand)
+                "asin": asin,
+                "title": title,
+                "brand": brand,
+                "total_qty": 0,
+                "total_spent": 0.0,
+                "suggested_category": suggest_category(title, brand),
             }
 
         if asin:
-            unique_products[asin]['total_qty'] += qty
-            unique_products[asin]['total_spent'] += item_total
+            unique_products[asin]["total_qty"] += qty
+            unique_products[asin]["total_spent"] += item_total
 
         # Add to order
-        orders[order_id]['date'] = row.get('Order Date', '')
-        orders[order_id]['items'].append({
-            'asin': asin,
-            'title': title,
-            'brand': brand,
-            'qty': qty,
-            'unit_cost': unit_cost if unit_cost > 0 else (item_subtotal / qty if qty > 0 else 0),
-            'subtotal': item_subtotal,
-            'tax': item_tax,
-            'shipping': item_shipping,
-            'total': item_total
-        })
-        orders[order_id]['subtotal'] += item_subtotal
-        orders[order_id]['tax'] += item_tax
-        orders[order_id]['shipping'] += item_shipping
-        orders[order_id]['total'] += item_total
+        orders[order_id]["date"] = row.get("Order Date", "")
+        orders[order_id]["items"].append(
+            {
+                "asin": asin,
+                "title": title,
+                "brand": brand,
+                "qty": qty,
+                "unit_cost": unit_cost if unit_cost > 0 else (item_subtotal / qty if qty > 0 else 0),
+                "subtotal": item_subtotal,
+                "tax": item_tax,
+                "shipping": item_shipping,
+                "total": item_total,
+            }
+        )
+        orders[order_id]["subtotal"] += item_subtotal
+        orders[order_id]["tax"] += item_tax
+        orders[order_id]["shipping"] += item_shipping
+        orders[order_id]["total"] += item_total
 
     # Convert to response format
-    products_list = [AmazonProduct(**p) for p in sorted(
-        unique_products.values(),
-        key=lambda x: x['total_spent'],
-        reverse=True
-    )]
+    products_list = [
+        AmazonProduct(**p) for p in sorted(unique_products.values(), key=lambda x: x["total_spent"], reverse=True)
+    ]
 
     orders_list = [
         AmazonOrder(
             order_id=oid,
-            order_date=data['date'],
-            items=data['items'],
-            subtotal=data['subtotal'],
-            tax=data['tax'],
-            shipping=data['shipping'],
-            total=data['total']
+            order_date=data["date"],
+            items=data["items"],
+            subtotal=data["subtotal"],
+            tax=data["tax"],
+            shipping=data["shipping"],
+            total=data["total"],
         )
         for oid, data in orders.items()
     ]
@@ -206,13 +210,14 @@ def parse_amazon_csv(content: str) -> ParseResult:
         product_count=len(products_list),
         total_spend=total_spend,
         products=products_list,
-        orders=orders_list
+        orders=orders_list,
     )
 
 
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.post("/parse", response_model=ParseResult)
 async def parse_amazon_file(
@@ -222,15 +227,15 @@ async def parse_amazon_file(
     """
     Parse an Amazon Business CSV file and return products for mapping
     """
-    if not file.filename.endswith('.csv'):
+    if not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
 
     content = await file.read()
     try:
         # Try UTF-8 with BOM first
-        text = content.decode('utf-8-sig')
+        text = content.decode("utf-8-sig")
     except UnicodeDecodeError:
-        text = content.decode('latin-1')
+        text = content.decode("latin-1")
 
     result = parse_amazon_csv(text)
     return result
@@ -250,20 +255,15 @@ async def get_existing_products(
     if search:
         search_filter = f"%{search}%"
         query = query.filter(
-            (Product.name.ilike(search_filter)) |
-            (Product.sku.ilike(search_filter)) |
-            (Product.description.ilike(search_filter))
+            (Product.name.ilike(search_filter))
+            | (Product.sku.ilike(search_filter))
+            | (Product.description.ilike(search_filter))
         )
 
     products = query.order_by(Product.name).limit(100).all()
 
     return [
-        {
-            "id": p.id,
-            "sku": p.sku,
-            "name": p.name,
-            "description": p.description[:50] if p.description else None
-        }
+        {"id": p.id, "sku": p.sku, "name": p.name, "description": p.description[:50] if p.description else None}
         for p in products
     ]
 
@@ -291,7 +291,7 @@ async def execute_import(
             website="https://www.amazon.com/business",
             is_active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(amazon_vendor)
         db.commit()
@@ -307,7 +307,7 @@ async def execute_import(
             item_type="supply",
             active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(misc_product)
         db.commit()
@@ -317,9 +317,7 @@ async def execute_import(
     for order in request.orders:
         try:
             # Check if PO already exists for this Amazon order
-            existing_po = db.query(PurchaseOrder).filter(
-                PurchaseOrder.po_number == f"AMZ-{order.order_id}"
-            ).first()
+            existing_po = db.query(PurchaseOrder).filter(PurchaseOrder.po_number == f"AMZ-{order.order_id}").first()
 
             if existing_po:
                 skipped_orders += 1
@@ -345,7 +343,7 @@ async def execute_import(
                 notes="Imported from Amazon Business CSV",
                 created_by=f"{current_user.first_name} {current_user.last_name}",
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(po)
             db.flush()  # Get PO ID
@@ -353,7 +351,7 @@ async def execute_import(
             # Create lines
             line_num = 1
             for item in order.items:
-                asin = item.get('asin', '')
+                asin = item.get("asin", "")
                 mapping = request.mappings.get(asin)
 
                 # Determine product_id
@@ -366,16 +364,16 @@ async def execute_import(
 
                 # Calculate quantities with optional override
                 # qty_override is units per Amazon unit (e.g., 240 magnets per pack)
-                amazon_qty = item.get('qty', 1)
-                line_total = Decimal(str(item.get('total', 0)))
+                amazon_qty = item.get("qty", 1)
+                line_total = Decimal(str(item.get("total", 0)))
 
                 if mapping and mapping.qty_override:
                     # qty_override = units per amazon unit
                     received_qty = amazon_qty * mapping.qty_override
-                    unit_cost = line_total / Decimal(str(received_qty)) if received_qty > 0 else Decimal('0')
+                    unit_cost = line_total / Decimal(str(received_qty)) if received_qty > 0 else Decimal("0")
                 else:
                     received_qty = amazon_qty
-                    unit_cost = Decimal(str(item.get('unit_cost', 0)))
+                    unit_cost = Decimal(str(item.get("unit_cost", 0)))
 
                 line = PurchaseOrderLine(
                     purchase_order_id=po.id,
@@ -387,7 +385,7 @@ async def execute_import(
                     line_total=line_total,
                     notes=f"{item.get('title', '')} (ASIN: {asin})",
                     created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
+                    updated_at=datetime.utcnow(),
                 )
                 db.add(line)
                 lines_created += 1
@@ -402,8 +400,5 @@ async def execute_import(
     db.commit()
 
     return ImportResult(
-        pos_created=pos_created,
-        lines_created=lines_created,
-        skipped_orders=skipped_orders,
-        errors=errors
+        pos_created=pos_created, lines_created=lines_created, skipped_orders=skipped_orders, errors=errors
     )

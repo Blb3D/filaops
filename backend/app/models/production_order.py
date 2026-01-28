@@ -7,6 +7,7 @@ Integrates with:
 - Routings (process steps to follow)
 - Work Centers & Resources (where/how work happens)
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -25,20 +26,21 @@ class ProductionOrder(Base):
     - Sales order demand
     - MRP planned orders
     """
+
     __tablename__ = "production_orders"
 
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(50), unique=True, nullable=False, index=True)
 
     # References (all indexed for query performance)
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False, index=True)
-    bom_id = Column(Integer, ForeignKey('boms.id'), nullable=True, index=True)
-    routing_id = Column(Integer, ForeignKey('routings.id'), nullable=True, index=True)
-    sales_order_id = Column(Integer, ForeignKey('sales_orders.id'), nullable=True, index=True)
-    sales_order_line_id = Column(Integer, ForeignKey('sales_order_lines.id'), nullable=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    bom_id = Column(Integer, ForeignKey("boms.id"), nullable=True, index=True)
+    routing_id = Column(Integer, ForeignKey("routings.id"), nullable=True, index=True)
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id"), nullable=True, index=True)
+    sales_order_line_id = Column(Integer, ForeignKey("sales_order_lines.id"), nullable=True, index=True)
 
     # Parent/Child for split orders
-    parent_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True, index=True)
+    parent_order_id = Column(Integer, ForeignKey("production_orders.id"), nullable=True, index=True)
     split_sequence = Column(Integer, nullable=True)  # 1, 2, 3... for child orders
 
     # Quantities
@@ -52,12 +54,12 @@ class ProductionOrder(Base):
         return self.quantity_ordered
 
     # Source: manual, sales_order, mrp_planned
-    source = Column(String(50), default='manual', nullable=False)
+    source = Column(String(50), default="manual", nullable=False)
 
     # Order Type: MAKE_TO_ORDER (MTO) or MAKE_TO_STOCK (MTS)
     # MTO: Produced for a specific sales order, ships when complete
     # MTS: Produced for inventory, FG sits on shelf until ordered
-    order_type = Column(String(20), default='MAKE_TO_ORDER', nullable=False)
+    order_type = Column(String(20), default="MAKE_TO_ORDER", nullable=False)
 
     # Status (Manufacturing Workflow)
     # Lifecycle: draft → released → scheduled → in_progress → completed → closed
@@ -73,7 +75,7 @@ class ProductionOrder(Base):
     #   - closed: Parts accepted, inventory updated, WO complete
     #   - cancelled: WO terminated
     #   - on_hold: Production paused
-    status = Column(String(50), default='draft', nullable=False, index=True)
+    status = Column(String(50), default="draft", nullable=False, index=True)
 
     # QC Status (Quality Control)
     # Values: not_required, pending, in_progress, passed, failed, waived
@@ -84,7 +86,7 @@ class ProductionOrder(Base):
     #   - passed: Parts accepted, ready for inventory
     #   - failed: Parts rejected, WO moves to qc_hold status
     #   - waived: Failed but accepted anyway (document reason in notes)
-    qc_status = Column(String(50), default='not_required', nullable=False)
+    qc_status = Column(String(50), default="not_required", nullable=False)
     qc_notes = Column(Text, nullable=True)
     qc_inspected_by = Column(String(100), nullable=True)
     qc_inspected_at = Column(DateTime, nullable=True)
@@ -120,7 +122,9 @@ class ProductionOrder(Base):
     # Scrap/Remake tracking
     scrap_reason = Column(String(100), nullable=True)  # adhesion, layer_shift, stringing, warping, nozzle_clog, other
     scrapped_at = Column(DateTime, nullable=True)
-    remake_of_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True)  # Links remake to original failed WO
+    remake_of_id = Column(
+        Integer, ForeignKey("production_orders.id"), nullable=True
+    )  # Links remake to original failed WO
 
     # Metadata
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -135,10 +139,16 @@ class ProductionOrder(Base):
     routing = relationship("Routing", foreign_keys=[routing_id])
     sales_order = relationship("SalesOrder", foreign_keys=[sales_order_id], backref="production_orders")
     print_jobs = relationship("PrintJob", back_populates="production_order")
-    operations = relationship("ProductionOrderOperation", back_populates="production_order",
-                              cascade="all, delete-orphan", order_by="ProductionOrderOperation.sequence")
+    operations = relationship(
+        "ProductionOrderOperation",
+        back_populates="production_order",
+        cascade="all, delete-orphan",
+        order_by="ProductionOrderOperation.sequence",
+    )
     # Parent/Child split relationships
-    parent_order = relationship("ProductionOrder", remote_side=[id], backref="child_orders", foreign_keys=[parent_order_id])
+    parent_order = relationship(
+        "ProductionOrder", remote_side=[id], backref="child_orders", foreign_keys=[parent_order_id]
+    )
     # Scrap/Remake relationships
     original_order = relationship("ProductionOrder", remote_side=[id], backref="remakes", foreign_keys=[remake_of_id])
     # Spool tracking
@@ -167,32 +177,32 @@ class ProductionOrder(Base):
     @property
     def is_scrapped(self):
         """True if this WO was scrapped"""
-        return self.status == 'scrapped' or self.scrapped_at is not None
+        return self.status == "scrapped" or self.scrapped_at is not None
 
     @property
     def is_remake(self):
         """True if this WO is a remake of a failed WO"""
         return self.remake_of_id is not None
-    
+
     @property
     def is_qc_required(self):
         """True if QC inspection is required"""
-        return self.qc_status != 'not_required'
-    
+        return self.qc_status != "not_required"
+
     @property
     def is_ready_for_qc(self):
         """True if WO is ready for quality inspection"""
-        return self.status == 'completed' and self.qc_status == 'pending'
-    
+        return self.status == "completed" and self.qc_status == "pending"
+
     @property
     def can_close(self):
         """True if WO can be closed (all checks passed)"""
         return (
-            self.status == 'completed' and
-            self.qc_status in ['passed', 'not_required', 'waived'] and
-            self.quantity_completed >= self.quantity_ordered
+            self.status == "completed"
+            and self.qc_status in ["passed", "not_required", "waived"]
+            and self.quantity_completed >= self.quantity_ordered
         )
-    
+
     @property
     def needs_remake(self):
         """True if WO was scrapped and needs remake"""
@@ -206,14 +216,19 @@ class ProductionOrderOperation(Base):
     Created by copying from the product's routing when the MO is released.
     Tracks actual execution vs planned at the operation level.
     """
+
     __tablename__ = "production_order_operations"
 
     id = Column(Integer, primary_key=True, index=True)
-    production_order_id = Column(Integer, ForeignKey('production_orders.id', ondelete='CASCADE'), nullable=False)
-    routing_operation_id = Column(Integer, ForeignKey('routing_operations.id'), nullable=True)
-    work_center_id = Column(Integer, ForeignKey('work_centers.id'), nullable=False)
-    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='SET NULL'), nullable=True)  # Specific resource assigned
-    printer_id = Column(Integer, ForeignKey('printers.id', ondelete='SET NULL'), nullable=True)  # Specific printer assigned
+    production_order_id = Column(Integer, ForeignKey("production_orders.id", ondelete="CASCADE"), nullable=False)
+    routing_operation_id = Column(Integer, ForeignKey("routing_operations.id"), nullable=True)
+    work_center_id = Column(Integer, ForeignKey("work_centers.id"), nullable=False)
+    resource_id = Column(
+        Integer, ForeignKey("resources.id", ondelete="SET NULL"), nullable=True
+    )  # Specific resource assigned
+    printer_id = Column(
+        Integer, ForeignKey("printers.id", ondelete="SET NULL"), nullable=True
+    )  # Specific printer assigned
 
     # Sequence and identification
     sequence = Column(Integer, nullable=False)
@@ -221,7 +236,7 @@ class ProductionOrderOperation(Base):
     operation_name = Column(String(200), nullable=True)
 
     # Status: pending, queued, running, complete, skipped
-    status = Column(String(50), default='pending', nullable=False, index=True)
+    status = Column(String(50), default="pending", nullable=False, index=True)
 
     # Quantities
     quantity_completed = Column(Numeric(18, 4), default=0, nullable=False)
@@ -263,19 +278,23 @@ class ProductionOrderOperation(Base):
     work_center = relationship("WorkCenter")
     resource = relationship("Resource", foreign_keys=[resource_id])
     printer = relationship("Printer", foreign_keys=[printer_id])
-    materials = relationship("ProductionOrderOperationMaterial", back_populates="operation",
-                            cascade="all, delete-orphan", order_by="ProductionOrderOperationMaterial.id")
+    materials = relationship(
+        "ProductionOrderOperationMaterial",
+        back_populates="operation",
+        cascade="all, delete-orphan",
+        order_by="ProductionOrderOperationMaterial.id",
+    )
 
     def __repr__(self):
         return f"<ProductionOrderOperation {self.sequence}: {self.operation_name} ({self.status})>"
 
     @property
     def is_complete(self):
-        return self.status == 'complete'
+        return self.status == "complete"
 
     @property
     def is_running(self):
-        return self.status == 'running'
+        return self.status == "running"
 
     @property
     def efficiency_percent(self):
@@ -288,40 +307,41 @@ class ProductionOrderOperation(Base):
 class ProductionOrderMaterial(Base):
     """
     Material overrides for production orders.
-    
+
     Tracks when materials are substituted or quantities adjusted during production.
     Example: BOM calls for Bambu PLA Red, but we use Elegoo PLA Red instead.
-    
+
     This ensures:
     - Correct inventory consumption (from actual material used)
     - Accurate COGS (using actual material cost)
     - Audit trail of substitutions
     """
+
     __tablename__ = "production_order_materials"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    production_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=False, index=True)
-    bom_line_id = Column(Integer, ForeignKey('bom_lines.id'), nullable=True)  # Original BOM line
-    
+    production_order_id = Column(Integer, ForeignKey("production_orders.id"), nullable=False, index=True)
+    bom_line_id = Column(Integer, ForeignKey("bom_lines.id"), nullable=True)  # Original BOM line
+
     # Original material from BOM
-    original_product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    original_product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     original_quantity = Column(Numeric(18, 4), nullable=False)  # From BOM
-    
+
     # Substituted/adjusted material
-    substitute_product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    substitute_product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
     planned_quantity = Column(Numeric(18, 4), nullable=False)  # Adjusted quantity to use
     actual_quantity_used = Column(Numeric(18, 4), nullable=True)  # Recorded on completion
-    
+
     # Audit trail
     reason = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_by = Column(String(100), nullable=True)
-    
+
     # Relationships
     production_order = relationship("ProductionOrder", backref="material_overrides")
     original_product = relationship("Product", foreign_keys=[original_product_id])
     substitute_product = relationship("Product", foreign_keys=[substitute_product_id])
-    
+
     def __repr__(self):
         return f"<ProductionOrderMaterial PO#{self.production_order_id}: {self.original_product_id} → {self.substitute_product_id}>"
 
@@ -329,52 +349,53 @@ class ProductionOrderMaterial(Base):
 class ProductionOrderOperationMaterial(Base):
     """
     Material consumption tracking for a specific production order operation.
-    
+
     This is the INSTANCE - tracks actual consumption with lot numbers.
     Created when a PO is released by copying from RoutingOperationMaterial.
-    
+
     Lifecycle:
     1. Created with status='pending' when PO released
     2. status='allocated' when inventory reserved at op start
     3. status='consumed' when operation completes
     4. status='returned' if excess returned to inventory
-    
+
     Examples:
     - PO-001 OP-10: Black PLA 370g required, Lot #L2024-001, 370g consumed
     - PO-001 OP-50: 6x6x6 Box 10 EA required, 10 EA consumed
     """
+
     __tablename__ = "production_order_operation_materials"
 
     id = Column(Integer, primary_key=True, index=True)
-    production_order_operation_id = Column(Integer, 
-                                           ForeignKey('production_order_operations.id', ondelete='CASCADE'), 
-                                           nullable=False, index=True)
-    component_id = Column(Integer, ForeignKey('products.id'), nullable=False, index=True)
-    routing_operation_material_id = Column(Integer, 
-                                           ForeignKey('routing_operation_materials.id', ondelete='SET NULL'),
-                                           nullable=True)  # Link back to template
-    
+    production_order_operation_id = Column(
+        Integer, ForeignKey("production_order_operations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    component_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    routing_operation_material_id = Column(
+        Integer, ForeignKey("routing_operation_materials.id", ondelete="SET NULL"), nullable=True
+    )  # Link back to template
+
     # Planned quantities (calculated from routing × PO qty)
     quantity_required = Column(Numeric(18, 6), nullable=False)
     unit = Column(String(20), default="EA", nullable=False)
-    
+
     # Actual consumption tracking
     quantity_allocated = Column(Numeric(18, 6), default=0, nullable=False)
     quantity_consumed = Column(Numeric(18, 6), default=0, nullable=False)
-    
+
     # Lot tracking (for traceability)
     lot_number = Column(String(100), nullable=True)
-    inventory_transaction_id = Column(Integer, ForeignKey('inventory_transactions.id'), nullable=True)
-    
+    inventory_transaction_id = Column(Integer, ForeignKey("inventory_transactions.id"), nullable=True)
+
     # Status: pending, allocated, consumed, returned
     status = Column(String(20), default="pending", nullable=False)
-    
+
     # Metadata
     consumed_at = Column(DateTime, nullable=True)
-    consumed_by = Column(Integer, ForeignKey('users.id'), nullable=True)
+    consumed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    
+
     # Relationships
     operation = relationship("ProductionOrderOperation", back_populates="materials")
     component = relationship("Product", foreign_keys=[component_id])
@@ -398,7 +419,7 @@ class ProductionOrderOperationMaterial(Base):
     @property
     def is_allocated(self):
         """True if inventory has been allocated"""
-        return self.status in ('allocated', 'consumed')
+        return self.status in ("allocated", "consumed")
 
     @property
     def shortage_quantity(self):
@@ -422,17 +443,18 @@ class ScrapRecord(Base):
     Pro tier: Enables scrap cost analysis, failure rate reporting
     Enterprise tier: Full audit trail with user attribution
     """
+
     __tablename__ = "scrap_records"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Source tracking
-    production_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True, index=True)
-    production_operation_id = Column(Integer, ForeignKey('production_order_operations.id'), nullable=True, index=True)
+    production_order_id = Column(Integer, ForeignKey("production_orders.id"), nullable=True, index=True)
+    production_operation_id = Column(Integer, ForeignKey("production_order_operations.id"), nullable=True, index=True)
     operation_sequence = Column(Integer, nullable=True)  # Denormalized for reporting
 
     # What was scrapped (uses products table, not items)
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
     quantity = Column(Numeric(18, 4), nullable=False)
 
     # Cost capture (at time of scrap - important for COGS accuracy)
@@ -440,17 +462,17 @@ class ScrapRecord(Base):
     total_cost = Column(Numeric(18, 4), nullable=False)  # qty * unit_cost
 
     # Reason (FK to scrap_reasons or free text)
-    scrap_reason_id = Column(Integer, ForeignKey('scrap_reasons.id'), nullable=True)
+    scrap_reason_id = Column(Integer, ForeignKey("scrap_reasons.id"), nullable=True)
     scrap_reason_code = Column(String(50), nullable=True)  # Denormalized for reporting
     notes = Column(Text, nullable=True)
 
     # Transaction links (for audit trail)
-    inventory_transaction_id = Column(Integer, ForeignKey('inventory_transactions.id'), nullable=True)
-    journal_entry_id = Column(Integer, ForeignKey('gl_journal_entries.id'), nullable=True)
+    inventory_transaction_id = Column(Integer, ForeignKey("inventory_transactions.id"), nullable=True)
+    journal_entry_id = Column(Integer, ForeignKey("gl_journal_entries.id"), nullable=True)
 
     # Audit
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
-    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
     production_order = relationship("ProductionOrder", backref="scrap_records")

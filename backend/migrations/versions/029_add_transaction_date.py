@@ -8,13 +8,14 @@ This column stores the user-entered date when a transaction actually occurred
 (e.g., when goods were physically received), distinct from created_at which
 is the system timestamp when the record was entered.
 """
+
 from alembic import op
 import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '029_add_transaction_date'
-down_revision = '028_add_company_timezone'
+revision = "029_add_transaction_date"
+down_revision = "028_add_company_timezone"
 branch_labels = None
 depends_on = None
 
@@ -22,17 +23,10 @@ depends_on = None
 def upgrade():
     """Add transaction_date column and backfill from created_at."""
     # Add the column
-    op.add_column(
-        'inventory_transactions',
-        sa.Column('transaction_date', sa.Date(), nullable=True)
-    )
+    op.add_column("inventory_transactions", sa.Column("transaction_date", sa.Date(), nullable=True))
 
     # Add index for efficient date-based queries
-    op.create_index(
-        'ix_inventory_transactions_transaction_date',
-        'inventory_transactions',
-        ['transaction_date']
-    )
+    op.create_index("ix_inventory_transactions_transaction_date", "inventory_transactions", ["transaction_date"])
 
     # Backfill existing records from created_at
     op.execute("""
@@ -44,5 +38,5 @@ def upgrade():
 
 def downgrade():
     """Remove transaction_date column."""
-    op.drop_index('ix_inventory_transactions_transaction_date', 'inventory_transactions')
-    op.drop_column('inventory_transactions', 'transaction_date')
+    op.drop_index("ix_inventory_transactions_transaction_date", "inventory_transactions")
+    op.drop_column("inventory_transactions", "transaction_date")

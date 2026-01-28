@@ -9,6 +9,7 @@ Account Types:
 - operator: Production floor access (can manage orders, production, inventory)
 - customer: Portal access only (managed via /admin/customers)
 """
+
 from typing import List, Optional
 from datetime import datetime, timezone
 
@@ -50,6 +51,7 @@ def build_full_name(user: User) -> Optional[str]:
 # LIST USERS
 # ============================================================================
 
+
 @router.get("/", response_model=List[AdminUserListResponse])
 async def list_admin_users(
     current_admin: User = Depends(get_current_admin_user),
@@ -61,47 +63,48 @@ async def list_admin_users(
 ):
     """
     List all admin and operator users.
-    
+
     Does NOT include customers (use /admin/customers for that).
     Admin only.
     """
-    query = db.query(User).filter(
-        User.account_type.in_(["admin", "operator"])
-    )
-    
+    query = db.query(User).filter(User.account_type.in_(["admin", "operator"]))
+
     # Filter by account type
     if account_type:
         query = query.filter(User.account_type == account_type)
-    
+
     # Filter by status
     if not include_inactive:
         query = query.filter(User.status == "active")
-    
+
     # Order by most recent first
     query = query.order_by(desc(User.created_at))
-    
+
     users = query.offset(skip).limit(limit).all()
-    
+
     result = []
     for user in users:
-        result.append({
-            "id": user.id,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "full_name": build_full_name(user),
-            "account_type": user.account_type,
-            "status": user.status,
-            "last_login_at": user.last_login_at,
-            "created_at": user.created_at,
-        })
-    
+        result.append(
+            {
+                "id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "full_name": build_full_name(user),
+                "account_type": user.account_type,
+                "status": user.status,
+                "last_login_at": user.last_login_at,
+                "created_at": user.created_at,
+            }
+        )
+
     return result
 
 
 # ============================================================================
 # GET USER STATS (for dashboard) - Must be before /{user_id} to avoid route conflict
 # ============================================================================
+
 
 @router.get("/stats/summary")
 async def get_user_stats(
@@ -113,20 +116,13 @@ async def get_user_stats(
 
     Useful for dashboard widgets.
     """
-    total_admins = db.query(User).filter(
-        User.account_type == "admin",
-        User.status == "active"
-    ).count()
+    total_admins = db.query(User).filter(User.account_type == "admin", User.status == "active").count()
 
-    total_operators = db.query(User).filter(
-        User.account_type == "operator",
-        User.status == "active"
-    ).count()
+    total_operators = db.query(User).filter(User.account_type == "operator", User.status == "active").count()
 
-    total_inactive = db.query(User).filter(
-        User.account_type.in_(["admin", "operator"]),
-        User.status != "active"
-    ).count()
+    total_inactive = (
+        db.query(User).filter(User.account_type.in_(["admin", "operator"]), User.status != "active").count()
+    )
 
     return {
         "active_admins": total_admins,
@@ -140,6 +136,7 @@ async def get_user_stats(
 # GET SINGLE USER
 # ============================================================================
 
+
 @router.get("/{user_id}", response_model=AdminUserResponse)
 async def get_admin_user(
     user_id: int,
@@ -148,20 +145,14 @@ async def get_admin_user(
 ):
     """
     Get a single admin or operator user.
-    
+
     Admin only.
     """
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.account_type.in_(["admin", "operator"])
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id, User.account_type.in_(["admin", "operator"])).first()
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     return {
         "id": user.id,
         "email": user.email,
@@ -180,6 +171,7 @@ async def get_admin_user(
 # CREATE USER
 # ============================================================================
 
+
 @router.post("/", response_model=AdminUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_admin_user(
     request: AdminUserCreate,
@@ -194,10 +186,9 @@ async def create_admin_user(
     Note: Subject to tier limits. Community tier allows 1 user (the initial admin).
     """
     # Check tier limits before creating
-    current_user_count = db.query(User).filter(
-        User.account_type.in_(["admin", "operator"]),
-        User.status == "active"
-    ).count()
+    current_user_count = (
+        db.query(User).filter(User.account_type.in_(["admin", "operator"]), User.status == "active").count()
+    )
 
     user_tier = get_current_tier(db, current_admin)
     enforce_resource_limit(db, "users", current_user_count, user_tier.value)
@@ -205,16 +196,13 @@ async def create_admin_user(
     # Check for existing email
     existing = db.query(User).filter(User.email == request.email).first()
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+
     # Hash password
     password_hashed = hash_password(request.password)
-    
+
     now = datetime.now(timezone.utc)
-    
+
     user = User(
         email=request.email,
         password_hash=password_hashed,
@@ -227,11 +215,11 @@ async def create_admin_user(
         created_at=now,
         updated_at=now,
     )
-    
+
     db.add(user)
     db.commit()
     db.refresh(user)
-    
+
     logger.info(
         "Admin/operator user created",
         extra={
@@ -240,9 +228,9 @@ async def create_admin_user(
             "account_type": user.account_type,
             "created_by_id": current_admin.id,
             "created_by_email": current_admin.email,
-        }
+        },
     )
-    
+
     return {
         "id": user.id,
         "email": user.email,
@@ -261,6 +249,7 @@ async def create_admin_user(
 # UPDATE USER
 # ============================================================================
 
+
 @router.patch("/{user_id}", response_model=AdminUserResponse)
 async def update_admin_user(
     user_id: int,
@@ -270,68 +259,51 @@ async def update_admin_user(
 ):
     """
     Update an admin or operator user.
-    
+
     Admin only. Cannot demote yourself or the last admin.
     """
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.account_type.in_(["admin", "operator"])
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id, User.account_type.in_(["admin", "operator"])).first()
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     # Prevent self-demotion
     if user.id == current_admin.id and request.account_type == "operator":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot demote yourself. Have another admin change your role."
+            detail="Cannot demote yourself. Have another admin change your role.",
         )
-    
+
     # Prevent deactivating yourself
     if user.id == current_admin.id and request.status in ["inactive", "suspended"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot deactivate your own account"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate your own account")
+
     # Prevent removing last admin
     if user.account_type == "admin" and request.account_type == "operator":
-        admin_count = db.query(User).filter(
-            User.account_type == "admin",
-            User.status == "active",
-            User.id != user_id
-        ).count()
+        admin_count = (
+            db.query(User).filter(User.account_type == "admin", User.status == "active", User.id != user_id).count()
+        )
         if admin_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot demote the last active admin"
-            )
-    
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot demote the last active admin")
+
     # Check for duplicate email
     if request.email and request.email != user.email:
         existing = db.query(User).filter(User.email == request.email).first()
         if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already in use"
-            )
-    
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         if value is not None:
             setattr(user, field, value)
-    
+
     user.updated_by = current_admin.id
     user.updated_at = datetime.now(timezone.utc)
-    
+
     db.commit()
     db.refresh(user)
-    
+
     logger.info(
         "Admin/operator user updated",
         extra={
@@ -340,9 +312,9 @@ async def update_admin_user(
             "updated_by_id": current_admin.id,
             "updated_by_email": current_admin.email,
             "changes": list(update_data.keys()),
-        }
+        },
     )
-    
+
     return {
         "id": user.id,
         "email": user.email,
@@ -361,6 +333,7 @@ async def update_admin_user(
 # RESET PASSWORD
 # ============================================================================
 
+
 @router.post("/{user_id}/reset-password", status_code=status.HTTP_200_OK)
 async def reset_user_password(
     user_id: int,
@@ -370,36 +343,26 @@ async def reset_user_password(
 ):
     """
     Reset password for an admin or operator user.
-    
+
     Admin only. Also revokes all existing refresh tokens for the user.
     """
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.account_type.in_(["admin", "operator"])
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id, User.account_type.in_(["admin", "operator"])).first()
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     # Update password
     user.password_hash = hash_password(request.new_password)
     user.updated_by = current_admin.id
     user.updated_at = datetime.now(timezone.utc)
-    
+
     # Revoke all refresh tokens for security
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == user_id,
-        RefreshToken.revoked.is_(False)
-    ).update({
-        "revoked": True,
-        "revoked_at": datetime.now(timezone.utc)
-    })
-    
+    db.query(RefreshToken).filter(RefreshToken.user_id == user_id, RefreshToken.revoked.is_(False)).update(
+        {"revoked": True, "revoked_at": datetime.now(timezone.utc)}
+    )
+
     db.commit()
-    
+
     logger.info(
         "Admin/operator password reset",
         extra={
@@ -407,15 +370,16 @@ async def reset_user_password(
             "user_email": user.email,
             "reset_by_id": current_admin.id,
             "reset_by_email": current_admin.email,
-        }
+        },
     )
-    
+
     return {"message": "Password reset successfully"}
 
 
 # ============================================================================
 # DELETE (DEACTIVATE) USER
 # ============================================================================
+
 
 @router.delete("/{user_id}", status_code=status.HTTP_200_OK)
 async def deactivate_admin_user(
@@ -425,57 +389,41 @@ async def deactivate_admin_user(
 ):
     """
     Deactivate an admin or operator user.
-    
+
     Admin only. Sets status to 'inactive' (soft delete).
     Cannot deactivate yourself or the last admin.
     """
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.account_type.in_(["admin", "operator"])
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id, User.account_type.in_(["admin", "operator"])).first()
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     # Prevent self-deactivation
     if user.id == current_admin.id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot deactivate your own account"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate your own account")
+
     # Prevent removing last admin
     if user.account_type == "admin":
-        admin_count = db.query(User).filter(
-            User.account_type == "admin",
-            User.status == "active",
-            User.id != user_id
-        ).count()
+        admin_count = (
+            db.query(User).filter(User.account_type == "admin", User.status == "active", User.id != user_id).count()
+        )
         if admin_count == 0:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot deactivate the last active admin"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate the last active admin"
             )
-    
+
     # Soft delete
     user.status = "inactive"
     user.updated_by = current_admin.id
     user.updated_at = datetime.now(timezone.utc)
-    
+
     # Revoke all refresh tokens
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == user_id,
-        RefreshToken.revoked.is_(False)
-    ).update({
-        "revoked": True,
-        "revoked_at": datetime.now(timezone.utc)
-    })
-    
+    db.query(RefreshToken).filter(RefreshToken.user_id == user_id, RefreshToken.revoked.is_(False)).update(
+        {"revoked": True, "revoked_at": datetime.now(timezone.utc)}
+    )
+
     db.commit()
-    
+
     logger.info(
         "Admin/operator user deactivated",
         extra={
@@ -483,15 +431,16 @@ async def deactivate_admin_user(
             "user_email": user.email,
             "deactivated_by_id": current_admin.id,
             "deactivated_by_email": current_admin.email,
-        }
+        },
     )
-    
+
     return {"message": f"User {user.email} has been deactivated"}
 
 
 # ============================================================================
 # REACTIVATE USER
 # ============================================================================
+
 
 @router.post("/{user_id}/reactivate", status_code=status.HTTP_200_OK)
 async def reactivate_admin_user(
@@ -501,32 +450,23 @@ async def reactivate_admin_user(
 ):
     """
     Reactivate a previously deactivated admin or operator user.
-    
+
     Admin only.
     """
-    user = db.query(User).filter(
-        User.id == user_id,
-        User.account_type.in_(["admin", "operator"])
-    ).first()
-    
+    user = db.query(User).filter(User.id == user_id, User.account_type.in_(["admin", "operator"])).first()
+
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     if user.status == "active":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already active"
-        )
-    
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already active")
+
     user.status = "active"
     user.updated_by = current_admin.id
     user.updated_at = datetime.now(timezone.utc)
-    
+
     db.commit()
-    
+
     logger.info(
         "Admin/operator user reactivated",
         extra={
@@ -534,7 +474,7 @@ async def reactivate_admin_user(
             "user_email": user.email,
             "reactivated_by_id": current_admin.id,
             "reactivated_by_email": current_admin.email,
-        }
+        },
     )
-    
+
     return {"message": f"User {user.email} has been reactivated"}

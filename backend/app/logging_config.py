@@ -13,6 +13,7 @@ Usage:
     # For business events requiring audit trail
     audit_log("ORDER_CREATED", user_id=1, order_id=123, details={"total": 99.99})
 """
+
 import json
 import logging
 import logging.handlers
@@ -63,11 +64,28 @@ class JSONFormatter(logging.Formatter):
         # Add extra fields (user_id, order_id, etc.)
         for key, value in record.__dict__.items():
             if key not in {
-                "name", "msg", "args", "created", "filename", "funcName",
-                "levelname", "levelno", "lineno", "module", "msecs",
-                "pathname", "process", "processName", "relativeCreated",
-                "stack_info", "exc_info", "exc_text", "thread", "threadName",
-                "taskName", "message",
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "stack_info",
+                "exc_info",
+                "exc_text",
+                "thread",
+                "threadName",
+                "taskName",
+                "message",
             }:
                 # Serialize non-JSON-serializable objects
                 try:
@@ -95,11 +113,28 @@ class TextFormatter(logging.Formatter):
         extras = []
         for key, value in record.__dict__.items():
             if key not in {
-                "name", "msg", "args", "created", "filename", "funcName",
-                "levelname", "levelno", "lineno", "module", "msecs",
-                "pathname", "process", "processName", "relativeCreated",
-                "stack_info", "exc_info", "exc_text", "thread", "threadName",
-                "taskName", "message",
+                "name",
+                "msg",
+                "args",
+                "created",
+                "filename",
+                "funcName",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "stack_info",
+                "exc_info",
+                "exc_text",
+                "thread",
+                "threadName",
+                "taskName",
+                "message",
             }:
                 extras.append(f"{key}={value}")
 

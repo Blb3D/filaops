@@ -1,4 +1,4 @@
-﻿"""Merge printer and accounting migration heads
+"""Merge printer and accounting migration heads
 
 Revision ID: 010_merge_heads
 Revises: 008_printer_brand_agnostic, 009_accounting_enhancements
@@ -8,14 +8,13 @@ Merges the two feature branches:
 - 008_printer_brand_agnostic: Printer brand management
 - 009_accounting_enhancements: Tax and accounting fields
 """
+
 from typing import Sequence, Union
 
-from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '010_merge_heads'
-down_revision: Union[str, Sequence[str], None] = ('008_printer_brand_agnostic', '009_accounting_enhancements')
+revision: str = "010_merge_heads"
+down_revision: Union[str, Sequence[str], None] = ("008_printer_brand_agnostic", "009_accounting_enhancements")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -4,6 +4,7 @@ Purchasing Event Model
 Tracks activity history for purchase orders - status changes, receipts, notes, etc.
 Provides an audit trail and activity timeline for the PO detail page.
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,6 +14,7 @@ from app.db.base import Base
 
 class PurchasingEvent(Base):
     """Purchasing Event - Activity log entry for a purchase order"""
+
     __tablename__ = "purchasing_events"
 
     # Primary Key
@@ -20,17 +22,9 @@ class PurchasingEvent(Base):
 
     # Foreign Keys
     purchase_order_id = Column(
-        Integer,
-        ForeignKey("purchase_orders.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        Integer, ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="NO ACTION"),
-        nullable=True,
-        index=True
-    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="NO ACTION"), nullable=True, index=True)
 
     # Event Type
     # status_change, receipt, partial_receipt, note_added, document_attached,

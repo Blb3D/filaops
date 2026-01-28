@@ -2,14 +2,10 @@ import subprocess
 import sys
 
 result = subprocess.run(
-    [
-        sys.executable, "-m", "pytest",
-        "tests/api/test_operation_status.py::TestQuantityValidation",
-        "-v", "--tb=short"
-    ],
+    [sys.executable, "-m", "pytest", "tests/api/test_operation_status.py::TestQuantityValidation", "-v", "--tb=short"],
     capture_output=True,
     text=True,
-    cwd=r"C:\repos\filaops\backend"
+    cwd=r"C:\repos\filaops\backend",
 )
 
 print("STDOUT:")

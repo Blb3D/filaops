@@ -1,4 +1,4 @@
-﻿# backend/app/core/settings.py
+# backend/app/core/settings.py
 """
 FilaOps ERP - Configuration Management with pydantic-settings
 
@@ -6,6 +6,7 @@ FilaOps ERP - Configuration Management with pydantic-settings
 - Validates and normalizes values
 - Cached singleton via get_settings()
 """
+
 import json
 from functools import lru_cache
 from pathlib import Path
@@ -55,9 +56,7 @@ class Settings(BaseSettings):
     DB_NAME: str = Field(default="filaops", description="Database name")
     DB_USER: str = Field(default="postgres", description="Database user")
     DB_PASSWORD: str = Field(default="postgres", description="Database password")
-    DATABASE_URL: Optional[str] = Field(
-        default=None, description="Full database URL (overrides DB_* settings)"
-    )
+    DATABASE_URL: Optional[str] = Field(default=None, description="Full database URL (overrides DB_* settings)")
 
     @property
     def database_url(self) -> str:
@@ -65,8 +64,7 @@ class Settings(BaseSettings):
         if self.DATABASE_URL:
             return self.DATABASE_URL
         return (
-            f"postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}"
-            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+            f"postgresql+psycopg://{self.DB_USER}:{self.DB_PASSWORD}" f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         )
 
     # ===================
@@ -76,9 +74,7 @@ class Settings(BaseSettings):
         default="change-this-to-a-random-secret-key-in-production",
         description="JWT signing key - MUST change in production",
     )
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
-        default=30, description="JWT token expiration in minutes"
-    )
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="JWT token expiration in minutes")
     API_KEY: Optional[str] = Field(default=None, description="API key for integrations")
 
     @field_validator("SECRET_KEY")
@@ -90,9 +86,7 @@ class Settings(BaseSettings):
             import os
 
             if os.getenv("ENVIRONMENT", "development").lower() == "production":
-                raise ValueError(
-                    "Default SECRET_KEY detected in production. Set a secure SECRET_KEY."
-                )
+                raise ValueError("Default SECRET_KEY detected in production. Set a secure SECRET_KEY.")
             warnings.warn(
                 "WARNING: Using default SECRET_KEY. Do not use this in production.",
                 UserWarning,
@@ -136,9 +130,7 @@ class Settings(BaseSettings):
         """Get allowed origins as a list."""
         return [origin.strip() for origin in self.ALLOWED_ORIGINS_STR.split(",") if origin.strip()]
 
-    FRONTEND_URL: str = Field(
-        default="http://localhost:5173", description="Frontend URL for redirects"
-    )
+    FRONTEND_URL: str = Field(default="http://localhost:5173", description="Frontend URL for redirects")
 
     @model_validator(mode="after")
     def add_frontend_url_to_cors(self):
@@ -151,16 +143,12 @@ class Settings(BaseSettings):
     # ==============================
     # Optional Google Drive switch
     # ==============================
-    ENABLE_GOOGLE_DRIVE: bool = Field(
-        default=False, validation_alias="ENABLE_GOOGLE_DRIVE"
-    )
+    ENABLE_GOOGLE_DRIVE: bool = Field(default=False, validation_alias="ENABLE_GOOGLE_DRIVE")
 
     # ===================
     # Bambu Print Suite
     # ===================
-    BAMBU_SUITE_API_URL: str = Field(
-        default="http://localhost:8001", description="Bambu Print Suite API URL"
-    )
+    BAMBU_SUITE_API_URL: str = Field(default="http://localhost:8001", description="Bambu Print Suite API URL")
     BAMBU_SUITE_API_KEY: Optional[str] = Field(default=None, description="API key")
 
     # ===================
@@ -168,9 +156,7 @@ class Settings(BaseSettings):
     # ===================
     UPLOAD_DIR: str = Field(default="./uploads/quotes", description="Upload dir")
     MAX_FILE_SIZE_MB: int = Field(default=100, description="Max upload size (MB)")
-    ALLOWED_FILE_FORMATS: List[str] = Field(
-        default=[".3mf", ".stl"], description="Allowed upload extensions"
-    )
+    ALLOWED_FILE_FORMATS: List[str] = Field(default=[".3mf", ".stl"], description="Allowed upload extensions")
 
     @field_validator("ALLOWED_FILE_FORMATS", mode="before")
     @classmethod
@@ -335,9 +321,7 @@ class Settings(BaseSettings):
         description="JSON: {'total_printers': 4, 'printers': [...]}",
     )
 
-    @field_validator(
-        "QUANTITY_DISCOUNTS", "FINISH_COSTS", "RUSH_MULTIPLIERS", "PRINTER_FLEET", mode="before"
-    )
+    @field_validator("QUANTITY_DISCOUNTS", "FINISH_COSTS", "RUSH_MULTIPLIERS", "PRINTER_FLEET", mode="before")
     @classmethod
     def parse_json_string(cls, v):
         """Accept JSON string or already-parsed object."""

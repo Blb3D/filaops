@@ -4,6 +4,7 @@ API Dependencies
 Authentication dependencies and common query parameter dependencies
 that can be safely imported without triggering rate limiter initialization issues.
 """
+
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Query, status
@@ -19,10 +20,7 @@ from app.schemas.common import PaginationParams
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session = Depends(get_db)
-) -> User:
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)) -> User:
     """
     Dependency to get the current authenticated user from access token
 
@@ -54,17 +52,12 @@ async def get_current_user(
 
     # Check if user is active
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
     return user
 
 
-async def get_current_admin_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> User:
+async def get_current_admin_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """
     Dependency to require admin access.
 
@@ -81,16 +74,11 @@ async def get_current_admin_user(
         HTTPException 403 if user is not an admin
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
     return current_user
 
 
-async def get_current_staff_user(
-    current_user: Annotated[User, Depends(get_current_user)]
-) -> User:
+async def get_current_staff_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
     """
     Dependency to require staff access (admin or operator).
 
@@ -107,25 +95,13 @@ async def get_current_staff_user(
         HTTPException 403 if user is not staff (admin/operator)
     """
     if current_user.account_type not in ("admin", "operator"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Staff access required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Staff access required")
     return current_user
 
 
 def get_pagination_params(
-    offset: int = Query(
-        default=0,
-        ge=0,
-        description="Number of records to skip (for pagination)"
-    ),
-    limit: int = Query(
-        default=50,
-        ge=1,
-        le=500,
-        description="Maximum number of records to return (1-500)"
-    )
+    offset: int = Query(default=0, ge=0, description="Number of records to skip (for pagination)"),
+    limit: int = Query(default=50, ge=1, le=500, description="Maximum number of records to return (1-500)"),
 ) -> PaginationParams:
     """
     Dependency for standardized pagination parameters.

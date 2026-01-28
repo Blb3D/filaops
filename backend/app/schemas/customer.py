@@ -3,6 +3,7 @@ Customer Pydantic Schemas
 
 For admin management of customers (users with account_type='customer')
 """
+
 from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
 from datetime import datetime
@@ -12,8 +13,10 @@ from datetime import datetime
 # Customer Schemas
 # ============================================================================
 
+
 class CustomerBase(BaseModel):
     """Base customer fields"""
+
     email: EmailStr
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -43,11 +46,13 @@ class CustomerCreate(CustomerBase):
     Note: Customer portal login is a Pro feature. In open source,
     customers are CRM records for order management only.
     """
+
     status: Optional[str] = Field("active")
 
 
 class CustomerUpdate(BaseModel):
     """Update an existing customer"""
+
     email: Optional[EmailStr] = None
     first_name: Optional[str] = Field(None, max_length=100)
     last_name: Optional[str] = Field(None, max_length=100)
@@ -74,6 +79,7 @@ class CustomerUpdate(BaseModel):
 
 class CustomerListResponse(BaseModel):
     """Customer list item (summary)"""
+
     id: int
     customer_number: Optional[str] = None
     email: str
@@ -105,6 +111,7 @@ class CustomerListResponse(BaseModel):
 
 class CustomerResponse(CustomerBase):
     """Full customer details"""
+
     id: int
     customer_number: Optional[str] = None
     status: str
@@ -126,6 +133,7 @@ class CustomerResponse(CustomerBase):
 
 class CustomerSearchResult(BaseModel):
     """Lightweight customer search result for dropdowns"""
+
     id: int
     customer_number: Optional[str] = None
     email: str

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 class PrinterBrand(str, Enum):
     """Supported printer brands"""
+
     BAMBULAB = "bambulab"
     KLIPPER = "klipper"
     OCTOPRINT = "octoprint"
@@ -21,6 +22,7 @@ class PrinterBrand(str, Enum):
 
 class PrinterStatus(str, Enum):
     """Printer operational status"""
+
     OFFLINE = "offline"
     IDLE = "idle"
     PRINTING = "printing"
@@ -31,13 +33,15 @@ class PrinterStatus(str, Enum):
 
 class ConnectionType(str, Enum):
     """How we connect to the printer"""
-    LOCAL = "local"      # Direct IP/network connection
-    CLOUD = "cloud"      # Via manufacturer's cloud API
-    BOTH = "both"        # Supports both local and cloud
+
+    LOCAL = "local"  # Direct IP/network connection
+    CLOUD = "cloud"  # Via manufacturer's cloud API
+    BOTH = "both"  # Supports both local and cloud
 
 
 class PrinterCapabilities(BaseModel):
     """Printer hardware capabilities"""
+
     # Build volume (mm)
     bed_width: Optional[float] = None
     bed_depth: Optional[float] = None
@@ -67,13 +71,14 @@ class PrinterCapabilities(BaseModel):
 
 class PrinterConnectionConfig(BaseModel):
     """Connection configuration for a printer"""
+
     # Network
     ip_address: Optional[str] = None
     port: Optional[int] = None
 
     # Authentication
     access_code: Optional[str] = None  # BambuLab access code
-    api_key: Optional[str] = None      # OctoPrint/Klipper API key
+    api_key: Optional[str] = None  # OctoPrint/Klipper API key
 
     # Cloud credentials (stored separately, referenced by ID)
     cloud_account_id: Optional[int] = None
@@ -92,6 +97,7 @@ class DiscoveredPrinter(BaseModel):
 
     This is the unified representation before being saved to the database.
     """
+
     # Identification
     brand: PrinterBrand
     model: str
@@ -126,66 +132,102 @@ KNOWN_PRINTER_MODELS: Dict[str, Dict[str, Any]] = {
         "brand": PrinterBrand.BAMBULAB,
         "model": "X1 Carbon",
         "capabilities": PrinterCapabilities(
-            bed_width=256, bed_depth=256, bed_height=256,
-            has_enclosure=True, has_heated_chamber=True,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=True,
-            max_nozzle_temp=300, max_bed_temp=110,
+            bed_width=256,
+            bed_depth=256,
+            bed_height=256,
+            has_enclosure=True,
+            has_heated_chamber=True,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=True,
+            max_nozzle_temp=300,
+            max_bed_temp=110,
         ),
     },
     "bambulab:X1": {
         "brand": PrinterBrand.BAMBULAB,
         "model": "X1",
         "capabilities": PrinterCapabilities(
-            bed_width=256, bed_depth=256, bed_height=256,
-            has_enclosure=True, has_heated_chamber=True,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=True,
-            max_nozzle_temp=300, max_bed_temp=110,
+            bed_width=256,
+            bed_depth=256,
+            bed_height=256,
+            has_enclosure=True,
+            has_heated_chamber=True,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=True,
+            max_nozzle_temp=300,
+            max_bed_temp=110,
         ),
     },
     "bambulab:P1S": {
         "brand": PrinterBrand.BAMBULAB,
         "model": "P1S",
         "capabilities": PrinterCapabilities(
-            bed_width=256, bed_depth=256, bed_height=256,
-            has_enclosure=True, has_heated_chamber=False,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=False,
-            max_nozzle_temp=300, max_bed_temp=110,
+            bed_width=256,
+            bed_depth=256,
+            bed_height=256,
+            has_enclosure=True,
+            has_heated_chamber=False,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=False,
+            max_nozzle_temp=300,
+            max_bed_temp=110,
         ),
     },
     "bambulab:P1P": {
         "brand": PrinterBrand.BAMBULAB,
         "model": "P1P",
         "capabilities": PrinterCapabilities(
-            bed_width=256, bed_depth=256, bed_height=256,
-            has_enclosure=False, has_heated_chamber=False,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=False,
-            max_nozzle_temp=300, max_bed_temp=110,
+            bed_width=256,
+            bed_depth=256,
+            bed_height=256,
+            has_enclosure=False,
+            has_heated_chamber=False,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=False,
+            max_nozzle_temp=300,
+            max_bed_temp=110,
         ),
     },
     "bambulab:A1": {
         "brand": PrinterBrand.BAMBULAB,
         "model": "A1",
         "capabilities": PrinterCapabilities(
-            bed_width=256, bed_depth=256, bed_height=256,
-            has_enclosure=False, has_heated_chamber=False,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=False,
-            max_nozzle_temp=300, max_bed_temp=100,
+            bed_width=256,
+            bed_depth=256,
+            bed_height=256,
+            has_enclosure=False,
+            has_heated_chamber=False,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=False,
+            max_nozzle_temp=300,
+            max_bed_temp=100,
         ),
     },
     "bambulab:A1 Mini": {
         "brand": PrinterBrand.BAMBULAB,
         "model": "A1 Mini",
         "capabilities": PrinterCapabilities(
-            bed_width=180, bed_depth=180, bed_height=180,
-            has_enclosure=False, has_heated_chamber=False,
-            has_ams=True, filament_count=4,
-            has_camera=True, has_lidar=False,
-            max_nozzle_temp=300, max_bed_temp=80,
+            bed_width=180,
+            bed_depth=180,
+            bed_height=180,
+            has_enclosure=False,
+            has_heated_chamber=False,
+            has_ams=True,
+            filament_count=4,
+            has_camera=True,
+            has_lidar=False,
+            max_nozzle_temp=300,
+            max_bed_temp=80,
         ),
     },
     # Prusa
@@ -193,33 +235,44 @@ KNOWN_PRINTER_MODELS: Dict[str, Dict[str, Any]] = {
         "brand": PrinterBrand.PRUSA,
         "model": "MK4",
         "capabilities": PrinterCapabilities(
-            bed_width=250, bed_depth=210, bed_height=220,
+            bed_width=250,
+            bed_depth=210,
+            bed_height=220,
             has_enclosure=False,
-            has_mmu=True, filament_count=5,
+            has_mmu=True,
+            filament_count=5,
             has_camera=False,
-            max_nozzle_temp=290, max_bed_temp=120,
+            max_nozzle_temp=290,
+            max_bed_temp=120,
         ),
     },
     "prusa:MK3S+": {
         "brand": PrinterBrand.PRUSA,
         "model": "MK3S+",
         "capabilities": PrinterCapabilities(
-            bed_width=250, bed_depth=210, bed_height=210,
+            bed_width=250,
+            bed_depth=210,
+            bed_height=210,
             has_enclosure=False,
-            has_mmu=True, filament_count=5,
+            has_mmu=True,
+            filament_count=5,
             has_camera=False,
-            max_nozzle_temp=280, max_bed_temp=100,
+            max_nozzle_temp=280,
+            max_bed_temp=100,
         ),
     },
     "prusa:XL": {
         "brand": PrinterBrand.PRUSA,
         "model": "XL",
         "capabilities": PrinterCapabilities(
-            bed_width=360, bed_depth=360, bed_height=360,
+            bed_width=360,
+            bed_depth=360,
+            bed_height=360,
             has_enclosure=True,
             filament_count=5,  # Tool changer
             has_camera=False,
-            max_nozzle_temp=290, max_bed_temp=120,
+            max_nozzle_temp=290,
+            max_bed_temp=120,
         ),
     },
     # Creality
@@ -227,29 +280,39 @@ KNOWN_PRINTER_MODELS: Dict[str, Dict[str, Any]] = {
         "brand": PrinterBrand.CREALITY,
         "model": "Ender 3 V3",
         "capabilities": PrinterCapabilities(
-            bed_width=220, bed_depth=220, bed_height=250,
+            bed_width=220,
+            bed_depth=220,
+            bed_height=250,
             has_enclosure=False,
-            max_nozzle_temp=260, max_bed_temp=100,
+            max_nozzle_temp=260,
+            max_bed_temp=100,
         ),
     },
     "creality:K1": {
         "brand": PrinterBrand.CREALITY,
         "model": "K1",
         "capabilities": PrinterCapabilities(
-            bed_width=220, bed_depth=220, bed_height=250,
+            bed_width=220,
+            bed_depth=220,
+            bed_height=250,
             has_enclosure=True,
             has_camera=True,
-            max_nozzle_temp=300, max_bed_temp=100,
+            max_nozzle_temp=300,
+            max_bed_temp=100,
         ),
     },
     "creality:K1 Max": {
         "brand": PrinterBrand.CREALITY,
         "model": "K1 Max",
         "capabilities": PrinterCapabilities(
-            bed_width=300, bed_depth=300, bed_height=300,
+            bed_width=300,
+            bed_depth=300,
+            bed_height=300,
             has_enclosure=True,
-            has_camera=True, has_lidar=True,
-            max_nozzle_temp=300, max_bed_temp=100,
+            has_camera=True,
+            has_lidar=True,
+            max_nozzle_temp=300,
+            max_bed_temp=100,
         ),
     },
 }

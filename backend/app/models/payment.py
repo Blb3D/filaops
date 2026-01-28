@@ -4,6 +4,7 @@ Payment Model
 Tracks payment transactions for sales orders with full audit trail.
 Supports partial payments, multiple payment methods, and refunds.
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -21,6 +22,7 @@ class Payment(Base):
     - Refunds (negative amounts)
     - Multiple payment methods
     """
+
     __tablename__ = "payments"
 
     # Primary Key
@@ -38,7 +40,9 @@ class Payment(Base):
     amount = Column(Numeric(10, 2), nullable=False)  # Positive for payment, negative for refund
 
     # Payment Method
-    payment_method = Column(String(50), nullable=False)  # cash, check, credit_card, paypal, stripe, venmo, zelle, wire, other
+    payment_method = Column(
+        String(50), nullable=False
+    )  # cash, check, credit_card, paypal, stripe, venmo, zelle, wire, other
 
     # Transaction Details
     transaction_id = Column(String(255), nullable=True)  # External transaction ID (Stripe, PayPal, etc.)

@@ -3,6 +3,7 @@ Integration tests for Accounting Export endpoints
 
 Tests the tax time sales export functionality
 """
+
 from datetime import datetime, timedelta
 from io import StringIO
 import csv
@@ -14,11 +15,7 @@ class TestSalesExport:
     def test_sales_export_requires_authentication(self, client):
         """Test that sales export returns 401 without auth"""
         response = client.get(
-            "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": "2025-01-01",
-                "end_date": "2025-12-31"
-            }
+            "/api/v1/admin/accounting/export/sales", params={"start_date": "2025-01-01", "end_date": "2025-12-31"}
         )
         assert response.status_code == 401
 
@@ -26,29 +23,22 @@ class TestSalesExport:
         """Test that sales export returns 403 for non-admin users"""
         response = client.get(
             "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": "2025-01-01",
-                "end_date": "2025-12-31"
-            },
-            headers=customer_headers
+            params={"start_date": "2025-01-01", "end_date": "2025-12-31"},
+            headers=customer_headers,
         )
         assert response.status_code == 403
 
     def test_sales_export_requires_start_date(self, client, admin_headers):
         """Test that sales export requires start_date parameter"""
         response = client.get(
-            "/api/v1/admin/accounting/export/sales",
-            params={"end_date": "2025-12-31"},
-            headers=admin_headers
+            "/api/v1/admin/accounting/export/sales", params={"end_date": "2025-12-31"}, headers=admin_headers
         )
         assert response.status_code == 422  # Validation error
 
     def test_sales_export_requires_end_date(self, client, admin_headers):
         """Test that sales export requires end_date parameter"""
         response = client.get(
-            "/api/v1/admin/accounting/export/sales",
-            params={"start_date": "2025-01-01"},
-            headers=admin_headers
+            "/api/v1/admin/accounting/export/sales", params={"start_date": "2025-01-01"}, headers=admin_headers
         )
         assert response.status_code == 422  # Validation error
 
@@ -60,12 +50,8 @@ class TestSalesExport:
 
         response = client.get(
             "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": start_date,
-                "end_date": end_date,
-                "format": "csv"
-            },
-            headers=admin_headers
+            params={"start_date": start_date, "end_date": end_date, "format": "csv"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -81,11 +67,8 @@ class TestSalesExport:
 
         response = client.get(
             "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": start_date,
-                "end_date": end_date
-            },
-            headers=admin_headers
+            params={"start_date": start_date, "end_date": end_date},
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -107,7 +90,7 @@ class TestSalesExport:
             "Shipping",
             "Total",
             "Status",
-            "Payment Status"
+            "Payment Status",
         ]
 
         assert csv_reader.fieldnames == expected_headers
@@ -128,11 +111,8 @@ class TestSalesExport:
 
         response = client.get(
             "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": future_date,
-                "end_date": future_date
-            },
-            headers=admin_headers
+            params={"start_date": future_date, "end_date": future_date},
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -154,10 +134,10 @@ class TestSalesExport:
             "/api/v1/admin/accounting/export/sales",
             params={
                 "start_date": start_date,
-                "end_date": end_date
+                "end_date": end_date,
                 # format not provided - should default to "csv"
             },
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         assert response.status_code == 200
@@ -171,11 +151,8 @@ class TestSalesExport:
 
         response = client.get(
             "/api/v1/admin/accounting/export/sales",
-            params={
-                "start_date": start_date,
-                "end_date": end_date
-            },
-            headers=admin_headers
+            params={"start_date": start_date, "end_date": end_date},
+            headers=admin_headers,
         )
 
         assert response.status_code == 200

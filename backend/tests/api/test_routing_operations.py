@@ -14,6 +14,7 @@ Tests cover:
 10. Full workflow integration
 11. Release with multiple routing operations
 """
+
 import pytest
 from decimal import Decimal
 from tests.factories import (
@@ -35,19 +36,14 @@ class TestReleaseCreatesOperations:
         wc = create_test_work_center(db, code="WC-REL-01", name="Test WC")
         product = create_test_product(db, sku="PROD-REL-01")
         routing = create_test_routing(db, product=product, code="RTG-REL-01", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=20, operation_code="PACK"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=20, operation_code="PACK")
 
         po = create_test_production_order(db, product=product, quantity=10, status="draft")
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -57,9 +53,12 @@ class TestReleaseCreatesOperations:
         assert data["operations_created"] == 2
 
         # Verify operations created
-        ops = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == po.id
-        ).order_by(ProductionOrderOperation.sequence).all()
+        ops = (
+            db.query(ProductionOrderOperation)
+            .filter(ProductionOrderOperation.production_order_id == po.id)
+            .order_by(ProductionOrderOperation.sequence)
+            .all()
+        )
 
         assert len(ops) == 2
         assert ops[0].operation_code == "PRINT"
@@ -77,27 +76,24 @@ class TestReleaseCreatesOperations:
             work_center=wc,
             sequence=10,
             operation_code="PRINT",
-            run_time_minutes=30  # 30 min per unit
+            run_time_minutes=30,  # 30 min per unit
         )
 
         po = create_test_production_order(
             db,
             product=product,
             status="draft",
-            quantity=10  # 10 units
+            quantity=10,  # 10 units
         )
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
 
-        op = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == po.id
-        ).first()
+        op = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == po.id).first()
 
         assert float(op.planned_run_minutes) == 300  # 30 × 10 = 300 minutes
 
@@ -110,8 +106,7 @@ class TestReleaseCreatesOperations:
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -128,8 +123,7 @@ class TestReleaseCreatesOperations:
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         # Same status transition is allowed (no-op)
@@ -144,9 +138,7 @@ class TestReleaseCreatesOperations:
         wc = create_test_work_center(db, code="WC-REL-05", name="Test WC")
         product = create_test_product(db, sku="PROD-REL-05")
         routing = create_test_routing(db, product=product, code="RTG-REL-05", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
 
         po = create_test_production_order(db, product=product, quantity=10, status="draft")
 
@@ -157,14 +149,13 @@ class TestReleaseCreatesOperations:
             sequence=10,
             operation_code="MANUAL",
             status="pending",
-            planned_run_minutes=Decimal("60")
+            planned_run_minutes=Decimal("60"),
         )
         db.add(existing_op)
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -172,9 +163,7 @@ class TestReleaseCreatesOperations:
         assert data["operations_created"] == 0  # No new ops created
 
         # Verify only the manual op exists
-        ops = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == po.id
-        ).all()
+        ops = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == po.id).all()
         assert len(ops) == 1
         assert ops[0].operation_code == "MANUAL"
 
@@ -188,16 +177,13 @@ class TestManualGeneration:
         wc = create_test_work_center(db, code="WC-GEN-01", name="Test WC")
         product = create_test_product(db, sku="PROD-GEN-01")
         routing = create_test_routing(db, product=product, code="RTG-GEN-01", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/operations/generate",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/operations/generate", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -211,12 +197,8 @@ class TestManualGeneration:
         wc = create_test_work_center(db, code="WC-GEN-02", name="Test WC")
         product = create_test_product(db, sku="PROD-GEN-02")
         routing = create_test_routing(db, product=product, code="RTG-GEN-02", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=20, operation_code="PACK"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=20, operation_code="PACK")
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
 
@@ -227,7 +209,7 @@ class TestManualGeneration:
             sequence=10,
             operation_code="OLD",
             status="pending",
-            planned_run_minutes=Decimal("60")
+            planned_run_minutes=Decimal("60"),
         )
         db.add(old_op)
         db.commit()
@@ -236,7 +218,7 @@ class TestManualGeneration:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/generate",
             json={"force": True},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -244,9 +226,7 @@ class TestManualGeneration:
         assert data["operations_created"] == 2
 
         # Verify old op deleted and new ops created
-        ops = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == po.id
-        ).all()
+        ops = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == po.id).all()
         assert len(ops) == 2
         assert all(op.id != old_op_id for op in ops)
 
@@ -256,9 +236,7 @@ class TestManualGeneration:
         wc = create_test_work_center(db, code="WC-GEN-03", name="Test WC")
         product = create_test_product(db, sku="PROD-GEN-03")
         routing = create_test_routing(db, product=product, code="RTG-GEN-03", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
 
@@ -269,14 +247,13 @@ class TestManualGeneration:
             sequence=10,
             operation_code="EXISTING",
             status="pending",
-            planned_run_minutes=Decimal("60")
+            planned_run_minutes=Decimal("60"),
         )
         db.add(existing_op)
         db.commit()
 
         response = client.post(
-            f"/api/v1/production-orders/{po.id}/operations/generate",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/operations/generate", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 400
@@ -292,17 +269,12 @@ class TestProductRouting:
         wc = create_test_work_center(db, code="WC-PRTR-01", name="Test WC")
         product = create_test_product(db, sku="PROD-PRTR-01")
         routing = create_test_routing(db, product=product, code="RTG-PRTR-01", is_active=True)
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
-        )
-        create_test_routing_operation(
-            db, routing=routing, work_center=wc, sequence=20, operation_code="PACK"
-        )
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT")
+        create_test_routing_operation(db, routing=routing, work_center=wc, sequence=20, operation_code="PACK")
         db.commit()
 
         response = client.get(
-            f"/api/v1/products/{product.id}/routing",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/products/{product.id}/routing", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -318,8 +290,7 @@ class TestProductRouting:
         db.commit()
 
         response = client.get(
-            f"/api/v1/products/{product.id}/routing",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/products/{product.id}/routing", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -338,23 +309,14 @@ class TestOperationRoutingLink:
         product = create_test_product(db, sku="PROD-LINK-01")
         routing = create_test_routing(db, product=product, code="RTG-LINK-01", is_active=True)
         routing_op = create_test_routing_operation(
-            db,
-            routing=routing,
-            work_center=wc,
-            sequence=10,
-            operation_code="PRINT"
+            db, routing=routing, work_center=wc, sequence=10, operation_code="PRINT"
         )
 
         po = create_test_production_order(db, product=product, quantity=10, status="draft")
         db.commit()
 
-        client.post(
-            f"/api/v1/production-orders/{po.id}/release",
-            headers={"Authorization": f"Bearer {admin_token}"}
-        )
+        client.post(f"/api/v1/production-orders/{po.id}/release", headers={"Authorization": f"Bearer {admin_token}"})
 
-        op = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == po.id
-        ).first()
+        op = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == po.id).first()
 
         assert op.routing_operation_id == routing_op.id

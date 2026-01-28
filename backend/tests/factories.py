@@ -11,6 +11,7 @@ Usage:
         user = create_test_user(db_session, email="test@example.com")
         product = create_test_product(db_session, name="Widget")
 """
+
 from datetime import datetime, date, timedelta
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
@@ -48,12 +49,9 @@ def _code(prefix: str, name: str) -> str:
 # USER FACTORY
 # =============================================================================
 
+
 def create_test_user(
-    db: Session,
-    email: Optional[str] = None,
-    password: str = "TestPass123!",
-    account_type: str = "admin",
-    **overrides
+    db: Session, email: Optional[str] = None, password: str = "TestPass123!", account_type: str = "admin", **overrides
 ) -> "User":
     """
     Create or get a test user (get-or-create semantics).
@@ -90,7 +88,7 @@ def create_test_user(
         account_type=account_type,
         status=overrides.pop("status", "active"),
         customer_number=overrides.pop("customer_number", f"CUST-{seq:04d}" if account_type == "customer" else None),
-        **overrides
+        **overrides,
     )
     db.add(user)
     db.flush()
@@ -101,11 +99,8 @@ def create_test_user(
 # VENDOR FACTORY
 # =============================================================================
 
-def create_test_vendor(
-    db: Session,
-    name: Optional[str] = None,
-    **overrides
-) -> "Vendor":
+
+def create_test_vendor(db: Session, name: Optional[str] = None, **overrides) -> "Vendor":
     """
     Create a test vendor.
 
@@ -130,7 +125,7 @@ def create_test_vendor(
         lead_time_days=overrides.pop("lead_time_days", 3),
         payment_terms=overrides.pop("payment_terms", "Net 30"),
         is_active=overrides.pop("is_active", True),
-        **overrides
+        **overrides,
     )
     db.add(vendor)
     db.flush()
@@ -141,6 +136,7 @@ def create_test_vendor(
 # PRODUCT FACTORY
 # =============================================================================
 
+
 def create_test_product(
     db: Session,
     sku: Optional[str] = None,
@@ -148,7 +144,7 @@ def create_test_product(
     item_type: str = None,
     product_type: str = None,  # Alias for item_type
     procurement_type: str = "make",
-    **overrides
+    **overrides,
 ) -> "Product":
     """
     Create a test product.
@@ -192,7 +188,7 @@ def create_test_product(
         standard_cost=overrides.pop("standard_cost", Decimal("10.00")),
         selling_price=overrides.pop("selling_price", Decimal("25.00")),
         active=overrides.pop("active", True),
-        **overrides
+        **overrides,
     )
     db.add(product)
     db.flush()
@@ -206,7 +202,7 @@ def create_test_material(
     unit: str = "G",
     purchase_uom: str = "KG",
     purchase_factor: Decimal = Decimal("1000"),
-    **overrides
+    **overrides,
 ) -> "Product":
     """
     Create a test raw material (material item).
@@ -239,7 +235,7 @@ def create_test_material(
         is_raw_material=True,
         standard_cost=overrides.pop("standard_cost", Decimal("25.00")),  # $/KG
         active=overrides.pop("active", True),
-        **overrides
+        **overrides,
     )
     db.add(material)
     db.flush()
@@ -250,11 +246,9 @@ def create_test_material(
 # BOM FACTORY
 # =============================================================================
 
+
 def create_test_bom(
-    db: Session,
-    product: "Product",
-    lines: Optional[List[Dict[str, Any]]] = None,
-    **overrides
+    db: Session, product: "Product", lines: Optional[List[Dict[str, Any]]] = None, **overrides
 ) -> "BOM":
     """
     Create a test BOM with lines.
@@ -279,7 +273,7 @@ def create_test_bom(
         version=overrides.pop("version", 1),
         revision=overrides.pop("revision", "1.0"),
         active=overrides.pop("active", True),
-        **overrides
+        **overrides,
     )
     db.add(bom)
     db.flush()
@@ -317,7 +311,7 @@ def create_test_bom_line(
     consume_stage: str = "production",
     is_cost_only: bool = False,
     scrap_factor: Decimal = Decimal("0"),
-    **overrides
+    **overrides,
 ) -> "BOMLine":
     """
     Create a test BOM line.
@@ -353,7 +347,7 @@ def create_test_bom_line(
         consume_stage=consume_stage,
         is_cost_only=is_cost_only,
         scrap_factor=scrap_factor,
-        **overrides
+        **overrides,
     )
     db.add(line)
     db.flush()
@@ -364,12 +358,13 @@ def create_test_bom_line(
 # SALES ORDER FACTORY
 # =============================================================================
 
+
 def create_test_sales_order(
     db: Session,
     user: "User",
     product: Optional["Product"] = None,
     lines: Optional[List[Dict[str, Any]]] = None,
-    **overrides
+    **overrides,
 ) -> "SalesOrder":
     """
     Create a test sales order.
@@ -422,7 +417,7 @@ def create_test_sales_order(
         order_type=overrides.pop("order_type", "line_item" if lines else "quote_based"),
         source=overrides.pop("source", "portal"),
         estimated_completion_date=overrides.pop("estimated_completion_date", datetime.utcnow() + timedelta(days=7)),
-        **overrides
+        **overrides,
     )
     db.add(so)
     db.flush()
@@ -451,13 +446,14 @@ def create_test_sales_order(
 # PRODUCTION ORDER FACTORY
 # =============================================================================
 
+
 def create_test_production_order(
     db: Session,
     product: "Product",
     quantity: int = 10,
     sales_order: Optional["SalesOrder"] = None,
     sales_order_line: Optional["SalesOrderLine"] = None,
-    **overrides
+    **overrides,
 ) -> "ProductionOrder":
     """
     Create a test production order.
@@ -489,7 +485,7 @@ def create_test_production_order(
         sales_order_line_id=sales_order_line.id if sales_order_line else None,
         priority=overrides.pop("priority", 3),
         due_date=overrides.pop("due_date", date.today() + timedelta(days=7)),
-        **overrides
+        **overrides,
     )
     db.add(po)
     db.flush()
@@ -500,11 +496,9 @@ def create_test_production_order(
 # PURCHASE ORDER FACTORY
 # =============================================================================
 
+
 def create_test_purchase_order(
-    db: Session,
-    vendor: "Vendor",
-    lines: Optional[List[Dict[str, Any]]] = None,
-    **overrides
+    db: Session, vendor: "Vendor", lines: Optional[List[Dict[str, Any]]] = None, **overrides
 ) -> "PurchaseOrder":
     """
     Create a test purchase order.
@@ -528,7 +522,7 @@ def create_test_purchase_order(
         status=overrides.pop("status", "draft"),
         order_date=overrides.pop("order_date", date.today()),
         expected_date=overrides.pop("expected_date", date.today() + timedelta(days=vendor.lead_time_days or 3)),
-        **overrides
+        **overrides,
     )
     db.add(po)
     db.flush()
@@ -565,11 +559,8 @@ def create_test_purchase_order(
 # INVENTORY LOCATION FACTORY
 # =============================================================================
 
-def create_test_location(
-    db: Session,
-    name: Optional[str] = None,
-    **overrides
-) -> "InventoryLocation":
+
+def create_test_location(db: Session, name: Optional[str] = None, **overrides) -> "InventoryLocation":
     """
     Create a test inventory location.
 
@@ -590,7 +581,7 @@ def create_test_location(
         code=overrides.pop("code", f"LOC-{seq:03d}"),
         type=overrides.pop("type", "warehouse"),
         active=overrides.pop("active", True),
-        **overrides
+        **overrides,
     )
     db.add(location)
     db.flush()
@@ -616,22 +607,16 @@ def create_test_inventory_location(
     name: str = "Test Location",
     location_type: str = "warehouse",
     active: bool = True,
-    **overrides
+    **overrides,
 ) -> "InventoryLocation":
     """Alias for create_test_location with different parameter names."""
-    return create_test_location(
-        db,
-        name=name,
-        code=code,
-        type=location_type,
-        active=active,
-        **overrides
-    )
+    return create_test_location(db, name=name, code=code, type=location_type, active=active, **overrides)
 
 
 # =============================================================================
 # INVENTORY FACTORY
 # =============================================================================
+
 
 def create_test_inventory(
     db: Session,
@@ -640,7 +625,7 @@ def create_test_inventory(
     location: Optional["InventoryLocation"] = None,
     on_hand: Decimal = None,
     allocated: Decimal = None,
-    **overrides
+    **overrides,
 ) -> "Inventory":
     """
     Create or update inventory for a product.
@@ -668,10 +653,7 @@ def create_test_inventory(
     allocated_qty = allocated if allocated is not None else overrides.pop("allocated_quantity", Decimal("0"))
 
     # Check if inventory record already exists for this product/location
-    inv = db.query(Inventory).filter_by(
-        product_id=product.id,
-        location_id=location.id
-    ).first()
+    inv = db.query(Inventory).filter_by(product_id=product.id, location_id=location.id).first()
 
     if inv:
         inv.on_hand_quantity = on_hand_qty
@@ -682,7 +664,7 @@ def create_test_inventory(
             location_id=location.id,
             on_hand_quantity=on_hand_qty,
             allocated_quantity=allocated_qty,
-            **overrides
+            **overrides,
         )
         db.add(inv)
 
@@ -691,11 +673,7 @@ def create_test_inventory(
 
 
 def create_test_inventory_transaction(
-    db: Session,
-    product: "Product",
-    quantity: Decimal,
-    transaction_type: str = "adjustment",
-    **overrides
+    db: Session, product: "Product", quantity: Decimal, transaction_type: str = "adjustment", **overrides
 ) -> "InventoryTransaction":
     """
     Create an inventory transaction.
@@ -718,7 +696,7 @@ def create_test_inventory_transaction(
         quantity=quantity,
         reference=overrides.pop("reference", f"TEST-{_next('txn'):04d}"),
         notes=overrides.pop("notes", "Test transaction"),
-        **overrides
+        **overrides,
     )
     db.add(txn)
     db.flush()
@@ -729,12 +707,13 @@ def create_test_inventory_transaction(
 # WORK CENTER FACTORY
 # =============================================================================
 
+
 def create_test_work_center(
     db: Session,
     code: Optional[str] = None,
     name: str = "Test Work Center",
     center_type: str = "production",
-    is_active: bool = True
+    is_active: bool = True,
 ) -> "WorkCenter":
     """
     Create a test work center.
@@ -759,12 +738,7 @@ def create_test_work_center(
     if existing:
         return existing
 
-    wc = WorkCenter(
-        code=code,
-        name=name,
-        center_type=center_type,
-        is_active=is_active
-    )
+    wc = WorkCenter(code=code, name=name, center_type=center_type, is_active=is_active)
     db.add(wc)
     db.flush()
     return wc
@@ -774,13 +748,14 @@ def create_test_work_center(
 # RESOURCE/MACHINE FACTORY
 # =============================================================================
 
+
 def create_test_resource(
     db: Session,
     work_center: "WorkCenter",
     code: Optional[str] = None,
     name: str = "Test Resource",
     status: str = "available",
-    is_active: bool = True
+    is_active: bool = True,
 ) -> "Machine":
     """
     Create a test resource/machine.
@@ -806,13 +781,7 @@ def create_test_resource(
     if existing:
         return existing
 
-    resource = Machine(
-        work_center_id=work_center.id,
-        code=code,
-        name=name,
-        status=status,
-        is_active=is_active
-    )
+    resource = Machine(work_center_id=work_center.id, code=code, name=name, status=status, is_active=is_active)
     db.add(resource)
     db.flush()
     return resource
@@ -821,6 +790,7 @@ def create_test_resource(
 # =============================================================================
 # PRODUCTION ORDER OPERATION FACTORY
 # =============================================================================
+
 
 def create_test_po_operation(
     db: Session,
@@ -837,7 +807,7 @@ def create_test_po_operation(
     scheduled_start: Optional[datetime] = None,
     scheduled_end: Optional[datetime] = None,
     quantity_completed: Optional[Decimal] = None,
-    quantity_scrapped: Optional[Decimal] = None
+    quantity_scrapped: Optional[Decimal] = None,
 ) -> "ProductionOrderOperation":
     """
     Create a test production order operation.
@@ -879,7 +849,7 @@ def create_test_po_operation(
         scheduled_start=scheduled_start,
         scheduled_end=scheduled_end,
         quantity_completed=quantity_completed or Decimal("0"),
-        quantity_scrapped=quantity_scrapped or Decimal("0")
+        quantity_scrapped=quantity_scrapped or Decimal("0"),
     )
     db.add(op)
     db.flush()
@@ -890,12 +860,9 @@ def create_test_po_operation(
 # ROUTING FACTORY
 # =============================================================================
 
+
 def create_test_routing(
-    db: Session,
-    product: "Product",
-    code: Optional[str] = None,
-    name: str = "Test Routing",
-    is_active: bool = True
+    db: Session, product: "Product", code: Optional[str] = None, name: str = "Test Routing", is_active: bool = True
 ) -> "Routing":
     """
     Create a test routing.
@@ -915,12 +882,7 @@ def create_test_routing(
     if code is None:
         code = f"RTG-{datetime.now().strftime('%H%M%S%f')}"
 
-    routing = Routing(
-        product_id=product.id,
-        code=code,
-        name=name,
-        is_active=is_active
-    )
+    routing = Routing(product_id=product.id, code=code, name=name, is_active=is_active)
     db.add(routing)
     db.flush()
     return routing
@@ -930,6 +892,7 @@ def create_test_routing(
 # ROUTING OPERATION FACTORY
 # =============================================================================
 
+
 def create_test_routing_operation(
     db: Session,
     routing: "Routing",
@@ -938,7 +901,7 @@ def create_test_routing_operation(
     operation_code: str = "PRINT",
     operation_name: str = "Test Operation",
     setup_time_minutes: float = 5,
-    run_time_minutes: float = 30
+    run_time_minutes: float = 30,
 ) -> "RoutingOperation":
     """
     Create a test routing operation.
@@ -965,7 +928,7 @@ def create_test_routing_operation(
         operation_code=operation_code,
         operation_name=operation_name,
         setup_time_minutes=Decimal(str(setup_time_minutes)),
-        run_time_minutes=Decimal(str(run_time_minutes))
+        run_time_minutes=Decimal(str(run_time_minutes)),
     )
     db.add(routing_op)
     db.flush()

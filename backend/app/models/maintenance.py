@@ -4,6 +4,7 @@ Maintenance Log Model
 Tracks maintenance activities on printers for preventive maintenance scheduling.
 Freemium feature: Basic maintenance logging and scheduling.
 """
+
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Numeric, ForeignKey
 from sqlalchemy.orm import relationship
@@ -21,6 +22,7 @@ class MaintenanceLog(Base):
     - Calibration (bed leveling, extrusion calibration)
     - Cleaning (nozzle cleaning, bed cleaning)
     """
+
     __tablename__ = "maintenance_logs"
 
     id = Column(Integer, primary_key=True, index=True)

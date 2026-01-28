@@ -7,13 +7,13 @@ Revision ID: 057_seed_scrap_reasons
 Revises: 056_migrate_bom
 Create Date: 2025-01-21
 """
+
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy import text
 
 # revision identifiers
-revision = '057_seed_scrap_reasons'
-down_revision = '056_migrate_bom'
+revision = "057_seed_scrap_reasons"
+down_revision = "056_migrate_bom"
 branch_labels = None
 depends_on = None
 
@@ -26,19 +26,15 @@ DEFAULT_SCRAP_REASONS = [
     ("stringing", "Stringing", "Excessive stringing between features", 30),
     ("warping", "Warping", "Part warped during cooling", 40),
     ("nozzle_clog", "Nozzle Clog", "Nozzle became clogged during print", 50),
-
     # Physical damage
     ("damage", "Physical Damage", "Part was damaged during handling or post-processing", 60),
-
     # Quality issues
     ("quality_fail", "Quality Fail", "Part failed quality inspection", 70),
     ("dimensional", "Dimensional Out of Spec", "Part dimensions outside tolerance", 80),
     ("surface_defect", "Surface Defect", "Visible surface quality issues", 90),
-
     # Material issues
     ("material_defect", "Material Defect", "Raw material had defects", 100),
     ("wrong_material", "Wrong Material", "Wrong material was used", 110),
-
     # Other
     ("operator_error", "Operator Error", "Error made by operator", 120),
     ("machine_failure", "Machine Failure", "Printer or machine malfunction", 130),
@@ -53,8 +49,7 @@ def upgrade():
     for code, name, description, sequence in DEFAULT_SCRAP_REASONS:
         # Check if already exists
         existing = connection.execute(
-            text("SELECT id FROM scrap_reasons WHERE code = :code"),
-            {"code": code}
+            text("SELECT id FROM scrap_reasons WHERE code = :code"), {"code": code}
         ).fetchone()
 
         if not existing:
@@ -68,7 +63,7 @@ def upgrade():
                     "name": name,
                     "description": description,
                     "sequence": sequence,
-                }
+                },
             )
             print(f"  Added scrap reason: {code}")
         else:
@@ -80,10 +75,7 @@ def downgrade():
     connection = op.get_bind()
 
     codes = [r[0] for r in DEFAULT_SCRAP_REASONS]
-    placeholders = ', '.join([f':code{i}' for i in range(len(codes))])
-    params = {f'code{i}': code for i, code in enumerate(codes)}
+    placeholders = ", ".join([f":code{i}" for i in range(len(codes))])
+    params = {f"code{i}": code for i, code in enumerate(codes)}
 
-    connection.execute(
-        text(f"DELETE FROM scrap_reasons WHERE code IN ({placeholders})"),
-        params
-    )
+    connection.execute(text(f"DELETE FROM scrap_reasons WHERE code IN ({placeholders})"), params)

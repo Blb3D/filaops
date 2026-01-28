@@ -6,6 +6,7 @@ Manage vendor SKU mappings for invoice parsing memory:
 - Search across all vendors
 - Product suggestion endpoint
 """
+
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime
@@ -111,15 +112,16 @@ async def create_vendor_item(
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     # Check for duplicate vendor_sku
-    existing = db.query(VendorItem).filter(
-        VendorItem.vendor_id == vendor_id,
-        VendorItem.vendor_sku == request.vendor_sku,
-    ).first()
-    if existing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Vendor SKU '{request.vendor_sku}' already exists for this vendor"
+    existing = (
+        db.query(VendorItem)
+        .filter(
+            VendorItem.vendor_id == vendor_id,
+            VendorItem.vendor_sku == request.vendor_sku,
         )
+        .first()
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Vendor SKU '{request.vendor_sku}' already exists for this vendor")
 
     # Verify product exists if provided
     if request.product_id:
@@ -159,12 +161,15 @@ async def get_vendor_item(
     current_user: User = Depends(get_current_user),
 ):
     """Get a specific vendor item mapping."""
-    item = db.query(VendorItem).options(
-        joinedload(VendorItem.product)
-    ).filter(
-        VendorItem.id == item_id,
-        VendorItem.vendor_id == vendor_id,
-    ).first()
+    item = (
+        db.query(VendorItem)
+        .options(joinedload(VendorItem.product))
+        .filter(
+            VendorItem.id == item_id,
+            VendorItem.vendor_id == vendor_id,
+        )
+        .first()
+    )
 
     if not item:
         raise HTTPException(status_code=404, detail="Vendor item not found")
@@ -185,10 +190,14 @@ async def update_vendor_item(
 
     Typically used to map/remap a vendor SKU to a different product.
     """
-    item = db.query(VendorItem).filter(
-        VendorItem.id == item_id,
-        VendorItem.vendor_id == vendor_id,
-    ).first()
+    item = (
+        db.query(VendorItem)
+        .filter(
+            VendorItem.id == item_id,
+            VendorItem.vendor_id == vendor_id,
+        )
+        .first()
+    )
 
     if not item:
         raise HTTPException(status_code=404, detail="Vendor item not found")
@@ -203,7 +212,7 @@ async def update_vendor_item(
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
     for field, value in update_data.items():
-        if field == 'default_unit_cost' and value is not None:
+        if field == "default_unit_cost" and value is not None:
             setattr(item, field, str(value))
         else:
             setattr(item, field, value)
@@ -227,10 +236,14 @@ async def delete_vendor_item(
     current_user: User = Depends(get_current_user),
 ):
     """Delete a vendor item mapping."""
-    item = db.query(VendorItem).filter(
-        VendorItem.id == item_id,
-        VendorItem.vendor_id == vendor_id,
-    ).first()
+    item = (
+        db.query(VendorItem)
+        .filter(
+            VendorItem.id == item_id,
+            VendorItem.vendor_id == vendor_id,
+        )
+        .first()
+    )
 
     if not item:
         raise HTTPException(status_code=404, detail="Vendor item not found")
@@ -271,10 +284,15 @@ async def search_vendor_items(
     if unmapped_only:
         query = query.filter(VendorItem.product_id.is_(None))
 
-    items = query.options(
-        joinedload(VendorItem.product),
-        joinedload(VendorItem.vendor),
-    ).order_by(VendorItem.times_ordered.desc()).limit(limit).all()
+    items = (
+        query.options(
+            joinedload(VendorItem.product),
+            joinedload(VendorItem.vendor),
+        )
+        .order_by(VendorItem.times_ordered.desc())
+        .limit(limit)
+        .all()
+    )
 
     return [_vendor_item_to_response(item) for item in items]
 
@@ -298,39 +316,54 @@ async def suggest_product_match(
     suggestions = []
 
     # 1. Check if this vendor SKU is mapped by another vendor
-    existing_mappings = db.query(VendorItem).filter(
-        VendorItem.vendor_sku == vendor_sku,
-        VendorItem.product_id.isnot(None),
-    ).options(joinedload(VendorItem.product)).limit(5).all()
+    existing_mappings = (
+        db.query(VendorItem)
+        .filter(
+            VendorItem.vendor_sku == vendor_sku,
+            VendorItem.product_id.isnot(None),
+        )
+        .options(joinedload(VendorItem.product))
+        .limit(5)
+        .all()
+    )
 
     for mapping in existing_mappings:
         if mapping.product:
-            suggestions.append({
-                "product_id": mapping.product.id,
-                "product_sku": mapping.product.sku,
-                "product_name": mapping.product.name,
-                "match_type": "exact_vendor_sku",
-                "confidence": "high",
-                "source": f"Mapped by vendor {mapping.vendor_id}",
-            })
+            suggestions.append(
+                {
+                    "product_id": mapping.product.id,
+                    "product_sku": mapping.product.sku,
+                    "product_name": mapping.product.name,
+                    "match_type": "exact_vendor_sku",
+                    "confidence": "high",
+                    "source": f"Mapped by vendor {mapping.vendor_id}",
+                }
+            )
 
     # 2. Search products by SKU similarity
     sku_pattern = f"%{vendor_sku}%"
-    similar_products = db.query(Product).filter(
-        Product.sku.ilike(sku_pattern),
-        Product.active.is_(True),
-    ).limit(limit).all()
+    similar_products = (
+        db.query(Product)
+        .filter(
+            Product.sku.ilike(sku_pattern),
+            Product.active.is_(True),
+        )
+        .limit(limit)
+        .all()
+    )
 
     for product in similar_products:
         if not any(s["product_id"] == product.id for s in suggestions):
-            suggestions.append({
-                "product_id": product.id,
-                "product_sku": product.sku,
-                "product_name": product.name,
-                "match_type": "sku_similarity",
-                "confidence": "medium",
-                "source": "SKU pattern match",
-            })
+            suggestions.append(
+                {
+                    "product_id": product.id,
+                    "product_sku": product.sku,
+                    "product_name": product.name,
+                    "match_type": "sku_similarity",
+                    "confidence": "medium",
+                    "source": "SKU pattern match",
+                }
+            )
 
     # 3. Search by description if provided
     if vendor_description and len(suggestions) < limit:
@@ -338,21 +371,28 @@ async def suggest_product_match(
         for word in words:
             if len(word) >= 3:  # Skip short words
                 desc_pattern = f"%{word}%"
-                name_matches = db.query(Product).filter(
-                    Product.name.ilike(desc_pattern),
-                    Product.active.is_(True),
-                ).limit(5).all()
+                name_matches = (
+                    db.query(Product)
+                    .filter(
+                        Product.name.ilike(desc_pattern),
+                        Product.active.is_(True),
+                    )
+                    .limit(5)
+                    .all()
+                )
 
                 for product in name_matches:
                     if not any(s["product_id"] == product.id for s in suggestions):
-                        suggestions.append({
-                            "product_id": product.id,
-                            "product_sku": product.sku,
-                            "product_name": product.name,
-                            "match_type": "description_similarity",
-                            "confidence": "low",
-                            "source": f"Name contains '{word}'",
-                        })
+                        suggestions.append(
+                            {
+                                "product_id": product.id,
+                                "product_sku": product.sku,
+                                "product_name": product.name,
+                                "match_type": "description_similarity",
+                                "confidence": "low",
+                                "source": f"Name contains '{word}'",
+                            }
+                        )
                         if len(suggestions) >= limit:
                             break
 
@@ -383,13 +423,19 @@ async def bulk_update_last_seen(
         vendor_sku = item_data.get("vendor_sku")
 
         if vendor_id and vendor_sku:
-            result = db.query(VendorItem).filter(
-                VendorItem.vendor_id == vendor_id,
-                VendorItem.vendor_sku == vendor_sku,
-            ).update({
-                VendorItem.last_seen_at: now,
-                VendorItem.times_ordered: VendorItem.times_ordered + 1,
-            })
+            result = (
+                db.query(VendorItem)
+                .filter(
+                    VendorItem.vendor_id == vendor_id,
+                    VendorItem.vendor_sku == vendor_sku,
+                )
+                .update(
+                    {
+                        VendorItem.last_seen_at: now,
+                        VendorItem.times_ordered: VendorItem.times_ordered + 1,
+                    }
+                )
+            )
             updated_count += result
 
     db.commit()

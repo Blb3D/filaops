@@ -1,6 +1,7 @@
 """
 Sales Order Pydantic Schemas
 """
+
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
@@ -13,8 +14,10 @@ from app.schemas.fulfillment_status import FulfillmentStatusSummary
 # Request Schemas
 # ============================================================================
 
+
 class SalesOrderLineCreate(BaseModel):
     """Line item for manual order creation"""
+
     product_id: int = Field(..., description="Product ID")
     quantity: int = Field(..., gt=0, le=10000, description="Quantity (1-10000)")
     unit_price: Optional[Decimal] = Field(None, ge=0, description="Unit price (uses product price if not specified)")
@@ -23,6 +26,7 @@ class SalesOrderLineCreate(BaseModel):
 
 class SalesOrderCreate(BaseModel):
     """Create a manual sales order (line_item type)"""
+
     # Order lines (at least one required)
     lines: List[SalesOrderLineCreate] = Field(..., min_length=1, description="Order lines")
 
@@ -48,6 +52,7 @@ class SalesOrderCreate(BaseModel):
 
 class SalesOrderConvert(BaseModel):
     """Request to convert quote to sales order"""
+
     shipping_address_line1: Optional[str] = Field(None, max_length=255)
     shipping_address_line2: Optional[str] = Field(None, max_length=255)
     shipping_city: Optional[str] = Field(None, max_length=100)
@@ -59,6 +64,7 @@ class SalesOrderConvert(BaseModel):
 
 class SalesOrderUpdateStatus(BaseModel):
     """Update sales order status (admin)"""
+
     status: str = Field(..., description="Order status")
     internal_notes: Optional[str] = Field(None, description="Internal notes")
     production_notes: Optional[str] = Field(None, description="Production notes")
@@ -66,6 +72,7 @@ class SalesOrderUpdateStatus(BaseModel):
 
 class SalesOrderUpdatePayment(BaseModel):
     """Update payment information"""
+
     payment_status: str = Field(..., description="Payment status")
     payment_method: Optional[str] = Field(None, description="Payment method")
     payment_transaction_id: Optional[str] = Field(None, description="Transaction ID")
@@ -73,22 +80,24 @@ class SalesOrderUpdatePayment(BaseModel):
 
 class SalesOrderUpdateShipping(BaseModel):
     """Update shipping information (tracking, carrier, date)"""
+
     tracking_number: Optional[str] = Field(None, max_length=255)
     carrier: Optional[str] = Field(None, max_length=100)
     shipped_at: Optional[datetime] = None
 
-    @field_validator('shipped_at')
+    @field_validator("shipped_at")
     @classmethod
     def validate_shipped_at(cls, v: Optional[datetime]) -> Optional[datetime]:
         """Validate shipped date is reasonable (between 2000-2099)"""
         if v is not None:
             if v.year < 2000 or v.year > 2099:
-                raise ValueError('Shipped date must be between year 2000 and 2099')
+                raise ValueError("Shipped date must be between year 2000 and 2099")
         return v
 
 
 class SalesOrderUpdateAddress(BaseModel):
     """Update shipping address on an order"""
+
     shipping_address_line1: Optional[str] = Field(None, max_length=255)
     shipping_address_line2: Optional[str] = Field(None, max_length=255)
     shipping_city: Optional[str] = Field(None, max_length=100)
@@ -99,6 +108,7 @@ class SalesOrderUpdateAddress(BaseModel):
 
 class SalesOrderCancel(BaseModel):
     """Cancel sales order"""
+
     cancellation_reason: str = Field(..., max_length=1000)
 
 
@@ -106,8 +116,10 @@ class SalesOrderCancel(BaseModel):
 # Response Schemas
 # ============================================================================
 
+
 class SalesOrderBase(BaseModel):
     """Base sales order fields"""
+
     order_number: str
     status: str
     fulfillment_status: str
@@ -126,6 +138,7 @@ class SalesOrderBase(BaseModel):
 
 class SalesOrderListResponse(SalesOrderBase):
     """Sales order list item"""
+
     id: int
     quote_id: Optional[int]
     product_id: Optional[int] = None  # Direct product link
@@ -149,6 +162,7 @@ class SalesOrderListResponse(SalesOrderBase):
 
 class SalesOrderLineResponse(BaseModel):
     """Sales order line item response"""
+
     id: int
     product_id: int
     product_sku: Optional[str] = None
@@ -165,6 +179,7 @@ class SalesOrderLineResponse(BaseModel):
 
 class SalesOrderResponse(SalesOrderBase):
     """Full sales order details"""
+
     id: int
     user_id: int
     quote_id: Optional[int]
@@ -174,7 +189,7 @@ class SalesOrderResponse(SalesOrderBase):
     order_type: Optional[str] = None  # 'quote_based' or 'line_item'
     source: Optional[str] = None  # 'portal', 'manual', 'squarespace', 'woocommerce'
     source_order_id: Optional[str] = None
-    
+
     # Order status (two-tier model: order status + fulfillment status)
     fulfillment_status: Optional[str] = None  # Shipping workflow status
 
@@ -228,6 +243,7 @@ class SalesOrderResponse(SalesOrderBase):
 
 class SalesOrderStatsResponse(BaseModel):
     """Sales order statistics"""
+
     total_orders: int
     pending_orders: int
     confirmed_orders: int

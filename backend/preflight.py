@@ -1,5 +1,6 @@
 from importlib import util as _util
 
+
 def have(modname: str) -> bool:
     try:
         # supports dotted modules (e.g., "email_validator")
@@ -7,17 +8,26 @@ def have(modname: str) -> bool:
     except Exception:
         return False
 
+
 mods = [
     # core runtime
-    "sqlalchemy", "fastapi", "alembic", "uvicorn",
+    "sqlalchemy",
+    "fastapi",
+    "alembic",
+    "uvicorn",
     # config & validation
-    "pydantic", "pydantic_settings", "email_validator",
+    "pydantic",
+    "pydantic_settings",
+    "email_validator",
     # auth & forms
-    "jwt", "cryptography", "passlib", "multipart",
+    "jwt",
+    "cryptography",
+    "passlib",
+    "multipart",
     # requests
     "requests",
     # Postgres driver
-    "psycopg2"
+    "psycopg2",
 ]
 
 missing = [m for m in mods if not have(m)]

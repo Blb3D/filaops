@@ -3,6 +3,7 @@ Maps operation codes to BOM consume stages.
 
 This determines which materials are needed at each operation.
 """
+
 from typing import List, Set
 
 # Operation code to consume stage mapping
@@ -14,23 +15,19 @@ OPERATION_CONSUME_STAGES = {
     "MOLD": ["production", "any"],
     "CUT": ["production", "any"],
     "MACHINE": ["production", "any"],
-
     # Assembly operations - consume hardware, subassemblies
     "ASSEMBLE": ["assembly", "production", "any"],
     "BUILD": ["assembly", "production", "any"],
     "WELD": ["assembly", "production", "any"],
-
     # Finishing operations - typically no material consumption
     "CLEAN": ["any"],
     "SAND": ["any"],
     "PAINT": ["finishing", "any"],
     "COAT": ["finishing", "any"],
-
     # Quality operations - typically no material consumption
     "QC": ["any"],
     "INSPECT": ["any"],
     "TEST": ["any"],
-
     # Shipping operations - consume packaging materials
     "PACK": ["shipping", "any"],
     "SHIP": ["shipping", "any"],

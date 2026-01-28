@@ -1,20 +1,23 @@
 """
 Bill of Materials models
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.db.base import Base
 
+
 class BOM(Base):
     """Bill of Materials model - matches boms table"""
+
     __tablename__ = "boms"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Product reference
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
 
     # BOM identifiers
     code = Column(String(50), nullable=True)  # BOM code
@@ -48,23 +51,24 @@ class BOM(Base):
 
 class BOMLine(Base):
     """BOM Line model - matches bom_lines table"""
+
     __tablename__ = "bom_lines"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # References
-    bom_id = Column(Integer, ForeignKey('boms.id'), nullable=False)
-    component_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    bom_id = Column(Integer, ForeignKey("boms.id"), nullable=False)
+    component_id = Column(Integer, ForeignKey("products.id"), nullable=False)
 
     # Line details
     sequence = Column(Integer, nullable=True)  # 'sequence' not 'line_number'
     quantity = Column(Numeric(18, 4), nullable=False)
-    unit = Column(String(20), default='EA', nullable=False)  # Explicit UOM: EA, kg, HR, m, etc.
+    unit = Column(String(20), default="EA", nullable=False)  # Explicit UOM: EA, kg, HR, m, etc.
 
     # Consumption stage - when should this item be consumed?
     # 'production' = consume at complete_print (filament, raw materials)
     # 'shipping' = consume at buy_label (boxes, packaging)
-    consume_stage = Column(String(20), default='production', nullable=False)
+    consume_stage = Column(String(20), default="production", nullable=False)
 
     # Cost-only flag: if True, this line is for costing only and won't allocate inventory
     # Use for overhead, machine time, labor items

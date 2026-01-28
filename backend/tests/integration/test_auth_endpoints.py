@@ -4,6 +4,7 @@ Integration tests for authentication endpoints
 Tests the full API flow for user registration, login, token refresh, and profile retrieval
 Following TDD approach - write tests first, then implement
 """
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -45,6 +46,7 @@ def db_session():
 @pytest.fixture
 def client(db_session):
     """Create a test client with database override"""
+
     def override_get_db():
         try:
             yield db_session
@@ -69,7 +71,7 @@ class TestUserRegistration:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -90,7 +92,7 @@ class TestUserRegistration:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -109,7 +111,7 @@ class TestUserRegistration:
                 "password": "SecurePass123!",
                 "first_name": "First",
                 "last_name": "User",
-            }
+            },
         )
 
         # Try to register with same email
@@ -120,7 +122,7 @@ class TestUserRegistration:
                 "password": "DifferentPass456!",
                 "first_name": "Second",
                 "last_name": "User",
-            }
+            },
         )
 
         assert response.status_code == 400
@@ -135,7 +137,7 @@ class TestUserRegistration:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         assert response.status_code == 422  # Validation error
@@ -149,7 +151,7 @@ class TestUserRegistration:
                 "password": "weak",  # Too short, no numbers, no special chars
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         assert response.status_code == 422  # Validation error
@@ -161,7 +163,7 @@ class TestUserRegistration:
             json={
                 "email": "user@example.com",
                 # Missing password
-            }
+            },
         )
 
         assert response.status_code == 422
@@ -177,7 +179,7 @@ class TestUserRegistration:
                 "last_name": "Doe",
                 "company_name": "Acme Corp",
                 "phone": "555-1234",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -199,7 +201,7 @@ class TestUserLogin:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         # Login with correct credentials
@@ -208,7 +210,7 @@ class TestUserLogin:
             data={
                 "username": "user@example.com",  # OAuth2 uses 'username' field
                 "password": "SecurePass123!",
-            }
+            },
         )
 
         assert response.status_code == 200
@@ -227,7 +229,7 @@ class TestUserLogin:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         # Try to login with wrong password
@@ -236,7 +238,7 @@ class TestUserLogin:
             data={
                 "username": "user@example.com",
                 "password": "WrongPassword456!",
-            }
+            },
         )
 
         assert response.status_code == 401
@@ -249,7 +251,7 @@ class TestUserLogin:
             data={
                 "username": "nonexistent@example.com",
                 "password": "SomePassword123!",
-            }
+            },
         )
 
         assert response.status_code == 401
@@ -267,7 +269,7 @@ class TestUserLogin:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
 
         # Check last_login_at before login
@@ -280,7 +282,7 @@ class TestUserLogin:
             data={
                 "username": "user@example.com",
                 "password": "SecurePass123!",
-            }
+            },
         )
 
         # Check last_login_at after login
@@ -303,15 +305,12 @@ class TestTokenRefresh:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
         refresh_token = response.json()["refresh_token"]
 
         # Refresh the token
-        response = client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": refresh_token}
-        )
+        response = client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
 
         assert response.status_code == 200
         data = response.json()
@@ -321,10 +320,7 @@ class TestTokenRefresh:
 
     def test_refresh_token_with_invalid_token(self, client):
         """Test that invalid refresh token is rejected"""
-        response = client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": "invalid.token.here"}
-        )
+        response = client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid.token.here"})
 
         assert response.status_code == 401
         assert "invalid" in response.json()["detail"].lower()
@@ -339,15 +335,12 @@ class TestTokenRefresh:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
         access_token = response.json()["access_token"]
 
         # Try to refresh with access token (should fail)
-        response = client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": access_token}
-        )
+        response = client.post("/api/v1/auth/refresh", json={"refresh_token": access_token})
 
         assert response.status_code == 401
 
@@ -365,15 +358,12 @@ class TestGetCurrentUser:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
         access_token = response.json()["access_token"]
 
         # Get current user
-        response = client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {access_token}"}
-        )
+        response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {access_token}"})
 
         assert response.status_code == 200
         data = response.json()
@@ -391,10 +381,7 @@ class TestGetCurrentUser:
 
     def test_get_current_user_with_invalid_token(self, client):
         """Test that invalid token returns 401"""
-        response = client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": "Bearer invalid.token.here"}
-        )
+        response = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer invalid.token.here"})
 
         assert response.status_code == 401
 
@@ -408,14 +395,11 @@ class TestGetCurrentUser:
                 "password": "SecurePass123!",
                 "first_name": "John",
                 "last_name": "Doe",
-            }
+            },
         )
         refresh_token = response.json()["refresh_token"]
 
         # Try to access /me with refresh token
-        response = client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {refresh_token}"}
-        )
+        response = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {refresh_token}"})
 
         assert response.status_code == 401

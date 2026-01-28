@@ -4,6 +4,7 @@ Scrap Reason Model
 Stores configurable reasons for scrapping production orders.
 Allows shops to define their own failure modes specific to their processes.
 """
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
 from datetime import datetime
 
@@ -19,6 +20,7 @@ class ScrapReason(Base):
     - layer_shift: Layer shift during print
     - spaghetti: Print became spaghetti (detached from bed)
     """
+
     __tablename__ = "scrap_reasons"
 
     id = Column(Integer, primary_key=True, index=True)

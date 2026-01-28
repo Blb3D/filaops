@@ -1,29 +1,32 @@
 """
 Print Job model
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
 from app.db.base import Base
 
+
 class PrintJob(Base):
     """Print Job model - matches print_jobs table"""
+
     __tablename__ = "print_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # References
-    production_order_id = Column(Integer, ForeignKey('production_orders.id'), nullable=True)
-    printer_id = Column(Integer, ForeignKey('printers.id'), nullable=True)
+    production_order_id = Column(Integer, ForeignKey("production_orders.id"), nullable=True)
+    printer_id = Column(Integer, ForeignKey("printers.id"), nullable=True)
 
     # File info
     gcode_file = Column(String(500), nullable=True)
 
     # Status and priority
-    status = Column(String(50), nullable=False, default='queued')
+    status = Column(String(50), nullable=False, default="queued")
     # queued, assigned, printing, completed, failed
-    priority = Column(String(20), default='normal')
+    priority = Column(String(20), default="normal")
 
     # Timing
     estimated_time_minutes = Column(Integer, nullable=True)

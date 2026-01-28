@@ -7,6 +7,7 @@ This script seeds the database with:
 
 Run with: python -m backend.scripts.seed_example_data
 """
+
 import sys
 from pathlib import Path
 
@@ -24,14 +25,16 @@ from app.models.product import Product
 from app.models.material import MaterialType, Color, MaterialColor
 
 
-def get_or_create_category(db: Session, code: str, name: str, parent_code: Optional[str] = None, sort_order: int = 0) -> ItemCategory:
+def get_or_create_category(
+    db: Session, code: str, name: str, parent_code: Optional[str] = None, sort_order: int = 0
+) -> ItemCategory:
     """Get existing category or create if it doesn't exist"""
     category = db.query(ItemCategory).filter(ItemCategory.code == code).first()
     if not category:
         parent = None
         if parent_code:
             parent = db.query(ItemCategory).filter(ItemCategory.code == parent_code).first()
-        
+
         category = ItemCategory(
             code=code,
             name=name,
@@ -39,7 +42,7 @@ def get_or_create_category(db: Session, code: str, name: str, parent_code: Optio
             sort_order=sort_order,
             is_active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(category)
         db.commit()
@@ -50,7 +53,7 @@ def get_or_create_category(db: Session, code: str, name: str, parent_code: Optio
 def ensure_categories_exist(db: Session):
     """Ensure all required categories exist, create them if missing"""
     print("\n📁 Ensuring categories exist...")
-    
+
     categories_to_create = [
         # Root categories
         {"code": "FILAMENT", "name": "Filament", "parent_code": None, "sort_order": 1},
@@ -73,7 +76,7 @@ def ensure_categories_exist(db: Session):
         {"code": "STANDARD_PRODUCTS", "name": "Standard Products", "parent_code": "FINISHED_GOODS", "sort_order": 1},
         {"code": "CUSTOM_PRODUCTS", "name": "Custom Products", "parent_code": "FINISHED_GOODS", "sort_order": 2},
     ]
-    
+
     # First pass: Create root categories
     for cat_data in categories_to_create:
         if cat_data["parent_code"] is None:
@@ -86,13 +89,13 @@ def ensure_categories_exist(db: Session):
                     sort_order=cat_data["sort_order"],
                     is_active=True,
                     created_at=datetime.utcnow(),
-                    updated_at=datetime.utcnow()
+                    updated_at=datetime.utcnow(),
                 )
                 db.add(category)
                 print(f"  ✅ Created category: {cat_data['code']}")
-    
+
     db.commit()
-    
+
     # Second pass: Create child categories
     for cat_data in categories_to_create:
         if cat_data["parent_code"] is not None:
@@ -107,23 +110,23 @@ def ensure_categories_exist(db: Session):
                         sort_order=cat_data["sort_order"],
                         is_active=True,
                         created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
+                        updated_at=datetime.utcnow(),
                     )
                     db.add(category)
                     print(f"  ✅ Created category: {cat_data['code']} (under {cat_data['parent_code']})")
                 else:
                     print(f"  ⚠️  Parent category {cat_data['parent_code']} not found for {cat_data['code']}")
-    
+
     db.commit()
 
 
 def seed_example_items(db: Session):
     """Seed one example item per category"""
     print("\n📦 Seeding example items by category...")
-    
+
     # Ensure categories exist first
     ensure_categories_exist(db)
-    
+
     examples = [
         # Finished goods examples - one for each major material category
         {
@@ -166,7 +169,6 @@ def seed_example_items(db: Session):
             "standard_cost": Decimal("8.00"),
             "selling_price": Decimal("22.00"),
         },
-        
         # Packaging examples
         {
             "sku": "SEED-EXAMPLE-BOX-001",
@@ -188,7 +190,6 @@ def seed_example_items(db: Session):
             "standard_cost": Decimal("0.10"),
             "selling_price": None,
         },
-        
         # Hardware examples
         {
             "sku": "SEED-EXAMPLE-FAST-001",
@@ -210,7 +211,6 @@ def seed_example_items(db: Session):
             "standard_cost": Decimal("0.15"),
             "selling_price": None,
         },
-        
         # Finished goods examples
         {
             "sku": "SEED-EXAMPLE-STD-001",
@@ -233,10 +233,10 @@ def seed_example_items(db: Session):
             "selling_price": Decimal("30.00"),
         },
     ]
-    
+
     created = 0
     skipped = 0
-    
+
     for example in examples:
         # Check if SKU already exists
         existing = db.query(Product).filter(Product.sku == example["sku"]).first()
@@ -244,7 +244,7 @@ def seed_example_items(db: Session):
             print(f"  ⏭️  Skipped {example['sku']} (already exists)")
             skipped += 1
             continue
-        
+
         # Get category (should exist after ensure_categories_exist)
         category = db.query(ItemCategory).filter(ItemCategory.code == example["category_code"]).first()
         if not category:
@@ -252,7 +252,7 @@ def seed_example_items(db: Session):
             print(f"     This should not happen. Skipping {example['sku']}")
             skipped += 1
             continue
-        
+
         # Create product
         product = Product(
             sku=example["sku"],
@@ -266,12 +266,12 @@ def seed_example_items(db: Session):
             unit="EA",
             active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(product)
         created += 1
         print(f"  ✅ Created {example['sku']}: {example['name']}")
-    
+
     db.commit()
     print(f"\n  📊 Created {created} example items, skipped {skipped}")
     return created, skipped
@@ -280,7 +280,7 @@ def seed_example_items(db: Session):
 def seed_materials(db: Session):
     """Seed basic materials list (material types only, no colors/products)"""
     print("\n🎨 Seeding basic material types (colors and products should be imported via CSV)...")
-    
+
     # Basic BambuLab material types - just the types, no colors
     # Users should import their full material+color list via CSV
     material_types = [
@@ -345,7 +345,6 @@ def seed_materials(db: Session):
             "description": "Metallic finish PLA with metallic appearance",
             "strength_rating": 5,
         },
-        
         # PETG variants
         {
             "code": "PETG_BASIC",
@@ -387,7 +386,6 @@ def seed_materials(db: Session):
             "description": "Translucent PETG, clear finish with good light transmission",
             "strength_rating": 7,
         },
-        
         # ABS variants
         {
             "code": "ABS_BASIC",
@@ -411,7 +409,6 @@ def seed_materials(db: Session):
             "description": "Glass fiber reinforced ABS, very strong and rigid",
             "strength_rating": 9,
         },
-        
         # ASA variants
         {
             "code": "ASA_BASIC",
@@ -435,7 +432,6 @@ def seed_materials(db: Session):
             "description": "Carbon fiber reinforced ASA, UV resistant and very strong",
             "strength_rating": 10,
         },
-        
         # TPU variants
         {
             "code": "TPU_95A",
@@ -457,7 +453,6 @@ def seed_materials(db: Session):
             "description": "Rigid TPU 68D, more rigid than 95A but still flexible",
             "strength_rating": 6,
         },
-        
         # Specialty materials
         {
             "code": "PAHT_CF",
@@ -482,22 +477,22 @@ def seed_materials(db: Session):
             "strength_rating": 9,
         },
     ]
-    
+
     # NOTE: Colors and material+color combinations are NOT seeded here.
     # Users should import their material inventory via CSV using the material import endpoint.
     # This seed function only creates the basic material type definitions.
-    
+
     # Create material types
     material_type_objs = {}
     created_types = 0
-    
+
     for mt_data in material_types:
         existing = db.query(MaterialType).filter(MaterialType.code == mt_data["code"]).first()
         if existing:
             print(f"  ⏭️  Material type {mt_data['code']} already exists")
             material_type_objs[mt_data["code"]] = existing
             continue
-        
+
         mt = MaterialType(
             code=mt_data["code"],
             name=mt_data["name"],
@@ -512,14 +507,14 @@ def seed_materials(db: Session):
             is_customer_visible=True,
             display_order=mt_data.get("display_order", 100),
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(mt)
         db.flush()
         material_type_objs[mt_data["code"]] = mt
         created_types += 1
         print(f"  ✅ Created material type: {mt_data['name']}")
-    
+
     db.commit()
 
     # Seed basic colors so users can create materials without CSV import
@@ -558,7 +553,7 @@ def seed_materials(db: Session):
             active=True,
             is_customer_visible=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(color)
         db.flush()
@@ -585,23 +580,22 @@ def seed_materials(db: Session):
             color = color_objs[color_code]
 
             # Check if link already exists
-            existing_link = db.query(MaterialColor).filter(
-                MaterialColor.material_type_id == mt.id,
-                MaterialColor.color_id == color.id
-            ).first()
+            existing_link = (
+                db.query(MaterialColor)
+                .filter(MaterialColor.material_type_id == mt.id, MaterialColor.color_id == color.id)
+                .first()
+            )
 
             if not existing_link:
-                link = MaterialColor(
-                    material_type_id=mt.id,
-                    color_id=color.id,
-                    is_customer_visible=True
-                )
+                link = MaterialColor(material_type_id=mt.id, color_id=color.id, is_customer_visible=True)
                 db.add(link)
                 created_links += 1
 
     db.commit()
 
-    print(f"\n  📊 Created {created_types} material types, {created_colors} colors, {created_links} material-color links")
+    print(
+        f"\n  📊 Created {created_types} material types, {created_colors} colors, {created_links} material-color links"
+    )
     print("  💡 Tip: Import additional materials via CSV or use 'Create new color' in the material form")
 
     return created_types, created_colors, created_links, 0  # types, colors, links, products
@@ -612,16 +606,16 @@ def main():
     print("=" * 60)
     print("FilaOps Example Data Seeder")
     print("=" * 60)
-    
+
     db: Session = SessionLocal()
-    
+
     try:
         # Seed example items
         items_created, items_skipped = seed_example_items(db)
-        
+
         # Seed materials (returns products_created as 4th value)
         mt_created, colors_created, links_created, mat_products_created = seed_materials(db)
-        
+
         print("\n" + "=" * 60)
         print("✅ Seeding complete!")
         print("=" * 60)
@@ -632,7 +626,7 @@ def main():
         print("\n💡 Tip: You can now see example items in each category!")
         print("💡 Tip: All material+color combinations are ready - just update inventory quantities!")
         print(f"💡 Tip: Material SKUs follow format: MAT-{'{MATERIAL_CODE}'}-{'{COLOR_CODE}'}")
-        
+
     except Exception as e:
         print(f"\n❌ Error: {e}")
         db.rollback()
@@ -643,4 +637,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

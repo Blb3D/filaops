@@ -4,6 +4,7 @@ Event Service
 Centralized helper functions for recording events across the application.
 Provides consistent event creation for purchasing, shipping, and order events.
 """
+
 from datetime import date, datetime
 from typing import Optional
 from sqlalchemy.orm import Session

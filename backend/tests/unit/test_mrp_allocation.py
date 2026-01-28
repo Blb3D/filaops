@@ -8,12 +8,12 @@ These tests verify that the MRP calculation correctly handles:
 The fix uses get_allocations_by_production_order() to track which PO owns
 which allocations, then adjusts the available inventory accordingly.
 """
+
 import pytest
 from decimal import Decimal
-from unittest.mock import Mock, patch, MagicMock
-from datetime import date
+from unittest.mock import Mock, patch
 
-from app.services.mrp import MRPService, ComponentRequirement, NetRequirement
+from app.services.mrp import MRPService, ComponentRequirement
 from app.services.inventory_service import get_allocations_by_production_order
 
 
@@ -66,7 +66,7 @@ class TestMRPCalculateNetRequirementsAllocation:
         po_id = 101
 
         # Mock inventory levels
-        with patch.object(mock_mrp_service, '_get_inventory_levels') as mock_inv:
+        with patch.object(mock_mrp_service, "_get_inventory_levels") as mock_inv:
             mock_inv.return_value = {
                 product_id: {
                     "on_hand": Decimal("2000"),
@@ -76,15 +76,13 @@ class TestMRPCalculateNetRequirementsAllocation:
             }
 
             # Mock incoming supply (none)
-            with patch.object(mock_mrp_service, '_get_incoming_supply') as mock_supply:
+            with patch.object(mock_mrp_service, "_get_incoming_supply") as mock_supply:
                 mock_supply.return_value = {}
 
                 # Mock the allocations_by_production_order helper
-                with patch('app.services.inventory_service.get_allocations_by_production_order') as mock_alloc:
+                with patch("app.services.inventory_service.get_allocations_by_production_order") as mock_alloc:
                     # PO-001 has 1000g allocated for product_id 1
-                    mock_alloc.return_value = {
-                        product_id: {po_id: Decimal("1000")}
-                    }
+                    mock_alloc.return_value = {product_id: {po_id: Decimal("1000")}}
 
                     # Mock product query
                     mock_product = Mock()
@@ -99,7 +97,7 @@ class TestMRPCalculateNetRequirementsAllocation:
                     mock_product.material_type_id = None
                     mock_product.unit = "G"
 
-                    with patch.object(mock_mrp_service.db, 'query') as mock_query:
+                    with patch.object(mock_mrp_service.db, "query") as mock_query:
                         mock_query.return_value.filter.return_value.all.return_value = [mock_product]
 
                         # Create requirement for PO-001
@@ -112,18 +110,15 @@ class TestMRPCalculateNetRequirementsAllocation:
                         )
 
                         # Calculate with source_production_order_ids including PO-001
-                        result = mock_mrp_service.calculate_net_requirements(
-                            [req],
-                            source_production_order_ids={po_id}
-                        )
+                        result = mock_mrp_service.calculate_net_requirements([req], source_production_order_ids={po_id})
 
                         assert len(result) == 1
                         net_req = result[0]
 
                         # Key assertion: No shortage because PO-001's allocation is added back
-                        assert net_req.net_shortage == Decimal("0"), (
-                            f"Expected 0 shortage (own allocation added back), got {net_req.net_shortage}"
-                        )
+                        assert net_req.net_shortage == Decimal(
+                            "0"
+                        ), f"Expected 0 shortage (own allocation added back), got {net_req.net_shortage}"
 
     def test_scenario_b_competing_orders_correct_shortage(self, mock_mrp_service):
         """
@@ -142,10 +137,10 @@ class TestMRPCalculateNetRequirementsAllocation:
         """
         product_id = 1
         po_other_id = 100  # NOT in our calculation
-        po_new_id = 101    # IS in our calculation
+        po_new_id = 101  # IS in our calculation
 
         # Mock inventory levels
-        with patch.object(mock_mrp_service, '_get_inventory_levels') as mock_inv:
+        with patch.object(mock_mrp_service, "_get_inventory_levels") as mock_inv:
             mock_inv.return_value = {
                 product_id: {
                     "on_hand": Decimal("10000"),
@@ -155,11 +150,11 @@ class TestMRPCalculateNetRequirementsAllocation:
             }
 
             # Mock incoming supply (none)
-            with patch.object(mock_mrp_service, '_get_incoming_supply') as mock_supply:
+            with patch.object(mock_mrp_service, "_get_incoming_supply") as mock_supply:
                 mock_supply.return_value = {}
 
                 # Mock the allocations_by_production_order helper
-                with patch('app.services.inventory_service.get_allocations_by_production_order') as mock_alloc:
+                with patch("app.services.inventory_service.get_allocations_by_production_order") as mock_alloc:
                     # PO-OTHER has 9000g allocated, PO-NEW has 0g
                     mock_alloc.return_value = {
                         product_id: {po_other_id: Decimal("9000")}
@@ -179,7 +174,7 @@ class TestMRPCalculateNetRequirementsAllocation:
                     mock_product.material_type_id = None
                     mock_product.unit = "G"
 
-                    with patch.object(mock_mrp_service.db, 'query') as mock_query:
+                    with patch.object(mock_mrp_service.db, "query") as mock_query:
                         mock_query.return_value.filter.return_value.all.return_value = [mock_product]
 
                         # Create requirement for PO-NEW (1500g needed)
@@ -194,8 +189,7 @@ class TestMRPCalculateNetRequirementsAllocation:
                         # Calculate with source_production_order_ids including only PO-NEW
                         # (PO-OTHER is not in our calculation)
                         result = mock_mrp_service.calculate_net_requirements(
-                            [req],
-                            source_production_order_ids={po_new_id}
+                            [req], source_production_order_ids={po_new_id}
                         )
 
                         assert len(result) == 1
@@ -203,9 +197,9 @@ class TestMRPCalculateNetRequirementsAllocation:
 
                         # Key assertion: 500g shortage because only 1000g available
                         # PO-NEW has no allocation to add back
-                        assert net_req.net_shortage == Decimal("500"), (
-                            f"Expected 500g shortage, got {net_req.net_shortage}"
-                        )
+                        assert net_req.net_shortage == Decimal(
+                            "500"
+                        ), f"Expected 500g shortage, got {net_req.net_shortage}"
 
     def test_scenario_b_without_source_po_ids_uses_available(self, mock_mrp_service):
         """
@@ -216,7 +210,7 @@ class TestMRPCalculateNetRequirementsAllocation:
         product_id = 1
 
         # Mock inventory levels
-        with patch.object(mock_mrp_service, '_get_inventory_levels') as mock_inv:
+        with patch.object(mock_mrp_service, "_get_inventory_levels") as mock_inv:
             mock_inv.return_value = {
                 product_id: {
                     "on_hand": Decimal("2000"),
@@ -226,7 +220,7 @@ class TestMRPCalculateNetRequirementsAllocation:
             }
 
             # Mock incoming supply (none)
-            with patch.object(mock_mrp_service, '_get_incoming_supply') as mock_supply:
+            with patch.object(mock_mrp_service, "_get_incoming_supply") as mock_supply:
                 mock_supply.return_value = {}
 
                 # Mock product query
@@ -242,7 +236,7 @@ class TestMRPCalculateNetRequirementsAllocation:
                 mock_product.material_type_id = None
                 mock_product.unit = "G"
 
-                with patch.object(mock_mrp_service.db, 'query') as mock_query:
+                with patch.object(mock_mrp_service.db, "query") as mock_query:
                     mock_query.return_value.filter.return_value.all.return_value = [mock_product]
 
                     req = ComponentRequirement(
@@ -260,9 +254,9 @@ class TestMRPCalculateNetRequirementsAllocation:
                     net_req = result[0]
 
                     # Standard calculation: 2000 - 1500 = 500g shortage
-                    assert net_req.net_shortage == Decimal("500"), (
-                        f"Expected 500g shortage (standard calculation), got {net_req.net_shortage}"
-                    )
+                    assert net_req.net_shortage == Decimal(
+                        "500"
+                    ), f"Expected 500g shortage (standard calculation), got {net_req.net_shortage}"
 
     def test_empty_requirements_returns_empty_list(self, mock_mrp_service):
         """When no requirements provided, returns empty list."""
@@ -276,7 +270,7 @@ class TestMRPCalculateNetRequirementsAllocation:
         po_id = 101
 
         # Mock inventory levels for both products
-        with patch.object(mock_mrp_service, '_get_inventory_levels') as mock_inv:
+        with patch.object(mock_mrp_service, "_get_inventory_levels") as mock_inv:
             mock_inv.return_value = {
                 product_a_id: {
                     "on_hand": Decimal("1000"),
@@ -287,13 +281,13 @@ class TestMRPCalculateNetRequirementsAllocation:
                     "on_hand": Decimal("2000"),
                     "allocated": Decimal("0"),  # No allocations
                     "available": Decimal("2000"),
-                }
+                },
             }
 
-            with patch.object(mock_mrp_service, '_get_incoming_supply') as mock_supply:
+            with patch.object(mock_mrp_service, "_get_incoming_supply") as mock_supply:
                 mock_supply.return_value = {}
 
-                with patch('app.services.inventory_service.get_allocations_by_production_order') as mock_alloc:
+                with patch("app.services.inventory_service.get_allocations_by_production_order") as mock_alloc:
                     mock_alloc.return_value = {
                         product_a_id: {po_id: Decimal("500")}
                         # product_b has no allocations
@@ -323,10 +317,8 @@ class TestMRPCalculateNetRequirementsAllocation:
                     mock_product_b.material_type_id = None
                     mock_product_b.unit = "G"
 
-                    with patch.object(mock_mrp_service.db, 'query') as mock_query:
-                        mock_query.return_value.filter.return_value.all.return_value = [
-                            mock_product_a, mock_product_b
-                        ]
+                    with patch.object(mock_mrp_service.db, "query") as mock_query:
+                        mock_query.return_value.filter.return_value.all.return_value = [mock_product_a, mock_product_b]
 
                         reqs = [
                             ComponentRequirement(
@@ -345,23 +337,20 @@ class TestMRPCalculateNetRequirementsAllocation:
                             ),
                         ]
 
-                        result = mock_mrp_service.calculate_net_requirements(
-                            reqs,
-                            source_production_order_ids={po_id}
-                        )
+                        result = mock_mrp_service.calculate_net_requirements(reqs, source_production_order_ids={po_id})
 
                         assert len(result) == 2
 
                         # Product A: available=500, add back 500 for PO-101 = 1000
                         # Need 800, have 1000, shortage = 0
                         a_result = next(r for r in result if r.product_id == product_a_id)
-                        assert a_result.net_shortage == Decimal("0"), (
-                            f"Product A expected 0 shortage, got {a_result.net_shortage}"
-                        )
+                        assert a_result.net_shortage == Decimal(
+                            "0"
+                        ), f"Product A expected 0 shortage, got {a_result.net_shortage}"
 
                         # Product B: available=2000, no allocation to add back
                         # Need 1500, have 2000, shortage = 0
                         b_result = next(r for r in result if r.product_id == product_b_id)
-                        assert b_result.net_shortage == Decimal("0"), (
-                            f"Product B expected 0 shortage, got {b_result.net_shortage}"
-                        )
+                        assert b_result.net_shortage == Decimal(
+                            "0"
+                        ), f"Product B expected 0 shortage, got {b_result.net_shortage}"

@@ -1,12 +1,14 @@
 """
 Schemas for operation-level blocking check responses.
 """
+
 from typing import Optional, List
 from pydantic import BaseModel
 
 
 class IncomingSupplyInfo(BaseModel):
     """Info about incoming supply from a purchase order."""
+
     purchase_order_id: int
     purchase_order_code: str
     quantity: float
@@ -15,6 +17,7 @@ class IncomingSupplyInfo(BaseModel):
 
 class MaterialIssueInfo(BaseModel):
     """Material availability info for an operation."""
+
     product_id: int
     product_sku: str
     product_name: Optional[str] = None
@@ -28,12 +31,14 @@ class MaterialIssueInfo(BaseModel):
 
 class CanStartResponse(BaseModel):
     """Response for quick can-start check."""
+
     can_start: bool
     blocking_issues: List[MaterialIssueInfo] = []
 
 
 class OperationBlockingResponse(BaseModel):
     """Full blocking issues response for an operation."""
+
     operation_id: int
     operation_code: Optional[str] = None
     operation_name: Optional[str] = None

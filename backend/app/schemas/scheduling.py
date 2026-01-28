@@ -1,6 +1,7 @@
 """
 Scheduling and Capacity Management Schemas
 """
+
 from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 class CapacityCheckRequest(BaseModel):
     """Request to check if a resource has capacity"""
+
     resource_id: int
     start_time: datetime
     end_time: datetime
@@ -15,6 +17,7 @@ class CapacityCheckRequest(BaseModel):
 
 class ConflictInfo(BaseModel):
     """Information about a scheduling conflict"""
+
     order_id: int
     order_code: str
     start_time: str
@@ -24,6 +27,7 @@ class ConflictInfo(BaseModel):
 
 class CapacityCheckResponse(BaseModel):
     """Response from capacity check"""
+
     resource_id: int
     resource_code: str
     resource_name: str
@@ -35,6 +39,7 @@ class CapacityCheckResponse(BaseModel):
 
 class AvailableSlotResponse(BaseModel):
     """An available time slot"""
+
     start_time: str
     end_time: str
     duration_hours: float
@@ -42,6 +47,7 @@ class AvailableSlotResponse(BaseModel):
 
 class MachineAvailabilityResponse(BaseModel):
     """Machine availability and utilization"""
+
     resource_id: int
     resource_code: str
     resource_name: str
@@ -53,4 +59,3 @@ class MachineAvailabilityResponse(BaseModel):
     available_hours: float
     utilization_percent: float
     scheduled_order_count: int
-

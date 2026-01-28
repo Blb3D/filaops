@@ -4,6 +4,7 @@ Alembic Environment Configuration for FilaOps
 This configuration loads the database URL from environment variables
 and imports all models for autogenerate support.
 """
+
 import sys
 from logging.config import fileConfig
 from pathlib import Path

@@ -7,6 +7,7 @@ Stores company-wide settings including:
 - Tax configuration
 - Quote/Invoice settings
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, Boolean, DateTime, LargeBinary, func
 
 from app.db.base import Base
@@ -16,6 +17,7 @@ class CompanySettings(Base):
     """
     Company-wide settings (singleton table - only one row)
     """
+
     __tablename__ = "company_settings"
 
     id = Column(Integer, primary_key=True, default=1)

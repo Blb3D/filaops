@@ -8,12 +8,13 @@ Revision ID: 052_inv_accounts_je_link
 Revises: 9056086f1897
 Create Date: 2026-01-20
 """
+
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '052_inv_accounts_je_link'
-down_revision = '9056086f1897'
+revision = "052_inv_accounts_je_link"
+down_revision = "9056086f1897"
 branch_labels = None
 depends_on = None
 
@@ -50,34 +51,27 @@ def upgrade() -> None:
     # 2. Add journal_entry_id to inventory_transactions
     # Links each inventory movement to its accounting entry for full audit trail
     # =========================================================================
-    op.add_column(
-        'inventory_transactions',
-        sa.Column('journal_entry_id', sa.Integer(), nullable=True)
-    )
+    op.add_column("inventory_transactions", sa.Column("journal_entry_id", sa.Integer(), nullable=True))
 
     # Add foreign key constraint
     op.create_foreign_key(
-        'fk_inventory_transactions_journal_entry',
-        'inventory_transactions',
-        'gl_journal_entries',
-        ['journal_entry_id'],
-        ['id'],
-        ondelete='SET NULL'
+        "fk_inventory_transactions_journal_entry",
+        "inventory_transactions",
+        "gl_journal_entries",
+        ["journal_entry_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
 
     # Add index for efficient lookups
-    op.create_index(
-        'ix_inventory_transactions_journal_entry_id',
-        'inventory_transactions',
-        ['journal_entry_id']
-    )
+    op.create_index("ix_inventory_transactions_journal_entry_id", "inventory_transactions", ["journal_entry_id"])
 
 
 def downgrade() -> None:
     # Remove journal_entry_id from inventory_transactions
-    op.drop_index('ix_inventory_transactions_journal_entry_id', table_name='inventory_transactions')
-    op.drop_constraint('fk_inventory_transactions_journal_entry', 'inventory_transactions', type_='foreignkey')
-    op.drop_column('inventory_transactions', 'journal_entry_id')
+    op.drop_index("ix_inventory_transactions_journal_entry_id", table_name="inventory_transactions")
+    op.drop_constraint("fk_inventory_transactions_journal_entry", "inventory_transactions", type_="foreignkey")
+    op.drop_column("inventory_transactions", "journal_entry_id")
 
     # Remove added accounts (leave 1200 name change - minor cosmetic)
     op.execute("""

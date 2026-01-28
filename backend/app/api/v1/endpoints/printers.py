@@ -7,6 +7,7 @@ Brand-agnostic printer management with support for:
 - Connection testing
 - Bulk CSV import for print farms
 """
+
 import csv
 import io
 import time
@@ -49,9 +50,7 @@ logger = get_logger(__name__)
 
 def _generate_printer_code(db: Session, prefix: str = "PRT") -> str:
     """Generate next printer code (PRT-001, PRT-002, etc.)"""
-    last = db.query(Printer).filter(
-        Printer.code.like(f"{prefix}-%")
-    ).order_by(desc(Printer.code)).first()
+    last = db.query(Printer).filter(Printer.code.like(f"{prefix}-%")).order_by(desc(Printer.code)).first()
 
     if last and last.code.startswith(f"{prefix}-"):
         try:
@@ -93,6 +92,7 @@ def _printer_to_response(printer: Printer) -> PrinterResponse:
 # Static routes (must be before /{printer_id} route to avoid conflicts)
 # ============================================================================
 
+
 @router.get("/generate-code")
 async def generate_printer_code(
     prefix: str = Query("PRT", max_length=5),
@@ -129,15 +129,17 @@ async def get_supported_brands(
         ]
 
         # Check if adapter supports discovery
-        supports_discovery = hasattr(adapter, 'discover_local')
+        supports_discovery = hasattr(adapter, "discover_local")
 
-        brands.append(PrinterBrandInfo(
-            code=brand_code,
-            name=adapter.brand_name,
-            supports_discovery=supports_discovery,
-            models=models,
-            connection_fields=adapter.get_connection_fields(),
-        ))
+        brands.append(
+            PrinterBrandInfo(
+                code=brand_code,
+                name=adapter.brand_name,
+                supports_discovery=supports_discovery,
+                models=models,
+                connection_fields=adapter.get_connection_fields(),
+            )
+        )
 
     return brands
 
@@ -145,6 +147,7 @@ async def get_supported_brands(
 # ============================================================================
 # Active Work Tracking (must be before /{printer_id} to avoid route conflicts)
 # ============================================================================
+
 
 @router.get("/active-work")
 async def get_printers_active_work(
@@ -163,10 +166,7 @@ async def get_printers_active_work(
     from sqlalchemy.orm import joinedload
 
     # Get all active printers with work centers
-    printers = db.query(Printer).filter(
-        Printer.active.is_(True),
-        Printer.work_center_id.isnot(None)
-    ).all()
+    printers = db.query(Printer).filter(Printer.active.is_(True), Printer.work_center_id.isnot(None)).all()
 
     if not printers:
         return {"printers": {}}
@@ -175,15 +175,19 @@ async def get_printers_active_work(
     work_center_ids = [p.work_center_id for p in printers]
 
     # Find running or queued operations for these work centers
-    active_ops = db.query(ProductionOrderOperation).options(
-        joinedload(ProductionOrderOperation.production_order).joinedload(ProductionOrder.product)
-    ).filter(
-        ProductionOrderOperation.work_center_id.in_(work_center_ids),
-        ProductionOrderOperation.status.in_(['running', 'queued'])
-    ).order_by(
-        ProductionOrderOperation.status.desc(),  # running first
-        ProductionOrderOperation.scheduled_start
-    ).all()
+    active_ops = (
+        db.query(ProductionOrderOperation)
+        .options(joinedload(ProductionOrderOperation.production_order).joinedload(ProductionOrder.product))
+        .filter(
+            ProductionOrderOperation.work_center_id.in_(work_center_ids),
+            ProductionOrderOperation.status.in_(["running", "queued"]),
+        )
+        .order_by(
+            ProductionOrderOperation.status.desc(),  # running first
+            ProductionOrderOperation.scheduled_start,
+        )
+        .all()
+    )
 
     # Build work center -> operations mapping
     wc_ops = {}
@@ -200,7 +204,7 @@ async def get_printers_active_work(
         # Get the first running operation, or first queued if none running
         current_op = None
         for op in ops:
-            if op.status == 'running':
+            if op.status == "running":
                 current_op = op
                 break
         if not current_op and ops:
@@ -220,7 +224,7 @@ async def get_printers_active_work(
                 "quantity_completed": float(po.quantity_completed) if po else 0,
                 "scheduled_start": current_op.scheduled_start.isoformat() if current_op.scheduled_start else None,
                 "scheduled_end": current_op.scheduled_end.isoformat() if current_op.scheduled_end else None,
-                "queue_depth": len([o for o in ops if o.status == 'queued']),
+                "queue_depth": len([o for o in ops if o.status == "queued"]),
             }
         else:
             result[printer.id] = None
@@ -231,6 +235,7 @@ async def get_printers_active_work(
 # ============================================================================
 # Printer CRUD
 # ============================================================================
+
 
 @router.get("/", response_model=PrinterListResponse)
 async def list_printers(
@@ -265,10 +270,10 @@ async def list_printers(
     if search:
         search_filter = f"%{search}%"
         query = query.filter(
-            (Printer.name.ilike(search_filter)) |
-            (Printer.code.ilike(search_filter)) |
-            (Printer.model.ilike(search_filter)) |
-            (Printer.location.ilike(search_filter))
+            (Printer.name.ilike(search_filter))
+            | (Printer.code.ilike(search_filter))
+            | (Printer.model.ilike(search_filter))
+            | (Printer.location.ilike(search_filter))
         )
 
     # Get total count
@@ -314,19 +319,14 @@ async def create_printer(
     Note: Subject to tier limits. Community tier allows up to 4 printers.
     """
     # Check tier limits before creating
-    current_printer_count = db.query(Printer).filter(
-        Printer.active.is_(True)
-    ).count()
+    current_printer_count = db.query(Printer).filter(Printer.active.is_(True)).count()
 
     user_tier = get_current_tier(db, current_user)
     enforce_resource_limit(db, "printers", current_printer_count, user_tier.value)
 
     # Check for duplicate code
     if db.query(Printer).filter(Printer.code == data.code).first():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Printer with code '{data.code}' already exists"
-        )
+        raise HTTPException(status_code=400, detail=f"Printer with code '{data.code}' already exists")
 
     printer = Printer(
         code=data.code,
@@ -370,10 +370,7 @@ async def update_printer(
     # Check for duplicate code if changing
     if data.code and data.code != printer.code:
         if db.query(Printer).filter(Printer.code == data.code).first():
-            raise HTTPException(
-                status_code=400,
-                detail=f"Printer with code '{data.code}' already exists"
-            )
+            raise HTTPException(status_code=400, detail=f"Printer with code '{data.code}' already exists")
 
     # Update fields
     update_data = data.model_dump(exclude_unset=True)
@@ -418,6 +415,7 @@ async def delete_printer(
 # Status Updates
 # ============================================================================
 
+
 @router.patch("/{printer_id}/status", response_model=PrinterResponse)
 async def update_printer_status(
     printer_id: int,
@@ -442,6 +440,7 @@ async def update_printer_status(
 # ============================================================================
 # Network Discovery
 # ============================================================================
+
 
 @router.post("/discover", response_model=DiscoveryResultResponse)
 async def discover_printers(
@@ -481,33 +480,28 @@ async def discover_printers(
 
     # Get existing printer serials/IPs for duplicate detection
     existing_serials = set(
-        p.serial_number for p in db.query(Printer.serial_number).filter(
-            Printer.serial_number.isnot(None)
-        ).all()
+        p.serial_number for p in db.query(Printer.serial_number).filter(Printer.serial_number.isnot(None)).all()
     )
-    existing_ips = set(
-        p.ip_address for p in db.query(Printer.ip_address).filter(
-            Printer.ip_address.isnot(None)
-        ).all()
-    )
+    existing_ips = set(p.ip_address for p in db.query(Printer.ip_address).filter(Printer.ip_address.isnot(None)).all())
 
     result_printers = []
     for printer in discovered:
-        already_registered = (
-            (printer.serial_number and printer.serial_number in existing_serials) or
-            (printer.ip_address and printer.ip_address in existing_ips)
+        already_registered = (printer.serial_number and printer.serial_number in existing_serials) or (
+            printer.ip_address and printer.ip_address in existing_ips
         )
 
-        result_printers.append(DiscoveredPrinterResponse(
-            brand=PrinterBrand(printer.brand.value),
-            model=printer.model,
-            name=printer.name,
-            ip_address=printer.ip_address,
-            serial_number=printer.serial_number,
-            capabilities=printer.capabilities.model_dump() if printer.capabilities else {},
-            suggested_code=_generate_printer_code(db, printer.brand.value.upper()[:3]),
-            already_registered=already_registered,
-        ))
+        result_printers.append(
+            DiscoveredPrinterResponse(
+                brand=PrinterBrand(printer.brand.value),
+                model=printer.model,
+                name=printer.name,
+                ip_address=printer.ip_address,
+                serial_number=printer.serial_number,
+                capabilities=printer.capabilities.model_dump() if printer.capabilities else {},
+                suggested_code=_generate_printer_code(db, printer.brand.value.upper()[:3]),
+                already_registered=already_registered,
+            )
+        )
 
     scan_duration = time.time() - start_time
     logger.info(f"Discovery completed: {len(result_printers)} printers found in {scan_duration:.2f}s")
@@ -548,11 +542,11 @@ async def probe_printer_ip(
 
     # Check common printer ports
     ports_to_check = [
-        (8883, "mqtt", "bambulab"),      # BambuLab MQTT
-        (80, "http", None),               # HTTP
-        (443, "https", None),             # HTTPS
-        (7125, "moonraker", "klipper"),   # Klipper/Moonraker
-        (5000, "octoprint", "octoprint"), # OctoPrint
+        (8883, "mqtt", "bambulab"),  # BambuLab MQTT
+        (80, "http", None),  # HTTP
+        (443, "https", None),  # HTTPS
+        (7125, "moonraker", "klipper"),  # Klipper/Moonraker
+        (5000, "octoprint", "octoprint"),  # OctoPrint
     ]
 
     def check_port(ip: str, port: int) -> bool:
@@ -622,18 +616,13 @@ async def test_printer_connection(
     adapter = orchestrator.get_adapter(data.brand.value)
 
     if not adapter:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No adapter available for brand '{data.brand}'"
-        )
+        raise HTTPException(status_code=400, detail=f"No adapter available for brand '{data.brand}'")
 
     start_time = time.time()
 
     from app.services.printer_discovery.models import PrinterConnectionConfig
-    config = PrinterConnectionConfig(
-        ip_address=data.ip_address,
-        **data.connection_config
-    )
+
+    config = PrinterConnectionConfig(ip_address=data.ip_address, **data.connection_config)
 
     try:
         success, error_msg = await adapter.test_connection(config)
@@ -656,6 +645,7 @@ async def test_printer_connection(
 # ============================================================================
 # Bulk Import
 # ============================================================================
+
 
 @router.post("/import-csv", response_model=PrinterCSVImportResult)
 async def import_printers_csv(
@@ -680,10 +670,7 @@ async def import_printers_csv(
         reader = csv.DictReader(io.StringIO(data.csv_data))
         rows = list(reader)
     except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid CSV format: {str(e)}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid CSV format: {str(e)}")
 
     total_rows = len(rows)
 
@@ -694,10 +681,7 @@ async def import_printers_csv(
             model = row.get("model", "").strip()
 
             if not code or not name or not model:
-                errors.append({
-                    "row": str(row_num),
-                    "error": "Missing required field (code, name, or model)"
-                })
+                errors.append({"row": str(row_num), "error": "Missing required field (code, name, or model)"})
                 continue
 
             # Check for duplicate
@@ -706,10 +690,7 @@ async def import_printers_csv(
                     skipped += 1
                     continue
                 else:
-                    errors.append({
-                        "row": str(row_num),
-                        "error": f"Printer code '{code}' already exists"
-                    })
+                    errors.append({"row": str(row_num), "error": f"Printer code '{code}' already exists"})
                     continue
 
             # Validate brand
@@ -739,10 +720,7 @@ async def import_printers_csv(
             imported += 1
 
         except Exception as e:
-            errors.append({
-                "row": str(row_num),
-                "error": str(e)
-            })
+            errors.append({"row": str(row_num), "error": str(e)})
 
     if imported > 0:
         db.commit()
@@ -754,4 +732,3 @@ async def import_printers_csv(
         skipped=skipped,
         errors=errors,
     )
-

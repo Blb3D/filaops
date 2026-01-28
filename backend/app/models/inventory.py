@@ -1,6 +1,7 @@
 """
 Inventory models
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean, Computed
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -10,13 +11,14 @@ from app.db.base import Base
 
 class InventoryLocation(Base):
     """Inventory Location model - matches inventory_locations table"""
+
     __tablename__ = "inventory_locations"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False)
     code = Column(String(50), nullable=True)
     type = Column(String(50), nullable=True)  # warehouse, shelf, bin, etc.
-    parent_id = Column(Integer, ForeignKey('inventory_locations.id'), nullable=True)
+    parent_id = Column(Integer, ForeignKey("inventory_locations.id"), nullable=True)
     active = Column(Boolean, default=True, nullable=True)
 
     # Self-referential relationship for hierarchy
@@ -31,13 +33,14 @@ class InventoryLocation(Base):
 
 class Inventory(Base):
     """Inventory model - matches inventory table"""
+
     __tablename__ = "inventory"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # References
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    location_id = Column(Integer, ForeignKey('inventory_locations.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("inventory_locations.id"), nullable=False)
 
     # Quantities
     on_hand_quantity = Column(Numeric(10, 2), default=0, nullable=False)
@@ -60,14 +63,15 @@ class Inventory(Base):
 
 class InventoryTransaction(Base):
     """Inventory Transaction model - matches inventory_transactions table"""
+
     __tablename__ = "inventory_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # References
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
-    location_id = Column(Integer, ForeignKey('inventory_locations.id'), nullable=True)
-    journal_entry_id = Column(Integer, ForeignKey('gl_journal_entries.id', ondelete='SET NULL'), nullable=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    location_id = Column(Integer, ForeignKey("inventory_locations.id"), nullable=True)
+    journal_entry_id = Column(Integer, ForeignKey("gl_journal_entries.id", ondelete="SET NULL"), nullable=True)
 
     # Transaction details
     transaction_type = Column(String(50), nullable=False)
@@ -90,12 +94,14 @@ class InventoryTransaction(Base):
     # total_cost: Pre-calculated at creation time. UI displays this directly - NO client-side math.
     # See docs/AI_DIRECTIVE_UOM_COSTS.md for details.
     cost_per_unit = Column(Numeric(18, 4), nullable=True)
-    total_cost = Column(Numeric(18, 4), nullable=True,
-                        comment='Pre-calculated: quantity * cost_per_unit. UI displays directly.')
-    
+    total_cost = Column(
+        Numeric(18, 4), nullable=True, comment="Pre-calculated: quantity * cost_per_unit. UI displays directly."
+    )
+
     # Unit of measure for quantity - STORED, not inferred from product
-    unit = Column(String(20), nullable=True,
-                  comment='Unit for quantity (G, EA, BOX). Stored at creation, not looked up.')
+    unit = Column(
+        String(20), nullable=True, comment="Unit for quantity (G, EA, BOX). Stored at creation, not looked up."
+    )
 
     # Notes
     notes = Column(Text, nullable=True)

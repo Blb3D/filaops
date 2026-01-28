@@ -5,6 +5,7 @@ Handles automatic inventory transactions for:
 - Production completion (consume materials, add finished goods)
 - Shipping (consume packaging materials, issue finished goods)
 """
+
 from decimal import Decimal
 from typing import Optional, List, Tuple, Dict, Any
 from sqlalchemy.orm import Session
@@ -90,10 +91,7 @@ def get_effective_cost(product: "Product") -> "Optional[Decimal]":
     return None
 
 
-def get_allocations_by_production_order(
-    db: Session,
-    product_ids: List[int]
-) -> Dict[int, Dict[int, Decimal]]:
+def get_allocations_by_production_order(db: Session, product_ids: List[int]) -> Dict[int, Dict[int, Decimal]]:
     """
     Get inventory allocations grouped by product_id and production_order_id.
 
@@ -123,24 +121,26 @@ def get_allocations_by_production_order(
 
     # Query all reservation transactions for these products
     # Sum reservation quantities, subtract reservation_release quantities
-    reservations = db.query(
-        InventoryTransaction.product_id,
-        InventoryTransaction.reference_id.label("production_order_id"),
-        func.sum(
-            case(
-                (InventoryTransaction.transaction_type == "reservation", InventoryTransaction.quantity),
-                (InventoryTransaction.transaction_type == "reservation_release", -InventoryTransaction.quantity),
-                else_=Decimal("0")
-            )
-        ).label("allocated")
-    ).filter(
-        InventoryTransaction.product_id.in_(product_ids),
-        InventoryTransaction.reference_type == "production_order",
-        InventoryTransaction.transaction_type.in_(["reservation", "reservation_release"])
-    ).group_by(
-        InventoryTransaction.product_id,
-        InventoryTransaction.reference_id
-    ).all()
+    reservations = (
+        db.query(
+            InventoryTransaction.product_id,
+            InventoryTransaction.reference_id.label("production_order_id"),
+            func.sum(
+                case(
+                    (InventoryTransaction.transaction_type == "reservation", InventoryTransaction.quantity),
+                    (InventoryTransaction.transaction_type == "reservation_release", -InventoryTransaction.quantity),
+                    else_=Decimal("0"),
+                )
+            ).label("allocated"),
+        )
+        .filter(
+            InventoryTransaction.product_id.in_(product_ids),
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.transaction_type.in_(["reservation", "reservation_release"]),
+        )
+        .group_by(InventoryTransaction.product_id, InventoryTransaction.reference_id)
+        .all()
+    )
 
     result: Dict[int, Dict[int, Decimal]] = defaultdict(dict)
     for row in reservations:
@@ -211,8 +211,8 @@ def get_effective_cost_per_inventory_unit(product: "Product") -> "Optional[Decim
     # standard_cost is stored in purchase unit - needs conversion
     if product.standard_cost is not None:
         base_cost = Decimal(str(product.standard_cost))
-        storage_unit = (product.unit or 'EA').upper().strip()
-        purchase_unit = (getattr(product, 'purchase_uom', None) or storage_unit).upper().strip()
+        storage_unit = (product.unit or "EA").upper().strip()
+        purchase_unit = (getattr(product, "purchase_uom", None) or storage_unit).upper().strip()
         if purchase_unit == storage_unit:
             return base_cost
         return convert_cost_for_unit(base_cost, purchase_unit, storage_unit)
@@ -231,7 +231,7 @@ def convert_and_generate_notes(
     reference_code: str,
 ) -> Tuple[Decimal, str]:
     """Convert BOM quantity to component unit and generate transaction notes.
-    
+
     Args:
         db: Database session
         bom_qty: Quantity in BOM line units
@@ -241,11 +241,11 @@ def convert_and_generate_notes(
         component_sku: Component SKU (for logging)
         reference_prefix: Prefix for notes (e.g., "Consumed for PO#", "Shipping materials for SO#")
         reference_code: Reference code/number for notes
-    
+
     Returns:
         Tuple of (total_qty, notes) where total_qty is the converted quantity
         and notes is the formatted transaction description
-    
+
     Raises:
         UOMConversionError: If units are incompatible and conversion fails.
             This prevents dangerous inventory errors (e.g., treating 225 G as 225 KG).
@@ -254,8 +254,9 @@ def convert_and_generate_notes(
     if line_unit != component_unit:
         total_qty, was_converted = convert_quantity_safe(db, bom_qty, line_unit, component_unit)
         if was_converted:
-            notes = f"{reference_prefix}{reference_code}: " + \
-                format_conversion_note(bom_qty, line_unit, total_qty, component_unit, component_name)
+            notes = f"{reference_prefix}{reference_code}: " + format_conversion_note(
+                bom_qty, line_unit, total_qty, component_unit, component_name
+            )
         else:
             # Conversion failed (incompatible units) - ABORT to prevent inventory errors
             # Using bom_qty would be dangerous: e.g., 225 G treated as 225 KG = massive error
@@ -270,7 +271,7 @@ def convert_and_generate_notes(
     else:
         total_qty = bom_qty
         notes = f"{reference_prefix}{reference_code}: {total_qty} {component_unit} of {component_name}"
-    
+
     return total_qty, notes
 
 
@@ -278,34 +279,24 @@ def get_or_create_default_location(db: Session) -> InventoryLocation:
     """Get or create the default warehouse location."""
     location = db.query(InventoryLocation).filter(InventoryLocation.type == "warehouse").first()
     if not location:
-        location = InventoryLocation(
-            name="Main Warehouse",
-            code="MAIN",
-            type="warehouse",
-            active=True
-        )
+        location = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse", active=True)
         db.add(location)
         db.flush()
     return location
 
 
-def get_or_create_inventory(
-    db: Session,
-    product_id: int,
-    location_id: int
-) -> Inventory:
+def get_or_create_inventory(db: Session, product_id: int, location_id: int) -> Inventory:
     """Get or create an inventory record for a product at a location."""
-    inventory = db.query(Inventory).filter(
-        Inventory.product_id == product_id,
-        Inventory.location_id == location_id
-    ).first()
+    inventory = (
+        db.query(Inventory).filter(Inventory.product_id == product_id, Inventory.location_id == location_id).first()
+    )
 
     if not inventory:
         inventory = Inventory(
             product_id=product_id,
             location_id=location_id,
             on_hand_quantity=Decimal("0"),
-            allocated_quantity=Decimal("0")
+            allocated_quantity=Decimal("0"),
         )
         db.add(inventory)
         db.flush()
@@ -324,20 +315,17 @@ def get_or_create_inventory(
 
 
 def validate_inventory_consistency(
-    db: Session,
-    product_id: Optional[int] = None,
-    location_id: Optional[int] = None,
-    auto_fix: bool = False
+    db: Session, product_id: Optional[int] = None, location_id: Optional[int] = None, auto_fix: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Validate inventory consistency: allocated should not exceed on_hand.
-    
+
     Args:
         db: Database session
         product_id: Optional filter by product
         location_id: Optional filter by location
         auto_fix: If True, automatically fix inconsistencies by reducing allocated to on_hand
-        
+
     Returns:
         List of inconsistency records found/fixed
     """
@@ -346,13 +334,13 @@ def validate_inventory_consistency(
         query = query.filter(Inventory.product_id == product_id)
     if location_id:
         query = query.filter(Inventory.location_id == location_id)
-    
+
     inconsistencies = []
     for inv in query.all():
         allocated = Decimal(str(inv.allocated_quantity))
         on_hand = Decimal(str(inv.on_hand_quantity))
         available = on_hand - allocated
-        
+
         if allocated > on_hand:
             inconsistency = {
                 "product_id": inv.product_id,
@@ -363,7 +351,7 @@ def validate_inventory_consistency(
                 "issue": "allocated_exceeds_on_hand",
                 "fixed": False,
             }
-            
+
             if auto_fix:
                 # Fix by reducing allocated to on_hand
                 inv.allocated_quantity = on_hand
@@ -374,12 +362,12 @@ def validate_inventory_consistency(
                     f"Fixed inventory inconsistency: Product {inv.product_id}, "
                     f"Location {inv.location_id}: Reduced allocated from {allocated} to {on_hand}"
                 )
-            
+
             inconsistencies.append(inconsistency)
-    
+
     if auto_fix and inconsistencies:
         db.commit()
-    
+
     return inconsistencies
 
 
@@ -431,7 +419,7 @@ def create_inventory_transaction(
         # Calculate what available quantity would be after this transaction
         current_available = Decimal(str(inventory.on_hand_quantity)) - Decimal(str(inventory.allocated_quantity))
         new_available = current_available - quantity
-        
+
         if new_available < 0:
             if not allow_negative or not approval_reason or not approved_by:
                 requires_approval = True
@@ -500,62 +488,63 @@ def reserve_production_materials(
 ) -> List[Dict[str, Any]]:
     """
     Reserve (allocate) materials when a production order is scheduled.
-    
+
     This increases the allocated_quantity on inventory records, reducing
     available quantity without actually consuming the materials.
-    
+
     Materials are reserved based on BOM quantity * ordered quantity.
-    
+
     Args:
         db: Database session
         production_order: The production order being scheduled
         created_by: User scheduling the order
-    
+
     Returns:
         List of reservation records with details about what was reserved
     """
     reservations = []
     location = get_or_create_default_location(db)
-    
+
     # Get BOM for the product
-    bom = db.query(BOM).filter(
-        BOM.product_id == production_order.product_id,
-        BOM.active.is_(True)
-    ).first()
-    
+    bom = db.query(BOM).filter(BOM.product_id == production_order.product_id, BOM.active.is_(True)).first()
+
     if not bom:
         logger.warning(f"No active BOM found for product {production_order.product_id} - no materials to reserve")
         return reservations
-    
+
     quantity_ordered = Decimal(str(production_order.quantity_ordered or 0))
-    
+
     # Get BOM lines for production consumption
-    bom_lines = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom.id,
-        BOMLine.consume_stage == "production",
-    ).all()
-    
+    bom_lines = (
+        db.query(BOMLine)
+        .filter(
+            BOMLine.bom_id == bom.id,
+            BOMLine.consume_stage == "production",
+        )
+        .all()
+    )
+
     for line in bom_lines:
         # Skip cost-only items (machine time, overhead)
         if line.is_cost_only:
             continue
-        
+
         # Skip non-inventory items
         component = db.query(Product).filter(Product.id == line.component_id).first()
         if not component:
             continue
-        
+
         # Calculate quantity to reserve (BOM qty per unit * ordered units)
         # Apply scrap factor if any
         base_qty = Decimal(str(line.quantity))
         scrap_factor = Decimal(str(line.scrap_factor or 0)) / Decimal("100")
         qty_with_scrap = base_qty * (Decimal("1") + scrap_factor)
         bom_qty = qty_with_scrap * quantity_ordered
-        
+
         # UOM Conversion: Convert BOM line unit to component's inventory unit
         line_unit = (line.unit or component.unit or "EA").upper()
         component_unit = (component.unit or "EA").upper()
-        
+
         try:
             total_qty, _ = convert_and_generate_notes(
                 db=db,
@@ -570,19 +559,19 @@ def reserve_production_materials(
         except UOMConversionError as e:
             logger.error(f"Failed to reserve materials: {e}")
             continue
-        
+
         # Get or create inventory record
         inventory = get_or_create_inventory(db, line.component_id, location.id)
-        
+
         # Increase allocated quantity
         current_allocated = Decimal(str(inventory.allocated_quantity))
         current_on_hand = Decimal(str(inventory.on_hand_quantity))
         new_allocated = current_allocated + total_qty
         available_after = current_on_hand - new_allocated
-        
+
         inventory.allocated_quantity = new_allocated
         inventory.updated_at = datetime.utcnow()
-        
+
         # Create reservation transaction for audit trail
         unit_cost = get_effective_cost_per_inventory_unit(component)
         total_cost = abs(total_qty) * unit_cost if unit_cost else None
@@ -601,7 +590,7 @@ def reserve_production_materials(
             created_at=datetime.utcnow(),
         )
         db.add(txn)
-        
+
         reservation_info = {
             "product_id": line.component_id,
             "product_sku": component.sku,
@@ -614,18 +603,15 @@ def reserve_production_materials(
             "is_shortage": available_after < 0,
         }
         reservations.append(reservation_info)
-        
+
         if available_after < 0:
             logger.warning(
                 f"Material shortage after reservation: {component.sku} - "
                 f"Available: {available_after} {component_unit} (shortage of {-available_after})"
             )
         else:
-            logger.info(
-                f"Reserved {total_qty} {component_unit} of {component.sku} "
-                f"for PO#{production_order.code}"
-            )
-    
+            logger.info(f"Reserved {total_qty} {component_unit} of {component.sku} " f"for PO#{production_order.code}")
+
     return reservations
 
 
@@ -636,16 +622,16 @@ def release_production_reservations(
 ) -> List[Dict[str, Any]]:
     """
     Release (un-allocate) materials that were reserved for a production order.
-    
+
     Called when:
     - Production order is cancelled/unscheduled
     - Before consuming actuals (to release then consume)
-    
+
     Args:
         db: Database session
         production_order: The production order
         created_by: User performing the action
-    
+
     Returns:
         List of release records
     """
@@ -654,27 +640,35 @@ def release_production_reservations(
     _location = get_or_create_default_location(db)
 
     # Find all reservation transactions for this PO
-    reservation_txns = db.query(InventoryTransaction).filter(
-        InventoryTransaction.reference_type == "production_order",
-        InventoryTransaction.reference_id == production_order.id,
-        InventoryTransaction.transaction_type == "reservation",
-    ).all()
-    
+    reservation_txns = (
+        db.query(InventoryTransaction)
+        .filter(
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.reference_id == production_order.id,
+            InventoryTransaction.transaction_type == "reservation",
+        )
+        .all()
+    )
+
     for txn in reservation_txns:
         # Decrease allocated quantity
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == txn.product_id,
-            Inventory.location_id == txn.location_id,
-        ).first()
-        
+        inventory = (
+            db.query(Inventory)
+            .filter(
+                Inventory.product_id == txn.product_id,
+                Inventory.location_id == txn.location_id,
+            )
+            .first()
+        )
+
         if inventory:
             current_allocated = Decimal(str(inventory.allocated_quantity))
             release_qty = Decimal(str(txn.quantity))
             new_allocated = max(Decimal("0"), current_allocated - release_qty)
-            
+
             inventory.allocated_quantity = new_allocated
             inventory.updated_at = datetime.utcnow()
-            
+
             # Create release transaction for audit - copy cost from original reservation
             unit_cost = txn.cost_per_unit
             total_cost = abs(release_qty) * unit_cost if unit_cost else None
@@ -693,19 +687,19 @@ def release_production_reservations(
                 created_at=datetime.utcnow(),
             )
             db.add(release_txn)
-            
+
             component = db.query(Product).filter(Product.id == txn.product_id).first()
-            releases.append({
-                "product_id": txn.product_id,
-                "product_sku": component.sku if component else "Unknown",
-                "quantity_released": float(release_qty),
-                "new_allocated": float(new_allocated),
-            })
-            
-            logger.info(
-                f"Released reservation of {release_qty} for PO#{production_order.code}"
+            releases.append(
+                {
+                    "product_id": txn.product_id,
+                    "product_sku": component.sku if component else "Unknown",
+                    "quantity_released": float(release_qty),
+                    "new_allocated": float(new_allocated),
+                }
             )
-    
+
+            logger.info(f"Released reservation of {release_qty} for PO#{production_order.code}")
+
     return releases
 
 
@@ -735,10 +729,15 @@ def consume_from_material_lots(
     consumptions = []
 
     # Get available lots for this component (FIFO by received_date)
-    available_lots = db.query(MaterialLot).filter(
-        MaterialLot.product_id == component_id,
-        MaterialLot.status == "active",
-    ).order_by(MaterialLot.received_date.asc()).all()
+    available_lots = (
+        db.query(MaterialLot)
+        .filter(
+            MaterialLot.product_id == component_id,
+            MaterialLot.status == "active",
+        )
+        .order_by(MaterialLot.received_date.asc())
+        .all()
+    )
 
     if not available_lots:
         logger.debug(f"No active MaterialLots found for component {component_id}")
@@ -750,12 +749,7 @@ def consume_from_material_lots(
             break
 
         # Calculate available quantity in this lot
-        available = (
-            lot.quantity_received
-            - lot.quantity_consumed
-            - lot.quantity_scrapped
-            + lot.quantity_adjusted
-        )
+        available = lot.quantity_received - lot.quantity_consumed - lot.quantity_scrapped + lot.quantity_adjusted
 
         if available <= Decimal("0"):
             continue
@@ -778,21 +772,13 @@ def consume_from_material_lots(
         lot.quantity_consumed = Decimal(str(lot.quantity_consumed or 0)) + consume_qty
 
         # Check if lot is now depleted
-        new_available = (
-            lot.quantity_received
-            - lot.quantity_consumed
-            - lot.quantity_scrapped
-            + lot.quantity_adjusted
-        )
+        new_available = lot.quantity_received - lot.quantity_consumed - lot.quantity_scrapped + lot.quantity_adjusted
         if new_available <= Decimal("0"):
             lot.status = "depleted"
             logger.info(f"MaterialLot {lot.lot_number} depleted")
 
         remaining -= consume_qty
-        logger.debug(
-            f"Consumed {consume_qty} from lot {lot.lot_number}, "
-            f"remaining in lot: {new_available}"
-        )
+        logger.debug(f"Consumed {consume_qty} from lot {lot.lot_number}, " f"remaining in lot: {new_available}")
 
     if remaining > Decimal("0"):
         logger.warning(
@@ -831,7 +817,7 @@ def consume_operation_material(
     """
 
     # Skip already consumed materials
-    if material.status == 'consumed':
+    if material.status == "consumed":
         logger.info(f"Material {material.id} already consumed, skipping")
         return None
 
@@ -867,7 +853,7 @@ def consume_operation_material(
     except UOMConversionError as e:
         logger.error(f"UOM conversion failed for material {material.id}: {e}")
         # Don't silently fail - mark material with error but don't create bad transaction
-        material.status = 'error'
+        material.status = "error"
         material.updated_at = datetime.utcnow()
         return None
 
@@ -887,7 +873,7 @@ def consume_operation_material(
 
     # Update the material record and link transaction
     material.quantity_consumed = qty_to_consume
-    material.status = 'consumed'
+    material.status = "consumed"
     material.consumed_at = datetime.utcnow()
     material.inventory_transaction_id = txn.id
     material.updated_at = datetime.utcnow()
@@ -922,8 +908,8 @@ def consume_production_materials(
     Consume raw materials based on BOM when production order completes.
 
     Only consumes items with consume_stage='production' and cost_only=False.
-    
-    If release_reservations=True (default), first releases any existing 
+
+    If release_reservations=True (default), first releases any existing
     reservations before consuming actual quantities.
 
     Args:
@@ -943,20 +929,21 @@ def consume_production_materials(
     location = get_or_create_default_location(db)
 
     # Get BOM for the product
-    bom = db.query(BOM).filter(
-        BOM.product_id == production_order.product_id,
-        BOM.active.is_(True)
-    ).first()
+    bom = db.query(BOM).filter(BOM.product_id == production_order.product_id, BOM.active.is_(True)).first()
 
     if not bom:
         logger.warning(f"No active BOM found for product {production_order.product_id}")
         return transactions
 
     # Get BOM lines for production consumption
-    bom_lines = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom.id,
-        BOMLine.consume_stage == "production",
-    ).all()
+    bom_lines = (
+        db.query(BOMLine)
+        .filter(
+            BOMLine.bom_id == bom.id,
+            BOMLine.consume_stage == "production",
+        )
+        .all()
+    )
 
     for line in bom_lines:
         # Skip cost-only items (machine time, overhead)
@@ -1089,8 +1076,7 @@ def receive_finished_goods(
         )
     else:
         logger.info(
-            f"Received {quantity_completed} units of {product.sku} "
-            f"from production order {production_order.id}"
+            f"Received {quantity_completed} units of {product.sku} " f"from production order {production_order.id}"
         )
 
     return ordered_txn, overrun_txn
@@ -1170,19 +1156,20 @@ def consume_shipping_materials(
 
     for product_id, qty in products_to_ship:
         # Get BOM for product
-        bom = db.query(BOM).filter(
-            BOM.product_id == product_id,
-            BOM.active.is_(True)
-        ).first()
+        bom = db.query(BOM).filter(BOM.product_id == product_id, BOM.active.is_(True)).first()
 
         if not bom:
             continue
 
         # Get BOM lines for shipping consumption
-        bom_lines = db.query(BOMLine).filter(
-            BOMLine.bom_id == bom.id,
-            BOMLine.consume_stage == "shipping",
-        ).all()
+        bom_lines = (
+            db.query(BOMLine)
+            .filter(
+                BOMLine.bom_id == bom.id,
+                BOMLine.consume_stage == "shipping",
+            )
+            .all()
+        )
 
         for line in bom_lines:
             if line.is_cost_only:
@@ -1225,8 +1212,7 @@ def consume_shipping_materials(
             transactions.append(txn)
 
             logger.info(
-                f"Consumed {total_qty} {component_unit} of {component.sku} "
-                f"for shipping order {sales_order.id}"
+                f"Consumed {total_qty} {component_unit} of {component.sku} " f"for shipping order {sales_order.id}"
             )
 
     return transactions
@@ -1280,10 +1266,7 @@ def issue_shipped_goods(
         )
         transactions.append(txn)
 
-        logger.info(
-            f"Issued {qty} units of {product.sku} "
-            f"for sales order {sales_order.id}"
-        )
+        logger.info(f"Issued {qty} units of {product.sku} " f"for sales order {sales_order.id}")
 
     return transactions
 
@@ -1327,15 +1310,12 @@ def process_shipment(
     consumed_product_ids = set()
     for txn in packaging_txns:
         consumed_product_ids.add(txn.product_id)
-    
+
     # Log consumed products for MRP tracking
     if consumed_product_ids:
         logger.debug(
             f"Packaging materials consumed for SO {sales_order.id}",
-            extra={
-                "sales_order_id": sales_order.id,
-                "consumed_product_ids": list(consumed_product_ids)
-            }
+            extra={"sales_order_id": sales_order.id, "consumed_product_ids": list(consumed_product_ids)},
         )
 
     return packaging_txns, issue_txns

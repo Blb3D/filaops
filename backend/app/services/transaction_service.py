@@ -13,6 +13,7 @@ Usage:
     inv_txn, journal_entry = txn_service.receipt_finished_good(...)
     db.commit()  # Caller commits
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Tuple, Optional, NamedTuple
@@ -28,6 +29,7 @@ from app.models.product import Product
 
 class MaterialConsumption(NamedTuple):
     """Material to consume in an operation"""
+
     product_id: int
     quantity: Decimal
     unit_cost: Decimal
@@ -36,6 +38,7 @@ class MaterialConsumption(NamedTuple):
 
 class ShipmentItem(NamedTuple):
     """Item being shipped"""
+
     product_id: int
     quantity: Decimal
     unit_cost: Decimal
@@ -43,6 +46,7 @@ class ShipmentItem(NamedTuple):
 
 class PackagingUsed(NamedTuple):
     """Packaging consumed in shipment"""
+
     product_id: int
     quantity: int  # Whole units only
     unit_cost: Decimal
@@ -50,6 +54,7 @@ class PackagingUsed(NamedTuple):
 
 class ReceiptItem(NamedTuple):
     """Item being received from PO"""
+
     product_id: int
     quantity: Decimal
     unit_cost: Decimal
@@ -74,9 +79,7 @@ class TransactionService:
     def _get_account_id(self, account_code: str) -> int:
         """Get account ID by code, with caching"""
         if account_code not in self._account_cache:
-            account = self.db.query(GLAccount).filter(
-                GLAccount.account_code == account_code
-            ).first()
+            account = self.db.query(GLAccount).filter(GLAccount.account_code == account_code).first()
             if not account:
                 raise ValueError(f"Account {account_code} not found in chart of accounts")
             self._account_cache[account_code] = account.id
@@ -88,9 +91,11 @@ class TransactionService:
 
         # Find max entry number for this year
         pattern = f"JE-{year}-%"
-        result = self.db.query(func.max(GLJournalEntry.entry_number)).filter(
-            GLJournalEntry.entry_number.like(pattern)
-        ).scalar()
+        result = (
+            self.db.query(func.max(GLJournalEntry.entry_number))
+            .filter(GLJournalEntry.entry_number.like(pattern))
+            .scalar()
+        )
 
         if result:
             # Extract sequence from "JE-2026-000042"
@@ -147,13 +152,13 @@ class TransactionService:
             line = GLJournalEntryLine(
                 journal_entry_id=je.id,
                 account_id=account_id,
-                debit_amount=amount if dr_cr == 'DR' else Decimal("0"),
-                credit_amount=amount if dr_cr == 'CR' else Decimal("0"),
+                debit_amount=amount if dr_cr == "DR" else Decimal("0"),
+                credit_amount=amount if dr_cr == "CR" else Decimal("0"),
                 line_order=idx,
             )
             self.db.add(line)
 
-            if dr_cr == 'DR':
+            if dr_cr == "DR":
                 total_dr += amount
             else:
                 total_cr += amount
@@ -182,10 +187,9 @@ class TransactionService:
         # Default location_id = 1 (main warehouse) if not specified
         loc_id = location_id or 1
 
-        inv = self.db.query(Inventory).filter(
-            Inventory.product_id == product_id,
-            Inventory.location_id == loc_id
-        ).first()
+        inv = (
+            self.db.query(Inventory).filter(Inventory.product_id == product_id, Inventory.location_id == loc_id).first()
+        )
 
         if inv:
             inv.on_hand_quantity = (inv.on_hand_quantity or 0) + quantity_delta
@@ -454,8 +458,8 @@ class TransactionService:
 
             self._update_inventory_quantity(item.product_id, -item.quantity)
 
-        je_lines.append(("5000", fg_total, "DR"))   # COGS
-        je_lines.append(("1220", fg_total, "CR"))   # FG Inventory
+        je_lines.append(("5000", fg_total, "DR"))  # COGS
+        je_lines.append(("1220", fg_total, "CR"))  # FG Inventory
 
         # Process packaging
         pkg_total = Decimal("0")
@@ -478,8 +482,8 @@ class TransactionService:
                 self._update_inventory_quantity(pkg.product_id, -pkg.quantity)
 
         if pkg_total > 0:
-            je_lines.append(("5010", pkg_total, "DR"))   # Shipping Supplies
-            je_lines.append(("1230", pkg_total, "CR"))   # Packaging Inventory
+            je_lines.append(("5010", pkg_total, "DR"))  # Shipping Supplies
+            je_lines.append(("1230", pkg_total, "CR"))  # Packaging Inventory
 
         # Create journal entry
         je = self._create_journal_entry(

@@ -43,44 +43,46 @@ class VersionManager:
         version = None
         try:
             version = subprocess.check_output(
-                ['git', 'describe', '--tags', '--abbrev=0'],
-                stderr=subprocess.DEVNULL,
-                text=True
+                ["git", "describe", "--tags", "--abbrev=0"], stderr=subprocess.DEVNULL, text=True
             ).strip()
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
 
         # Priority 2: Environment variable (fallback)
         if not version:
-            version = os.getenv('FILAOPS_VERSION')
+            version = os.getenv("FILAOPS_VERSION")
 
         # Priority 3: Fallback to hardcoded version
         if not version:
             version = VersionManager.FALLBACK_VERSION
 
         # Clean up git tag (remove 'v' prefix if present)
-        if version and version.startswith('v'):
+        if version and version.startswith("v"):
             version = version[1:]
 
         # Get commit hash (only works in dev mode with git)
         commit_hash = "unknown"
         try:
-            commit_hash = subprocess.check_output(
-                ['git', 'rev-parse', '--short', 'HEAD'],
-                stderr=subprocess.DEVNULL,
-                cwd=Path(__file__).parent.parent.parent.parent
-            ).decode().strip()
+            commit_hash = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "--short", "HEAD"],
+                    stderr=subprocess.DEVNULL,
+                    cwd=Path(__file__).parent.parent.parent.parent,
+                )
+                .decode()
+                .strip()
+            )
         except (subprocess.CalledProcessError, FileNotFoundError):
             # In Docker, try to read from env var
-            commit_hash = os.getenv('FILAOPS_COMMIT', 'unknown')
+            commit_hash = os.getenv("FILAOPS_COMMIT", "unknown")
 
         return {
             "version": version,
-            "build_date": os.getenv('FILAOPS_BUILD_DATE', datetime.now().isoformat()),
+            "build_date": os.getenv("FILAOPS_BUILD_DATE", datetime.now().isoformat()),
             "commit_hash": commit_hash,
             "database_version": "unknown",  # Will be set by endpoint with DB session
             "environment": os.getenv("ENVIRONMENT", "production"),
-            "update_method": "docker-compose"
+            "update_method": "docker-compose",
         }
 
     @staticmethod
@@ -96,6 +98,7 @@ class VersionManager:
         """
         try:
             from sqlalchemy import text
+
             result = db_session.execute(text("SELECT version_num FROM alembic_version")).scalar()
             return result[:8] if result else "unknown"
         except Exception as e:
@@ -115,9 +118,11 @@ class VersionManager:
         """
         with VersionManager._cache_lock:
             # Return cached result if less than 1 hour old
-            if (VersionManager._cache_expiry and
-                datetime.now() < VersionManager._cache_expiry and
-                VersionManager._update_cache):
+            if (
+                VersionManager._cache_expiry
+                and datetime.now() < VersionManager._cache_expiry
+                and VersionManager._update_cache
+            ):
                 logger.debug("Returning cached update info")
                 return {**VersionManager._update_cache, "cached": True}
 
@@ -127,9 +132,9 @@ class VersionManager:
 
                 # Add GitHub token if available (increases rate limit to 5000/hour)
                 headers = {}
-                github_token = os.getenv('GITHUB_TOKEN')
+                github_token = os.getenv("GITHUB_TOKEN")
                 if github_token:
-                    headers['Authorization'] = f'token {github_token}'
+                    headers["Authorization"] = f"token {github_token}"
 
                 logger.info(f"Checking for updates from GitHub: {url}")
                 response = requests.get(url, headers=headers, timeout=30)
@@ -140,17 +145,18 @@ class VersionManager:
                 latest_version = latest_release["tag_name"]
 
                 # Clean up version tags
-                if latest_version.startswith('v'):
+                if latest_version.startswith("v"):
                     latest_version = latest_version[1:]
-                if current_version.startswith('v'):
+                if current_version.startswith("v"):
                     current_version = current_version[1:]
 
                 # Compare versions using semantic versioning
                 try:
                     import semver
+
                     # Parse versions (handle cases like "1.5.0" vs "1.5.0-beta")
-                    current_ver = semver.VersionInfo.parse(current_version.split('-')[0])
-                    latest_ver = semver.VersionInfo.parse(latest_version.split('-')[0])
+                    current_ver = semver.VersionInfo.parse(current_version.split("-")[0])
+                    latest_ver = semver.VersionInfo.parse(latest_version.split("-")[0])
                     update_available = latest_ver > current_ver
                 except (ValueError, ImportError) as e:
                     # Fallback comparison if not valid semver or semver not installed
@@ -168,7 +174,7 @@ class VersionManager:
                     "upgrade_method": "docker-compose",
                     "estimated_downtime": "5-10 minutes",
                     "requires_manual_steps": True,  # Phase 1 - still manual
-                    "cached": False
+                    "cached": False,
                 }
 
                 # Cache for 1 hour
@@ -190,7 +196,7 @@ class VersionManager:
                 return {
                     "error": f"Failed to check for updates: {str(e)}",
                     "update_available": False,
-                    "current_version": VersionManager.get_current_version()["version"]
+                    "current_version": VersionManager.get_current_version()["version"],
                 }
 
             except Exception as e:
@@ -203,7 +209,7 @@ class VersionManager:
                 return {
                     "error": f"Unexpected error: {str(e)}",
                     "update_available": False,
-                    "current_version": VersionManager.get_current_version()["version"]
+                    "current_version": VersionManager.get_current_version()["version"],
                 }
 
     @staticmethod
@@ -225,7 +231,7 @@ class VersionManager:
                 "5. Rebuild containers: docker-compose build --no-cache",
                 "6. Start services: docker-compose up -d",
                 "7. Run migrations: docker-compose exec backend alembic upgrade head",
-                "8. Clear browser cache (Ctrl+Shift+R) and test"
+                "8. Clear browser cache (Ctrl+Shift+R) and test",
             ],
             "backup_recommendation": "Backup database before starting (recommended for production)",
             "documentation_url": "https://github.com/Blb3D/filaops/blob/main/UPGRADE.md",
@@ -234,6 +240,6 @@ class VersionManager:
                 "2. Checkout previous version: git checkout vX.X.X",
                 "3. Rebuild: docker-compose build",
                 "4. Start: docker-compose up -d",
-                "5. Rollback migrations: docker-compose exec backend alembic downgrade -1 (repeat as needed)"
-            ]
+                "5. Rollback migrations: docker-compose exec backend alembic downgrade -1 (repeat as needed)",
+            ],
         }

@@ -5,6 +5,7 @@ Handles:
 - Get resource schedule
 - Check for conflicts
 """
+
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -26,17 +27,13 @@ from app.services.resource_scheduling import (
 router = APIRouter()
 
 
-@router.get(
-    "/{resource_id}/schedule",
-    response_model=ResourceScheduleResponse,
-    summary="Get resource schedule"
-)
+@router.get("/{resource_id}/schedule", response_model=ResourceScheduleResponse, summary="Get resource schedule")
 def get_schedule(
     resource_id: int,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Get scheduled operations for a resource.
@@ -70,22 +67,18 @@ def get_schedule(
                 status=op.status,
             )
             for op in operations
-        ]
+        ],
     )
 
 
-@router.get(
-    "/{resource_id}/conflicts",
-    response_model=ConflictCheckResponse,
-    summary="Check for scheduling conflicts"
-)
+@router.get("/{resource_id}/conflicts", response_model=ConflictCheckResponse, summary="Check for scheduling conflicts")
 def check_conflicts(
     resource_id: int,
     start: datetime,
     end: datetime,
     exclude_operation_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Check if a time range conflicts with existing scheduled operations.
@@ -118,5 +111,5 @@ def check_conflicts(
                 scheduled_end=op.scheduled_end,
             )
             for op in conflicts
-        ]
+        ],
     )

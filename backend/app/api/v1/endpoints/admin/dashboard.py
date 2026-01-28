@@ -3,6 +3,7 @@ Admin Dashboard Endpoints
 
 Central hub for admin operations - provides summary data and navigation context
 """
+
 from typing import Optional, List
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -30,8 +31,10 @@ router = APIRouter(prefix="/dashboard", tags=["Admin - Dashboard"])
 # SCHEMAS
 # ============================================================================
 
+
 class ModuleInfo(BaseModel):
     """Info about an admin module"""
+
     name: str
     description: str
     route: str
@@ -42,6 +45,7 @@ class ModuleInfo(BaseModel):
 
 class DashboardSummary(BaseModel):
     """Summary counts for dashboard"""
+
     # Quotes
     pending_quotes: int
     quotes_today: int
@@ -63,6 +67,7 @@ class DashboardSummary(BaseModel):
 
 class DashboardResponse(BaseModel):
     """Full dashboard response"""
+
     summary: DashboardSummary
     modules: List[ModuleInfo]
     recent_orders: List[dict]
@@ -71,6 +76,7 @@ class DashboardResponse(BaseModel):
 
 class ProfitSummary(BaseModel):
     """Profit and revenue summary for the dashboard"""
+
     revenue_this_month: Decimal
     revenue_ytd: Decimal
     cogs_this_month: Decimal
@@ -85,6 +91,7 @@ class ProfitSummary(BaseModel):
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
 
 @router.get("/", response_model=DashboardResponse)
 async def get_dashboard(
@@ -107,9 +114,7 @@ async def get_dashboard(
     quotes_today = db.query(Quote).filter(Quote.created_at >= today_start).count()
 
     # Orders needing attention
-    pending_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.in_(["pending", "confirmed"])
-    ).count()
+    pending_orders = db.query(SalesOrder).filter(SalesOrder.status.in_(["pending", "confirmed"])).count()
 
     # Orders where BOM might need review (quote-based without approved BOM)
     orders_needing_review = (
@@ -121,18 +126,14 @@ async def get_dashboard(
         .count()
     )
 
-    orders_in_production = db.query(SalesOrder).filter(
-        SalesOrder.status == "in_production"
-    ).count()
+    orders_in_production = db.query(SalesOrder).filter(SalesOrder.status == "in_production").count()
 
-    orders_ready_to_ship = db.query(SalesOrder).filter(
-        SalesOrder.status == "ready_to_ship"
-    ).count()
+    orders_ready_to_ship = db.query(SalesOrder).filter(SalesOrder.status == "ready_to_ship").count()
 
     # Production
-    active_production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(["pending", "released", "in_progress"])
-    ).count()
+    active_production_orders = (
+        db.query(ProductionOrder).filter(ProductionOrder.status.in_(["pending", "released", "in_progress"])).count()
+    )
 
     # BOMs for custom products that might need review
     boms_needing_review = (
@@ -156,11 +157,7 @@ async def get_dashboard(
     )
     revenue_30_days = revenue_result or Decimal("0")
 
-    orders_30_days = (
-        db.query(SalesOrder)
-        .filter(SalesOrder.created_at >= thirty_days_ago)
-        .count()
-    )
+    orders_30_days = db.query(SalesOrder).filter(SalesOrder.created_at >= thirty_days_ago).count()
 
     summary = DashboardSummary(
         pending_quotes=pending_quotes,
@@ -306,7 +303,7 @@ async def get_dashboard_summary(
     from app.models.product import Product
     from sqlalchemy import func
     from decimal import Decimal
-    
+
     now = datetime.utcnow()
     week_ago = now - timedelta(days=7)
     thirty_days_ago = now - timedelta(days=30)
@@ -319,21 +316,21 @@ async def get_dashboard_summary(
     confirmed_orders = db.query(SalesOrder).filter(SalesOrder.status == "confirmed").count()
     in_production_orders = db.query(SalesOrder).filter(SalesOrder.status == "in_production").count()
     ready_to_ship_orders = db.query(SalesOrder).filter(SalesOrder.status == "ready_to_ship").count()
-    
+
     # Overdue orders (orders past their estimated completion date)
-    overdue_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.in_(["confirmed", "in_production"]),
-        SalesOrder.estimated_completion_date.isnot(None),
-        SalesOrder.estimated_completion_date < now
-    ).count()
+    overdue_orders = (
+        db.query(SalesOrder)
+        .filter(
+            SalesOrder.status.in_(["confirmed", "in_production"]),
+            SalesOrder.estimated_completion_date.isnot(None),
+            SalesOrder.estimated_completion_date < now,
+        )
+        .count()
+    )
 
     # Production
-    production_in_progress = db.query(ProductionOrder).filter(
-        ProductionOrder.status == "in_progress"
-    ).count()
-    production_scheduled = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(["pending", "released"])
-    ).count()
+    production_in_progress = db.query(ProductionOrder).filter(ProductionOrder.status == "in_progress").count()
+    production_scheduled = db.query(ProductionOrder).filter(ProductionOrder.status.in_(["pending", "released"])).count()
 
     # BOMs
     boms_needing_review = (
@@ -350,29 +347,36 @@ async def get_dashboard_summary(
     from collections import defaultdict
     from app.models.sales_order import SalesOrderLine
     from app.services.mrp import MRPService, ComponentRequirement
-    
+
     # 1. Get items below reorder point (count unique products)
     # OPTIMIZED: Single query aggregating inventory by product_id
     low_stock_products = set()
 
     # Get products with reorder points and their total inventory in one query
-    inventory_by_product = db.query(
-        Inventory.product_id,
-        func.coalesce(func.sum(Inventory.available_quantity), 0).label("total_available")
-    ).group_by(Inventory.product_id).all()
+    inventory_by_product = (
+        db.query(
+            Inventory.product_id, func.coalesce(func.sum(Inventory.available_quantity), 0).label("total_available")
+        )
+        .group_by(Inventory.product_id)
+        .all()
+    )
 
     # Create lookup dict for fast access
     inventory_lookup = {row.product_id: float(row.total_available) for row in inventory_by_product}
 
     # Get all STOCKED products with reorder points
     # Only stocked items should trigger reorder point alerts (matches /items/low-stock logic)
-    products_with_reorder = db.query(Product.id, Product.reorder_point).filter(
-        Product.active.is_(True),  # noqa: E712
-        Product.stocking_policy == 'stocked',  # Only stocked items for reorder alerts
-        Product.reorder_point.isnot(None),
-        Product.reorder_point > 0,
-        or_(Product.procurement_type != 'make', Product.procurement_type.is_(None)),  # Exclude make items
-    ).all()
+    products_with_reorder = (
+        db.query(Product.id, Product.reorder_point)
+        .filter(
+            Product.active.is_(True),  # noqa: E712
+            Product.stocking_policy == "stocked",  # Only stocked items for reorder alerts
+            Product.reorder_point.isnot(None),
+            Product.reorder_point > 0,
+            or_(Product.procurement_type != "make", Product.procurement_type.is_(None)),  # Exclude make items
+        )
+        .all()
+    )
 
     # Check each product against inventory (all in-memory, no additional queries)
     for product_id, reorder_point in products_with_reorder:
@@ -381,22 +385,18 @@ async def get_dashboard_summary(
 
         if available <= reorder_val:
             low_stock_products.add(product_id)
-    
+
     # 2. Get MRP shortages from active sales orders
-    active_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.notin_(["cancelled", "completed", "delivered"])
-    ).all()
-    
+    active_orders = db.query(SalesOrder).filter(SalesOrder.status.notin_(["cancelled", "completed", "delivered"])).all()
+
     mrp_shortage_products = set()
     if active_orders:
         mrp_service = MRPService(db)
         all_requirements = []
-        
+
         for order in active_orders:
             if order.order_type == "line_item":
-                lines = db.query(SalesOrderLine).filter(
-                    SalesOrderLine.sales_order_id == order.id
-                ).all()
+                lines = db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order.id).all()
                 for line in lines:
                     if line.product_id:
                         try:
@@ -404,27 +404,35 @@ async def get_dashboard_summary(
                                 product_id=int(line.product_id),
                                 quantity=Decimal(str(float(line.quantity))),
                                 source_demand_type="sales_order",
-                                source_demand_id=int(order.id)
+                                source_demand_id=int(order.id),
                             )
                             all_requirements.extend(requirements)
                         except Exception:
                             continue
-            elif order.order_type == "quote_based" and hasattr(order, 'product_id') and order.product_id:
+            elif order.order_type == "quote_based" and hasattr(order, "product_id") and order.product_id:
                 try:
                     order_qty = float(order.quantity) if order.quantity else 1.0
                     requirements = mrp_service.explode_bom(
                         product_id=int(order.product_id),
                         quantity=Decimal(str(order_qty)),
                         source_demand_type="sales_order",
-                        source_demand_id=int(order.id)
+                        source_demand_id=int(order.id),
                     )
                     all_requirements.extend(requirements)
                 except Exception:
                     continue
-        
+
         if all_requirements:
             # Aggregate by product_id
-            aggregated = defaultdict(lambda: {"product_id": None, "gross_quantity": Decimal("0"), "bom_level": 0, "product_sku": "", "product_name": ""})
+            aggregated = defaultdict(
+                lambda: {
+                    "product_id": None,
+                    "gross_quantity": Decimal("0"),
+                    "bom_level": 0,
+                    "product_sku": "",
+                    "product_name": "",
+                }
+            )
             for req in all_requirements:
                 key = int(req.product_id)
                 if aggregated[key]["product_id"] is None:
@@ -437,7 +445,7 @@ async def get_dashboard_summary(
                     }
                 else:
                     aggregated[key]["gross_quantity"] += Decimal(str(req.gross_quantity))
-            
+
             # Calculate net requirements
             component_reqs = [
                 ComponentRequirement(
@@ -449,81 +457,76 @@ async def get_dashboard_summary(
                 )
                 for data in aggregated.values()
             ]
-            
+
             net_requirements = mrp_service.calculate_net_requirements(component_reqs)
             for net_req in net_requirements:
                 if float(net_req.net_shortage) > 0:
                     mrp_shortage_products.add(int(net_req.product_id))
-    
+
     # Combine both sets (items below reorder point OR with MRP shortages)
     low_stock_count = len(low_stock_products | mrp_shortage_products)
 
     # Active orders count (for reference)
-    active_orders_count = db.query(SalesOrder).filter(
-        SalesOrder.status.in_(["confirmed", "in_production"])
-    ).count()
-    
+    active_orders_count = db.query(SalesOrder).filter(SalesOrder.status.in_(["confirmed", "in_production"])).count()
+
     # Production orders ready to start (materials available)
     # Get released/pending production orders and check material availability
     from app.models.bom import BOMLine
     from app.models.inventory import Inventory
-    
+
     ready_to_start_count = 0
-    released_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(["pending", "released"])
-    ).all()
-    
+    released_orders = db.query(ProductionOrder).filter(ProductionOrder.status.in_(["pending", "released"])).all()
+
     for po in released_orders:
         if not po.bom_id:
             # No BOM = no materials needed, ready to start
             ready_to_start_count += 1
             continue
-        
+
         bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
         if not bom:
             continue
-        
+
         bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
         all_available = True
-        
+
         qty_multiplier = Decimal(str(po.quantity_ordered or 1))
-        
+
         for line in bom_lines:
             if line.is_cost_only:
                 continue
-            
+
             component = db.query(Product).filter(Product.id == line.component_id).first()
             if not component:
                 continue
-            
+
             # Calculate required quantity
             base_qty = Decimal(str(line.quantity or 0))
             scrap_factor = Decimal(str(line.scrap_factor or 0)) / Decimal("100")
             qty_with_scrap = base_qty * (Decimal("1") + scrap_factor)
             required_qty = qty_with_scrap * qty_multiplier
-            
+
             # Check available inventory
-            inv_result = db.query(
-                func.sum(Inventory.available_quantity)
-            ).filter(Inventory.product_id == line.component_id).scalar()
+            inv_result = (
+                db.query(func.sum(Inventory.available_quantity))
+                .filter(Inventory.product_id == line.component_id)
+                .scalar()
+            )
             available_qty = Decimal(str(inv_result or 0))
-            
+
             if available_qty < required_qty:
                 all_available = False
                 break
-        
+
         if all_available:
             ready_to_start_count += 1
-    
+
     # Revenue metrics
     revenue_30_days = db.query(func.sum(SalesOrder.grand_total)).filter(
-        SalesOrder.payment_status == "paid",
-        SalesOrder.paid_at >= thirty_days_ago
+        SalesOrder.payment_status == "paid", SalesOrder.paid_at >= thirty_days_ago
     ).scalar() or Decimal("0")
-    
-    orders_30_days = db.query(SalesOrder).filter(
-        SalesOrder.created_at >= thirty_days_ago
-    ).count()
+
+    orders_30_days = db.query(SalesOrder).filter(SalesOrder.created_at >= thirty_days_ago).count()
 
     return {
         "quotes": {
@@ -565,12 +568,7 @@ async def get_recent_orders(
     """
     Get recent orders for dashboard display.
     """
-    orders = (
-        db.query(SalesOrder)
-        .order_by(desc(SalesOrder.created_at))
-        .limit(limit)
-        .all()
-    )
+    orders = db.query(SalesOrder).order_by(desc(SalesOrder.created_at)).limit(limit).all()
 
     return [
         {
@@ -654,12 +652,9 @@ async def get_sales_trend(
         db.query(
             func.date(SalesOrder.created_at).label("date"),
             func.sum(SalesOrder.grand_total).label("total"),
-            func.count(SalesOrder.id).label("count")
+            func.count(SalesOrder.id).label("count"),
         )
-        .filter(
-            SalesOrder.created_at >= start_date,
-            SalesOrder.status.notin_(["cancelled", "draft"])
-        )
+        .filter(SalesOrder.created_at >= start_date, SalesOrder.status.notin_(["cancelled", "draft"]))
         .group_by(func.date(SalesOrder.created_at))
         .order_by(func.date(SalesOrder.created_at))
         .all()
@@ -670,12 +665,12 @@ async def get_sales_trend(
         db.query(
             func.date(Payment.payment_date).label("date"),
             func.sum(Payment.amount).label("total"),
-            func.count(Payment.id).label("count")
+            func.count(Payment.id).label("count"),
         )
         .filter(
             Payment.payment_date >= start_date,
             Payment.status == "completed",
-            Payment.payment_type == "payment"  # Exclude refunds
+            Payment.payment_type == "payment",  # Exclude refunds
         )
         .group_by(func.date(Payment.payment_date))
         .order_by(func.date(Payment.payment_date))
@@ -690,18 +685,12 @@ async def get_sales_trend(
 
     # Build date-indexed maps for merging
     sales_by_date = {
-        row.date.isoformat() if row.date else None: {
-            "sales": float(row.total or 0),
-            "orders": row.count
-        }
+        row.date.isoformat() if row.date else None: {"sales": float(row.total or 0), "orders": row.count}
         for row in daily_sales
     }
 
     payments_by_date = {
-        row.date.isoformat() if row.date else None: {
-            "payments": float(row.total or 0),
-            "payment_count": row.count
-        }
+        row.date.isoformat() if row.date else None: {"payments": float(row.total or 0), "payment_count": row.count}
         for row in daily_payments
     }
 
@@ -730,7 +719,7 @@ async def get_sales_trend(
         "total_orders": total_orders,
         "total_payments": total_payments,  # Total payments received (cash)
         "total_payment_count": total_payment_count,
-        "data": data_points
+        "data": data_points,
     }
 
 
@@ -766,12 +755,12 @@ async def get_shipping_trend(
         db.query(
             func.date(SalesOrder.shipped_at).label("date"),
             func.sum(SalesOrder.grand_total).label("total"),
-            func.count(SalesOrder.id).label("count")
+            func.count(SalesOrder.id).label("count"),
         )
         .filter(
             SalesOrder.shipped_at >= start_date,
             SalesOrder.shipped_at.isnot(None),
-            SalesOrder.status.in_(["shipped", "completed", "delivered"])
+            SalesOrder.status.in_(["shipped", "completed", "delivered"]),
         )
         .group_by(func.date(SalesOrder.shipped_at))
         .order_by(func.date(SalesOrder.shipped_at))
@@ -780,13 +769,9 @@ async def get_shipping_trend(
 
     # Query orders entering ready_to_ship status (approximated by status changes)
     # For now, we'll track orders that are currently in the pipeline
-    pipeline_today = db.query(SalesOrder).filter(
-        SalesOrder.status == "ready_to_ship"
-    ).count()
+    pipeline_today = db.query(SalesOrder).filter(SalesOrder.status == "ready_to_ship").count()
 
-    pipeline_packaging = db.query(SalesOrder).filter(
-        SalesOrder.status == "in_production"
-    ).count()
+    pipeline_packaging = db.query(SalesOrder).filter(SalesOrder.status == "in_production").count()
 
     # Calculate totals
     total_shipped = sum(row.count for row in daily_shipped)
@@ -811,7 +796,7 @@ async def get_shipping_trend(
         "total_value": total_value,
         "pipeline_ready": pipeline_today,
         "pipeline_packaging": pipeline_packaging,
-        "data": data_points
+        "data": data_points,
     }
 
 
@@ -847,12 +832,12 @@ async def get_production_trend(
         db.query(
             func.date(ProductionOrder.completed_at).label("date"),
             func.sum(ProductionOrder.quantity_completed).label("units"),
-            func.count(ProductionOrder.id).label("count")
+            func.count(ProductionOrder.id).label("count"),
         )
         .filter(
             ProductionOrder.completed_at >= start_date,
             ProductionOrder.completed_at.isnot(None),
-            ProductionOrder.status == "complete"
+            ProductionOrder.status == "complete",
         )
         .group_by(func.date(ProductionOrder.completed_at))
         .order_by(func.date(ProductionOrder.completed_at))
@@ -860,13 +845,11 @@ async def get_production_trend(
     )
 
     # Current pipeline stats
-    pipeline_in_progress = db.query(ProductionOrder).filter(
-        ProductionOrder.status == "in_progress"
-    ).count()
+    pipeline_in_progress = db.query(ProductionOrder).filter(ProductionOrder.status == "in_progress").count()
 
-    pipeline_scheduled = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(["pending", "released", "scheduled"])
-    ).count()
+    pipeline_scheduled = (
+        db.query(ProductionOrder).filter(ProductionOrder.status.in_(["pending", "released", "scheduled"])).count()
+    )
 
     # Calculate totals
     total_completed = sum(row.count for row in daily_completed)
@@ -891,7 +874,7 @@ async def get_production_trend(
         "total_units": total_units,
         "pipeline_in_progress": pipeline_in_progress,
         "pipeline_scheduled": pipeline_scheduled,
-        "data": data_points
+        "data": data_points,
     }
 
 
@@ -935,12 +918,12 @@ async def get_purchasing_trend(
         db.query(
             PurchaseOrder.received_date.label("date"),
             func.sum(PurchaseOrder.total_amount).label("total"),
-            func.count(PurchaseOrder.id).label("count")
+            func.count(PurchaseOrder.id).label("count"),
         )
         .filter(
             PurchaseOrder.received_date >= start_date.date(),
             PurchaseOrder.received_date.isnot(None),
-            PurchaseOrder.status.in_(["received", "closed"])
+            PurchaseOrder.status.in_(["received", "closed"]),
         )
         .group_by(PurchaseOrder.received_date)
         .order_by(PurchaseOrder.received_date)
@@ -948,18 +931,14 @@ async def get_purchasing_trend(
     )
 
     # Current pipeline stats
-    pipeline_ordered = db.query(PurchaseOrder).filter(
-        PurchaseOrder.status == "ordered"
-    ).count()
+    pipeline_ordered = db.query(PurchaseOrder).filter(PurchaseOrder.status == "ordered").count()
 
-    pipeline_draft = db.query(PurchaseOrder).filter(
-        PurchaseOrder.status == "draft"
-    ).count()
+    pipeline_draft = db.query(PurchaseOrder).filter(PurchaseOrder.status == "draft").count()
 
     # Pending spend (ordered but not received)
-    pending_spend = db.query(func.sum(PurchaseOrder.total_amount)).filter(
-        PurchaseOrder.status == "ordered"
-    ).scalar() or 0
+    pending_spend = (
+        db.query(func.sum(PurchaseOrder.total_amount)).filter(PurchaseOrder.status == "ordered").scalar() or 0
+    )
 
     # Calculate totals
     total_received = sum(row.count for row in daily_received)
@@ -985,7 +964,7 @@ async def get_purchasing_trend(
         "pipeline_ordered": pipeline_ordered,
         "pipeline_draft": pipeline_draft,
         "pending_spend": float(pending_spend),
-        "data": data_points
+        "data": data_points,
     }
 
 
@@ -1000,12 +979,8 @@ async def get_quick_stats(
     Admin only. Lightweight endpoint for real-time updates.
     """
     pending_quotes = db.query(Quote).filter(Quote.status == "pending").count()
-    pending_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.in_(["pending", "confirmed"])
-    ).count()
-    ready_to_ship = db.query(SalesOrder).filter(
-        SalesOrder.status == "ready_to_ship"
-    ).count()
+    pending_orders = db.query(SalesOrder).filter(SalesOrder.status.in_(["pending", "confirmed"])).count()
+    ready_to_ship = db.query(SalesOrder).filter(SalesOrder.status == "ready_to_ship").count()
 
     return {
         "pending_quotes": pending_quotes,
@@ -1133,12 +1108,7 @@ async def get_profit_summary(
 
     # COGS this month (material consumption)
     cogs_this_month_result = (
-        db.query(
-            func.sum(
-                InventoryTransaction.quantity *
-                func.coalesce(InventoryTransaction.cost_per_unit, 0)
-            )
-        )
+        db.query(func.sum(InventoryTransaction.quantity * func.coalesce(InventoryTransaction.cost_per_unit, 0)))
         .filter(
             InventoryTransaction.transaction_type == "consumption",
             InventoryTransaction.reference_type == "production_order",
@@ -1150,12 +1120,7 @@ async def get_profit_summary(
 
     # COGS YTD
     cogs_ytd_result = (
-        db.query(
-            func.sum(
-                InventoryTransaction.quantity *
-                func.coalesce(InventoryTransaction.cost_per_unit, 0)
-            )
-        )
+        db.query(func.sum(InventoryTransaction.quantity * func.coalesce(InventoryTransaction.cost_per_unit, 0)))
         .filter(
             InventoryTransaction.transaction_type == "consumption",
             InventoryTransaction.reference_type == "production_order",
@@ -1172,15 +1137,13 @@ async def get_profit_summary(
     # Calculate gross margin percentages
     gross_margin_percent_this_month = None
     if revenue_this_month > 0:
-        gross_margin_percent_this_month = (
-            (gross_profit_this_month / revenue_this_month) * Decimal("100")
-        ).quantize(Decimal("0.01"))
+        gross_margin_percent_this_month = ((gross_profit_this_month / revenue_this_month) * Decimal("100")).quantize(
+            Decimal("0.01")
+        )
 
     gross_margin_percent_ytd = None
     if revenue_ytd > 0:
-        gross_margin_percent_ytd = (
-            (gross_profit_ytd / revenue_ytd) * Decimal("100")
-        ).quantize(Decimal("0.01"))
+        gross_margin_percent_ytd = ((gross_profit_ytd / revenue_ytd) * Decimal("100")).quantize(Decimal("0.01"))
 
     # Add note if COGS tracking is limited
     note = None

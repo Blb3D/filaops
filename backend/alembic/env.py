@@ -6,6 +6,7 @@ from alembic import context
 # optional: load .env if present
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except Exception:
     pass
@@ -30,6 +31,7 @@ except Exception as e:
 
 target_metadata = Base.metadata
 
+
 def run_migrations_offline():
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
@@ -42,6 +44,7 @@ def run_migrations_offline():
     )
     with context.begin_transaction():
         context.run_migrations()
+
 
 def run_migrations_online():
     connectable = engine_from_config(
@@ -58,6 +61,7 @@ def run_migrations_online():
         )
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()

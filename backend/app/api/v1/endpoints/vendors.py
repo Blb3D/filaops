@@ -1,6 +1,7 @@
 """
 Vendors API Endpoints
 """
+
 from fastapi import APIRouter, HTTPException, Depends
 from typing import Annotated, Optional
 from datetime import datetime
@@ -42,6 +43,7 @@ def _generate_vendor_code(db: Session) -> str:
 # Vendor CRUD
 # ============================================================================
 
+
 @router.get("/", response_model=ListResponse[VendorListResponse])
 async def list_vendors(
     pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
@@ -66,10 +68,10 @@ async def list_vendors(
     if search:
         search_filter = f"%{search}%"
         query = query.filter(
-            (Vendor.name.ilike(search_filter)) |
-            (Vendor.code.ilike(search_filter)) |
-            (Vendor.contact_name.ilike(search_filter)) |
-            (Vendor.email.ilike(search_filter))
+            (Vendor.name.ilike(search_filter))
+            | (Vendor.code.ilike(search_filter))
+            | (Vendor.contact_name.ilike(search_filter))
+            | (Vendor.email.ilike(search_filter))
         )
 
     # Get total count before pagination
@@ -80,36 +82,30 @@ async def list_vendors(
 
     # Get PO counts for each vendor
     po_counts = dict(
-        db.query(
-            PurchaseOrder.vendor_id,
-            func.count(PurchaseOrder.id)
-        ).group_by(PurchaseOrder.vendor_id).all()
+        db.query(PurchaseOrder.vendor_id, func.count(PurchaseOrder.id)).group_by(PurchaseOrder.vendor_id).all()
     )
 
     result = []
     for v in vendors:
-        result.append(VendorListResponse(
-            id=v.id,
-            code=v.code,
-            name=v.name,
-            contact_name=v.contact_name,
-            email=v.email,
-            phone=v.phone,
-            city=v.city,
-            state=v.state,
-            payment_terms=v.payment_terms,
-            is_active=v.is_active,
-            po_count=po_counts.get(v.id, 0)
-        ))
+        result.append(
+            VendorListResponse(
+                id=v.id,
+                code=v.code,
+                name=v.name,
+                contact_name=v.contact_name,
+                email=v.email,
+                phone=v.phone,
+                city=v.city,
+                state=v.state,
+                payment_terms=v.payment_terms,
+                is_active=v.is_active,
+                po_count=po_counts.get(v.id, 0),
+            )
+        )
 
     return ListResponse(
         items=result,
-        pagination=PaginationMeta(
-            total=total,
-            offset=pagination.offset,
-            limit=pagination.limit,
-            returned=len(result)
-        )
+        pagination=PaginationMeta(total=total, offset=pagination.offset, limit=pagination.limit, returned=len(result)),
     )
 
 
@@ -225,9 +221,12 @@ async def get_vendor_metrics(
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     # Get all POs for this vendor
-    pos = db.query(PurchaseOrder).filter(
-        PurchaseOrder.vendor_id == vendor_id
-    ).order_by(desc(PurchaseOrder.created_at)).all()
+    pos = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.vendor_id == vendor_id)
+        .order_by(desc(PurchaseOrder.created_at))
+        .all()
+    )
 
     total_pos = len(pos)
     total_spend = sum(float(po.total_amount or 0) for po in pos)
@@ -289,9 +288,7 @@ async def delete_vendor(
         raise HTTPException(status_code=404, detail="Vendor not found")
 
     # Check for POs
-    po_count = db.query(func.count(PurchaseOrder.id)).filter(
-        PurchaseOrder.vendor_id == vendor_id
-    ).scalar()
+    po_count = db.query(func.count(PurchaseOrder.id)).filter(PurchaseOrder.vendor_id == vendor_id).scalar()
 
     if po_count > 0:
         # Soft delete

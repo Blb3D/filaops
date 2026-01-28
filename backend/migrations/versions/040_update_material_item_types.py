@@ -10,14 +10,15 @@ Revises: 039_uom_cost_normalization
 Create Date: 2026-01-08
 
 """
+
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '040_update_material_item_types'
-down_revision: Union[str, None] = '039_uom_cost_normalization'
+revision: str = "040_update_material_item_types"
+down_revision: Union[str, None] = "039_uom_cost_normalization"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -38,13 +39,15 @@ def upgrade() -> None:
     # STEP 1: Update item_type for legacy filaments
     # =========================================================================
     # Products with material_type_id that are currently 'supply' become 'material'
-    result = connection.execute(sa.text("""
+    result = connection.execute(
+        sa.text("""
         UPDATE products
         SET item_type = 'material'
         WHERE material_type_id IS NOT NULL
         AND item_type = 'supply'
         RETURNING id, sku
-    """))
+    """)
+    )
     updated_rows = result.fetchall()
     updated_count = len(updated_rows)
 
@@ -52,22 +55,26 @@ def upgrade() -> None:
     # STEP 2: Ensure materials have proper UOM configuration
     # =========================================================================
     # For materials with G/KG but missing or wrong purchase_factor, fix it
-    connection.execute(sa.text("""
+    connection.execute(
+        sa.text("""
         UPDATE products
         SET purchase_factor = 1000
         WHERE (item_type = 'material' OR material_type_id IS NOT NULL)
         AND unit = 'G'
         AND purchase_uom = 'KG'
         AND (purchase_factor IS NULL OR purchase_factor != 1000)
-    """))
+    """)
+    )
 
     # Ensure is_raw_material = True for materials
-    connection.execute(sa.text("""
+    connection.execute(
+        sa.text("""
         UPDATE products
         SET is_raw_material = TRUE
         WHERE (item_type = 'material' OR material_type_id IS NOT NULL)
         AND (is_raw_material IS NULL OR is_raw_material = FALSE)
-    """))
+    """)
+    )
 
     print("=" * 70)
     print("MIGRATION 040 COMPLETE: Material Item Types Update")
@@ -94,9 +101,11 @@ def downgrade() -> None:
     connection = op.get_bind()
 
     # Only revert products that have material_type_id (were legacy filaments)
-    connection.execute(sa.text("""
+    connection.execute(
+        sa.text("""
         UPDATE products
         SET item_type = 'supply'
         WHERE material_type_id IS NOT NULL
         AND item_type = 'material'
-    """))
+    """)
+    )

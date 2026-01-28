@@ -3,12 +3,12 @@ Tests for operation status transition endpoints.
 
 TDD: Write tests first, then implement to make them pass.
 """
+
 import pytest
 from datetime import datetime, timedelta
 from decimal import Decimal
 
 from tests.factories import (
-    create_test_user,
     create_test_product,
     create_test_production_order,
     create_test_work_center,
@@ -31,21 +31,30 @@ class TestListOperations:
         po = create_test_production_order(db, product=product, quantity=10, status="released")
 
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc_print,
-            sequence=10, operation_code="PRINT", operation_name="3D Print",
-            planned_run_minutes=240, status="pending"
+            db,
+            production_order=po,
+            work_center=wc_print,
+            sequence=10,
+            operation_code="PRINT",
+            operation_name="3D Print",
+            planned_run_minutes=240,
+            status="pending",
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc_clean,
-            sequence=20, operation_code="CLEAN", operation_name="Post-Print Clean",
-            planned_run_minutes=30, status="pending"
+            db,
+            production_order=po,
+            work_center=wc_clean,
+            sequence=20,
+            operation_code="CLEAN",
+            operation_name="Post-Print Clean",
+            planned_run_minutes=30,
+            status="pending",
         )
         db.commit()
 
         # Execute
         response = client.get(
-            f"/api/v1/production-orders/{po.id}/operations",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/operations", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         # Verify
@@ -63,8 +72,7 @@ class TestListOperations:
     def test_list_operations_po_not_found(self, client, db, admin_token):
         """Non-existent PO returns 404."""
         response = client.get(
-            "/api/v1/production-orders/99999/operations",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            "/api/v1/production-orders/99999/operations", headers={"Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 404
 
@@ -82,9 +90,14 @@ class TestStartOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", operation_name="3D Print",
-            planned_run_minutes=240, status="pending"
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            operation_name="3D Print",
+            planned_run_minutes=240,
+            status="pending",
         )
         db.commit()
 
@@ -92,7 +105,7 @@ class TestStartOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"resource_id": resource.id, "operator_name": "John D"}
+            json={"resource_id": resource.id, "operator_name": "John D"},
         )
 
         # Verify
@@ -113,12 +126,15 @@ class TestStartOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"  # Not complete!
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="pending",  # Not complete!
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="CLEAN", status="pending"
+            db, production_order=po, work_center=wc, sequence=20, operation_code="CLEAN", status="pending"
         )
         db.commit()
 
@@ -126,7 +142,7 @@ class TestStartOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
 
         # Verify
@@ -142,8 +158,12 @@ class TestStartOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="running"  # Already running
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="running",  # Already running
         )
         db.commit()
 
@@ -151,7 +171,7 @@ class TestStartOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
 
         # Verify
@@ -167,8 +187,7 @@ class TestStartOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
@@ -178,7 +197,7 @@ class TestStartOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
 
         # Verify
@@ -201,9 +220,13 @@ class TestCompleteOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="running",
-            actual_start=datetime.utcnow() - timedelta(hours=2)
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="running",
+            actual_start=datetime.utcnow() - timedelta(hours=2),
         )
         db.commit()
 
@@ -211,7 +234,7 @@ class TestCompleteOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 10, "quantity_scrapped": 0}
+            json={"quantity_completed": 10, "quantity_scrapped": 0},
         )
 
         # Verify
@@ -231,8 +254,12 @@ class TestCompleteOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"  # Not running
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="pending",  # Not running
         )
         db.commit()
 
@@ -240,7 +267,7 @@ class TestCompleteOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 10}
+            json={"quantity_completed": 10},
         )
 
         # Verify
@@ -256,14 +283,22 @@ class TestCompleteOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete",  # Already done
-            quantity_completed=Decimal("10")  # Must set completed qty for next op validation
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="complete",  # Already done
+            quantity_completed=Decimal("10"),  # Must set completed qty for next op validation
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="CLEAN", status="running",  # Last one, running
-            actual_start=datetime.utcnow() - timedelta(minutes=30)
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=20,
+            operation_code="CLEAN",
+            status="running",  # Last one, running
+            actual_start=datetime.utcnow() - timedelta(minutes=30),
         )
         db.commit()
 
@@ -271,7 +306,7 @@ class TestCompleteOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 10}
+            json={"quantity_completed": 10},
         )
 
         # Verify
@@ -291,14 +326,23 @@ class TestCompleteOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc_print,
-            sequence=10, operation_code="PRINT", operation_name="3D Print",
-            status="running", actual_start=datetime.utcnow() - timedelta(hours=2)
+            db,
+            production_order=po,
+            work_center=wc_print,
+            sequence=10,
+            operation_code="PRINT",
+            operation_name="3D Print",
+            status="running",
+            actual_start=datetime.utcnow() - timedelta(hours=2),
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc_clean,
-            sequence=20, operation_code="CLEAN", operation_name="Post-Print Clean",
-            status="pending"
+            db,
+            production_order=po,
+            work_center=wc_clean,
+            sequence=20,
+            operation_code="CLEAN",
+            operation_name="Post-Print Clean",
+            status="pending",
         )
         db.commit()
 
@@ -306,7 +350,7 @@ class TestCompleteOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op1.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 10}
+            json={"quantity_completed": 10},
         )
 
         # Verify
@@ -331,13 +375,16 @@ class TestSkipOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="complete"
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="QC", operation_name="QC Inspect",
-            status="pending"
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=20,
+            operation_code="QC",
+            operation_name="QC Inspect",
+            status="pending",
         )
         db.commit()
 
@@ -345,7 +392,7 @@ class TestSkipOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/skip",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"reason": "Customer waived QC requirement"}
+            json={"reason": "Customer waived QC requirement"},
         )
 
         # Verify
@@ -364,8 +411,7 @@ class TestSkipOperation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="QC", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="QC", status="pending"
         )
         db.commit()
 
@@ -373,7 +419,7 @@ class TestSkipOperation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/skip",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
 
         # Verify
@@ -392,8 +438,7 @@ class TestQuantityValidation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="running"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="running"
         )
         db.commit()
 
@@ -401,7 +446,7 @@ class TestQuantityValidation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 15, "quantity_scrapped": 0}
+            json={"quantity_completed": 15, "quantity_scrapped": 0},
         )
 
         # Verify
@@ -417,8 +462,7 @@ class TestQuantityValidation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="running"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="running"
         )
         db.commit()
 
@@ -426,7 +470,7 @@ class TestQuantityValidation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 8, "quantity_scrapped": 5}
+            json={"quantity_completed": 8, "quantity_scrapped": 5},
         )
 
         # Verify
@@ -442,13 +486,17 @@ class TestQuantityValidation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete",
-            quantity_completed=Decimal("8"), quantity_scrapped=Decimal("2")
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="complete",
+            quantity_completed=Decimal("8"),
+            quantity_scrapped=Decimal("2"),
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="CLEAN", status="running"
+            db, production_order=po, work_center=wc, sequence=20, operation_code="CLEAN", status="running"
         )
         db.commit()
 
@@ -456,7 +504,7 @@ class TestQuantityValidation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 10, "quantity_scrapped": 0}
+            json={"quantity_completed": 10, "quantity_scrapped": 0},
         )
 
         # Verify
@@ -472,13 +520,17 @@ class TestQuantityValidation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete",
-            quantity_completed=Decimal("8"), quantity_scrapped=Decimal("2")
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="complete",
+            quantity_completed=Decimal("8"),
+            quantity_scrapped=Decimal("2"),
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="CLEAN", status="running"
+            db, production_order=po, work_center=wc, sequence=20, operation_code="CLEAN", status="running"
         )
         db.commit()
 
@@ -486,7 +538,7 @@ class TestQuantityValidation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 7, "quantity_scrapped": 1}
+            json={"quantity_completed": 7, "quantity_scrapped": 1},
         )
 
         # Verify - 7 + 1 = 8 which equals op1's qty_completed
@@ -503,20 +555,22 @@ class TestQuantityValidation:
 
         po = create_test_production_order(db, product=product, quantity=10, status="in_progress")
         op1 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="complete",
-            quantity_completed=Decimal("8")
+            db,
+            production_order=po,
+            work_center=wc,
+            sequence=10,
+            operation_code="PRINT",
+            status="complete",
+            quantity_completed=Decimal("8"),
         )
         op2 = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=20, operation_code="CLEAN", status="pending"
+            db, production_order=po, work_center=wc, sequence=20, operation_code="CLEAN", status="pending"
         )
         db.commit()
 
         # Execute
         response = client.get(
-            f"/api/v1/production-orders/{po.id}/operations",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/production-orders/{po.id}/operations", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         # Verify
@@ -542,7 +596,7 @@ class TestOperationNotFound:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/99999/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
         assert response.status_code == 404
 
@@ -556,8 +610,7 @@ class TestOperationNotFound:
         po2 = create_test_production_order(db, product=product, quantity=5, status="released")
 
         op = create_test_po_operation(
-            db, production_order=po1, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po1, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
@@ -565,6 +618,6 @@ class TestOperationNotFound:
         response = client.post(
             f"/api/v1/production-orders/{po2.id}/operations/{op.id}/start",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={}
+            json={},
         )
         assert response.status_code == 404

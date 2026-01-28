@@ -13,6 +13,7 @@ Usage:
     # With custom message
     raise ValidationError("SKU must be unique", field="sku")
 """
+
 from typing import Any, Dict, Optional
 
 

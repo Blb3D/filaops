@@ -22,14 +22,17 @@ router = APIRouter(prefix="/system", tags=["System Management"])
 # Response Models
 # ============================================================================
 
+
 class VersionResponse(BaseModel):
     """Current version information (public-safe fields only)"""
+
     version: str
     build_date: str
 
 
 class UpdateCheckResponse(BaseModel):
     """Update availability information"""
+
     update_available: bool
     current_version: str
     latest_version: Optional[str] = None
@@ -47,6 +50,7 @@ class UpdateCheckResponse(BaseModel):
 
 class UpdateInstructionsResponse(BaseModel):
     """Update instructions"""
+
     method: str
     estimated_time: str
     downtime: str
@@ -58,6 +62,7 @@ class UpdateInstructionsResponse(BaseModel):
 
 class SystemHealthResponse(BaseModel):
     """System health status"""
+
     status: str
     version: str
     timestamp: str
@@ -69,6 +74,7 @@ class SystemHealthResponse(BaseModel):
 # ============================================================================
 # Endpoints
 # ============================================================================
+
 
 @router.get("/version", response_model=VersionResponse)
 async def get_system_version():
@@ -83,15 +89,11 @@ async def get_system_version():
 
         # Return only public-safe fields
         return VersionResponse(
-            version=version_info.get("version", "unknown"),
-            build_date=version_info.get("build_date", "unknown")
+            version=version_info.get("version", "unknown"), build_date=version_info.get("build_date", "unknown")
         )
     except Exception as e:
         logger.error(f"Failed to get version info: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to get version info"
-        )
+        raise HTTPException(status_code=500, detail="Failed to get version info")
 
 
 @router.get("/updates/check", response_model=UpdateCheckResponse)
@@ -114,7 +116,7 @@ async def check_for_updates():
         return UpdateCheckResponse(
             update_available=False,
             current_version=VersionManager.get_current_version()["version"],
-            error=f"Failed to check for updates: {str(e)}"
+            error=f"Failed to check for updates: {str(e)}",
         )
 
 
@@ -131,10 +133,7 @@ async def get_update_instructions():
         return UpdateInstructionsResponse(**instructions)
     except Exception as e:
         logger.error(f"Failed to get update instructions: {e}", exc_info=True)
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get update instructions: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to get update instructions: {str(e)}")
 
 
 @router.get("/health", response_model=SystemHealthResponse)
@@ -152,6 +151,7 @@ async def system_health(db: Session = Depends(get_db)):
         database_connected = False
         try:
             from sqlalchemy import text
+
             db.execute(text("SELECT 1"))
             database_connected = True
         except Exception as db_error:
@@ -165,8 +165,8 @@ async def system_health(db: Session = Depends(get_db)):
             services={
                 "version_manager": "operational",
                 "update_checker": "ready",
-                "database": "connected" if database_connected else "disconnected"
-            }
+                "database": "connected" if database_connected else "disconnected",
+            },
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}", exc_info=True)
@@ -175,9 +175,5 @@ async def system_health(db: Session = Depends(get_db)):
             version="unknown",
             timestamp="",
             error=str(e),
-            services={
-                "version_manager": "error",
-                "update_checker": "error",
-                "database": "error"
-            }
+            services={"version_manager": "error", "update_checker": "error", "database": "error"},
         )

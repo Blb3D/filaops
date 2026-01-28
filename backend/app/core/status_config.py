@@ -6,6 +6,7 @@ to prevent invalid state changes.
 
 Sprint 3-4: Data Model Cleanup - Status Validation
 """
+
 from enum import Enum
 from typing import Dict, List, Set
 
@@ -14,8 +15,10 @@ from typing import Dict, List, Set
 # Production Order Status
 # =============================================================================
 
+
 class ProductionOrderStatus(str, Enum):
     """Valid status values for Production Orders"""
+
     DRAFT = "draft"
     RELEASED = "released"
     IN_PROGRESS = "in_progress"
@@ -71,8 +74,10 @@ def is_valid_production_order_transition(current_status: str, new_status: str) -
 # Production Order Operation Status
 # =============================================================================
 
+
 class OperationStatus(str, Enum):
     """Valid status values for Production Order Operations"""
+
     PENDING = "pending"
     QUEUED = "queued"
     RUNNING = "running"
@@ -102,8 +107,10 @@ OPERATION_STATUS_TRANSITIONS: Dict[str, Set[str]] = {
 # Sales Order Status
 # =============================================================================
 
+
 class SalesOrderStatus(str, Enum):
     """Valid status values for Sales Orders"""
+
     DRAFT = "draft"
     PENDING = "pending"
     CONFIRMED = "confirmed"
@@ -178,8 +185,10 @@ def is_valid_sales_order_transition(current_status: str, new_status: str) -> boo
 # Payment Status
 # =============================================================================
 
+
 class PaymentStatus(str, Enum):
     """Valid payment status values for Sales Orders"""
+
     PENDING = "pending"
     PARTIAL = "partial"
     PAID = "paid"
@@ -191,8 +200,10 @@ class PaymentStatus(str, Enum):
 # QC Status
 # =============================================================================
 
+
 class QCStatus(str, Enum):
     """Valid QC status values for Production Orders"""
+
     NOT_REQUIRED = "not_required"
     PENDING = "pending"
     PASSED = "passed"
@@ -219,8 +230,10 @@ QC_STATUS_TRANSITIONS: Dict[str, Set[str]] = {
 # Validation Helpers
 # =============================================================================
 
+
 class StatusTransitionError(Exception):
     """Raised when an invalid status transition is attempted"""
+
     def __init__(self, entity: str, current: str, requested: str, allowed: List[str]):
         self.entity = entity
         self.current = current
@@ -235,20 +248,10 @@ class StatusTransitionError(Exception):
 def validate_production_order_transition(current: str, new: str) -> None:
     """Validate and raise error if transition is invalid"""
     if not is_valid_production_order_transition(current, new):
-        raise StatusTransitionError(
-            "production order",
-            current,
-            new,
-            get_allowed_production_order_transitions(current)
-        )
+        raise StatusTransitionError("production order", current, new, get_allowed_production_order_transitions(current))
 
 
 def validate_sales_order_transition(current: str, new: str) -> None:
     """Validate and raise error if transition is invalid"""
     if not is_valid_sales_order_transition(current, new):
-        raise StatusTransitionError(
-            "sales order",
-            current,
-            new,
-            get_allowed_sales_order_transitions(current)
-        )
+        raise StatusTransitionError("sales order", current, new, get_allowed_sales_order_transitions(current))

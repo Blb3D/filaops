@@ -3,6 +3,7 @@ Unit of Measure (UOM) Management Endpoints
 
 Provides CRUD operations for units of measure and conversion utilities.
 """
+
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -38,6 +39,7 @@ logger = get_logger(__name__)
 # ============================================================================
 # LIST UNITS
 # ============================================================================
+
 
 @router.get("/", response_model=List[UOMListResponse])
 async def list_units(
@@ -79,16 +81,21 @@ async def list_unit_classes(
 
     for uom_class in sorted(classes):
         units = get_units_by_class(db, uom_class)
-        result.append(UOMClassResponse(
-            uom_class=uom_class,
-            units=[UOMListResponse(
-                id=u.id,
-                code=u.code,
-                name=u.name,
-                symbol=u.symbol,
-                uom_class=u.uom_class,
-            ) for u in units]
-        ))
+        result.append(
+            UOMClassResponse(
+                uom_class=uom_class,
+                units=[
+                    UOMListResponse(
+                        id=u.id,
+                        code=u.code,
+                        name=u.name,
+                        symbol=u.symbol,
+                        uom_class=u.uom_class,
+                    )
+                    for u in units
+                ],
+            )
+        )
 
     return result
 
@@ -96,6 +103,7 @@ async def list_unit_classes(
 # ============================================================================
 # CONVERT QUANTITY
 # ============================================================================
+
 
 @router.post("/convert", response_model=ConvertResponse)
 async def convert_units(
@@ -109,9 +117,7 @@ async def convert_units(
     Units must be in the same class (e.g., weight, length).
     """
     try:
-        converted, factor = convert_quantity_with_factor(
-            db, request.quantity, request.from_unit, request.to_unit
-        )
+        converted, factor = convert_quantity_with_factor(db, request.quantity, request.from_unit, request.to_unit)
 
         return ConvertResponse(
             original_quantity=request.quantity,
@@ -121,15 +127,13 @@ async def convert_units(
             conversion_factor=factor,
         )
     except UOMConversionError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ============================================================================
 # GET UNIT
 # ============================================================================
+
 
 @router.get("/{code}", response_model=UOMResponse)
 async def get_unit(
@@ -142,10 +146,7 @@ async def get_unit(
     """
     uom = get_uom_by_code(db, code)
     if not uom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unit not found: {code}"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unit not found: {code}")
 
     # Add base unit code if applicable
     base_code = None
@@ -171,6 +172,7 @@ async def get_unit(
 # CREATE UNIT
 # ============================================================================
 
+
 @router.post("/", response_model=UOMResponse, status_code=status.HTTP_201_CREATED)
 async def create_unit(
     request: UOMCreate,
@@ -186,8 +188,7 @@ async def create_unit(
     existing = get_uom_by_code(db, request.code)
     if existing:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unit with code '{request.code}' already exists"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Unit with code '{request.code}' already exists"
         )
 
     # Get base unit ID if provided
@@ -196,13 +197,12 @@ async def create_unit(
         base_unit = get_uom_by_code(db, request.base_unit_code)
         if not base_unit:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Base unit not found: {request.base_unit_code}"
+                status_code=status.HTTP_400_BAD_REQUEST, detail=f"Base unit not found: {request.base_unit_code}"
             )
         if base_unit.uom_class != request.uom_class:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Base unit must be in the same class ({request.uom_class})"
+                detail=f"Base unit must be in the same class ({request.uom_class})",
             )
         base_unit_id = base_unit.id
 
@@ -238,6 +238,7 @@ async def create_unit(
 # UPDATE UNIT
 # ============================================================================
 
+
 @router.patch("/{code}", response_model=UOMResponse)
 async def update_unit(
     code: str,
@@ -247,30 +248,27 @@ async def update_unit(
 ):
     """
     Update an existing unit of measure.
-    
+
     Note: Changing base_unit_code or uom_class is not allowed.
     These structural properties cannot be modified after creation
     to maintain data integrity and prevent conversion errors.
     """
     uom = get_uom_by_code(db, code)
     if not uom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Unit not found: {code}"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Unit not found: {code}")
 
     # Explicitly reject attempts to change structural fields
     # These fields are not in UOMUpdate schema, but this protects
     # against future schema changes or direct API manipulation
     update_dict = request.model_dump(exclude_unset=True)
-    forbidden_fields = {'base_unit_code', 'base_unit_id', 'uom_class', 'code'}
+    forbidden_fields = {"base_unit_code", "base_unit_id", "uom_class", "code"}
     attempted_forbidden = forbidden_fields.intersection(update_dict.keys())
-    
+
     if attempted_forbidden:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Cannot modify structural fields via PATCH: {', '.join(sorted(attempted_forbidden))}. "
-                   f"Base unit and UOM class cannot be changed after creation to maintain data integrity."
+            f"Base unit and UOM class cannot be changed after creation to maintain data integrity.",
         )
 
     if request.name is not None:

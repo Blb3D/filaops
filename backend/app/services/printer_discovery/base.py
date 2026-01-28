@@ -53,10 +53,7 @@ class PrinterDiscoveryAdapter(ABC):
         """
         pass
 
-    async def discover_cloud(
-        self,
-        credentials: Dict[str, Any]
-    ) -> List[DiscoveredPrinter]:
+    async def discover_cloud(self, credentials: Dict[str, Any]) -> List[DiscoveredPrinter]:
         """
         Discover printers via cloud API.
 
@@ -71,10 +68,7 @@ class PrinterDiscoveryAdapter(ABC):
         return []
 
     @abstractmethod
-    async def test_connection(
-        self,
-        config: PrinterConnectionConfig
-    ) -> tuple[bool, Optional[str]]:
+    async def test_connection(self, config: PrinterConnectionConfig) -> tuple[bool, Optional[str]]:
         """
         Test if we can connect to a printer with given config.
 
@@ -89,10 +83,7 @@ class PrinterDiscoveryAdapter(ABC):
         pass
 
     @abstractmethod
-    async def get_status(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterStatus]:
+    async def get_status(self, config: PrinterConnectionConfig) -> Optional[PrinterStatus]:
         """
         Get current printer status.
 
@@ -104,10 +95,7 @@ class PrinterDiscoveryAdapter(ABC):
         """
         pass
 
-    async def get_capabilities(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterCapabilities]:
+    async def get_capabilities(self, config: PrinterConnectionConfig) -> Optional[PrinterCapabilities]:
         """
         Query printer for its capabilities.
 

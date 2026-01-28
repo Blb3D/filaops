@@ -1,0 +1,44 @@
+# Pre-commit hooks for FilaOps
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  # Ruff - Fast Python linter and formatter
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^backend/
+      - id: ruff-format
+        files: ^backend/
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(frontend/|.*\.md$)
+      - id: end-of-file-fixer
+        exclude: ^frontend/
+      - id: check-yaml
+        args: [--unsafe]  # Allow custom tags
+      - id: check-json
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  # Frontend - ESLint
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint
+        entry: npm run lint --prefix frontend --
+        language: system
+        files: ^frontend/.*\.(js|jsx|ts|tsx)$
+        pass_filenames: false
+
+# CI configuration
+ci:
+  autofix_commit_msg: "style: auto-fix from pre-commit hooks"
+  autoupdate_commit_msg: "chore: update pre-commit hooks"

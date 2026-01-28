@@ -4,9 +4,8 @@ Accounting Models (General Ledger)
 Double-entry bookkeeping system with Schedule C mapping for sole proprietors.
 These models support journal entries, chart of accounts, and fiscal period tracking.
 """
-from sqlalchemy import (
-    Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean, CheckConstraint
-)
+
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -15,6 +14,7 @@ from app.db.base import Base
 
 class GLAccount(Base):
     """Chart of Accounts with Schedule C mapping for tax reporting"""
+
     __tablename__ = "gl_accounts"
 
     # Primary Key
@@ -56,6 +56,7 @@ class GLAccount(Base):
 
 class GLFiscalPeriod(Base):
     """Fiscal period tracking for month/year closing"""
+
     __tablename__ = "gl_fiscal_periods"
 
     # Primary Key
@@ -90,6 +91,7 @@ class GLFiscalPeriod(Base):
 
 class GLJournalEntry(Base):
     """Journal entry header with audit trail"""
+
     __tablename__ = "gl_journal_entries"
 
     # Primary Key
@@ -134,7 +136,7 @@ class GLJournalEntry(Base):
         "GLJournalEntryLine",
         back_populates="journal_entry",
         cascade="all, delete-orphan",
-        order_by="GLJournalEntryLine.line_order"
+        order_by="GLJournalEntryLine.line_order",
     )
     created_by_user = relationship("User", foreign_keys=[created_by])
     posted_by_user = relationship("User", foreign_keys=[posted_by])
@@ -168,6 +170,7 @@ class GLJournalEntry(Base):
 
 class GLJournalEntryLine(Base):
     """Individual debit/credit line within a journal entry"""
+
     __tablename__ = "gl_journal_entry_lines"
 
     # Primary Key
@@ -175,17 +178,9 @@ class GLJournalEntryLine(Base):
 
     # Foreign Keys
     journal_entry_id = Column(
-        Integer,
-        ForeignKey("gl_journal_entries.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
+        Integer, ForeignKey("gl_journal_entries.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    account_id = Column(
-        Integer,
-        ForeignKey("gl_accounts.id"),
-        nullable=False,
-        index=True
-    )
+    account_id = Column(Integer, ForeignKey("gl_accounts.id"), nullable=False, index=True)
 
     # Amounts - Using Numeric(10, 2) to match existing codebase pattern
     # Either debit_amount OR credit_amount must be > 0, not both

@@ -4,6 +4,7 @@ Shipping Event Model
 Tracks shipping lifecycle events for sales orders - label purchase, pickup,
 in transit, delivered, etc. Provides a shipment tracking timeline.
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,24 +14,15 @@ from app.db.base import Base
 
 class ShippingEvent(Base):
     """Shipping Event - Shipment tracking log entry for a sales order"""
+
     __tablename__ = "shipping_events"
 
     # Primary Key
     id = Column(Integer, primary_key=True, index=True)
 
     # Foreign Keys
-    sales_order_id = Column(
-        Integer,
-        ForeignKey("sales_orders.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="NO ACTION"),
-        nullable=True,
-        index=True
-    )
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="NO ACTION"), nullable=True, index=True)
 
     # Event Type
     # label_purchased, picked_up, in_transit, out_for_delivery, delivered,

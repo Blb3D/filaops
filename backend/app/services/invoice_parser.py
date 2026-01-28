@@ -3,6 +3,7 @@ Invoice Parser Service
 
 Uses Claude API to extract structured data from invoices (PDF/CSV).
 """
+
 import os
 import csv
 import json
@@ -36,7 +37,7 @@ logger = get_logger(__name__)
 
 
 # Claude API prompt for invoice extraction
-INVOICE_EXTRACTION_PROMPT = '''You are an expert invoice parser. Extract ALL structured data from this invoice.
+INVOICE_EXTRACTION_PROMPT = """You are an expert invoice parser. Extract ALL structured data from this invoice.
 
 CRITICAL: You must extract EVERY line item from the invoice. Do not stop early or skip items.
 
@@ -74,7 +75,7 @@ IMPORTANT RULES:
 8. Include items even if they have $0.00 price (free items, samples)
 9. Use null for missing fields, never empty strings
 10. All numbers must be numeric values, not strings
-'''
+"""
 
 
 def _get_anthropic_client(api_key: str = None):
@@ -128,14 +129,14 @@ def _parse_pdf_basic(text: str) -> dict:
         "total": 0,
     }
 
-    lines_text = text.split('\n')
+    lines_text = text.split("\n")
 
     # Try to find invoice number
     inv_patterns = [
-        r'Invoice\s*#?\s*:?\s*([A-Z0-9-]+)',
-        r'INV[#-]?\s*([A-Z0-9-]+)',
-        r'Order\s*#?\s*:?\s*([A-Z0-9-]+)',
-        r'PO\s*#?\s*:?\s*([A-Z0-9-]+)',
+        r"Invoice\s*#?\s*:?\s*([A-Z0-9-]+)",
+        r"INV[#-]?\s*([A-Z0-9-]+)",
+        r"Order\s*#?\s*:?\s*([A-Z0-9-]+)",
+        r"PO\s*#?\s*:?\s*([A-Z0-9-]+)",
     ]
     for pattern in inv_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -145,10 +146,10 @@ def _parse_pdf_basic(text: str) -> dict:
 
     # Try to find date and normalize to YYYY-MM-DD
     date_patterns = [
-        r'(\d{4}[/-]\d{1,2}[/-]\d{1,2})',  # YYYY-MM-DD or YYYY/MM/DD
-        r'(\d{1,2}[/-]\d{1,2}[/-]\d{4})',  # MM-DD-YYYY or DD/MM/YYYY
-        r'(\d{1,2}[/-]\d{1,2}[/-]\d{2})',  # MM-DD-YY
-        r'((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})',
+        r"(\d{4}[/-]\d{1,2}[/-]\d{1,2})",  # YYYY-MM-DD or YYYY/MM/DD
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{4})",  # MM-DD-YYYY or DD/MM/YYYY
+        r"(\d{1,2}[/-]\d{1,2}[/-]\d{2})",  # MM-DD-YY
+        r"((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},?\s+\d{4})",
     ]
     for pattern in date_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
@@ -156,11 +157,23 @@ def _parse_pdf_basic(text: str) -> dict:
             date_str = match.group(1)
             try:
                 # Try various formats
-                for fmt in ['%Y-%m-%d', '%Y/%m/%d', '%m-%d-%Y', '%m/%d/%Y', '%d-%m-%Y', '%d/%m/%Y',
-                           '%m-%d-%y', '%m/%d/%y', '%B %d, %Y', '%b %d, %Y', '%B %d %Y', '%b %d %Y']:
+                for fmt in [
+                    "%Y-%m-%d",
+                    "%Y/%m/%d",
+                    "%m-%d-%Y",
+                    "%m/%d/%Y",
+                    "%d-%m-%Y",
+                    "%d/%m/%Y",
+                    "%m-%d-%y",
+                    "%m/%d/%y",
+                    "%B %d, %Y",
+                    "%b %d, %Y",
+                    "%B %d %Y",
+                    "%b %d %Y",
+                ]:
                     try:
                         parsed = datetime.strptime(date_str, fmt)
-                        result["invoice_date"] = parsed.strftime('%Y-%m-%d')
+                        result["invoice_date"] = parsed.strftime("%Y-%m-%d")
                         break
                     except ValueError:
                         continue
@@ -171,15 +184,15 @@ def _parse_pdf_basic(text: str) -> dict:
 
     # Try to find total
     total_patterns = [
-        r'Total[:\s]*\$?\s*([\d,]+\.?\d*)',
-        r'Grand\s*Total[:\s]*\$?\s*([\d,]+\.?\d*)',
-        r'Amount\s*Due[:\s]*\$?\s*([\d,]+\.?\d*)',
+        r"Total[:\s]*\$?\s*([\d,]+\.?\d*)",
+        r"Grand\s*Total[:\s]*\$?\s*([\d,]+\.?\d*)",
+        r"Amount\s*Due[:\s]*\$?\s*([\d,]+\.?\d*)",
     ]
     for pattern in total_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             try:
-                result["total"] = float(match.group(1).replace(',', ''))
+                result["total"] = float(match.group(1).replace(",", ""))
             except ValueError:
                 pass
             break
@@ -187,7 +200,7 @@ def _parse_pdf_basic(text: str) -> dict:
     # Try to find line items - look for patterns like:
     # SKU/Item  Description  Qty  Price  Total
     # This is a basic heuristic - looks for lines with numbers that could be qty/price
-    line_pattern = r'([A-Z0-9-]+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)'
+    line_pattern = r"([A-Z0-9-]+)\s+(.+?)\s+(\d+(?:\.\d+)?)\s+\$?([\d,]+\.?\d*)\s+\$?([\d,]+\.?\d*)"
 
     line_num = 0
     for line in lines_text:
@@ -196,18 +209,20 @@ def _parse_pdf_basic(text: str) -> dict:
             line_num += 1
             try:
                 qty = float(match.group(3))
-                unit_cost = float(match.group(4).replace(',', ''))
-                line_total = float(match.group(5).replace(',', ''))
+                unit_cost = float(match.group(4).replace(",", ""))
+                line_total = float(match.group(5).replace(",", ""))
 
-                result["lines"].append({
-                    "line_number": line_num,
-                    "vendor_sku": match.group(1).strip(),
-                    "description": match.group(2).strip(),
-                    "quantity": qty,
-                    "unit": "EA",
-                    "unit_cost": unit_cost,
-                    "line_total": line_total,
-                })
+                result["lines"].append(
+                    {
+                        "line_number": line_num,
+                        "vendor_sku": match.group(1).strip(),
+                        "description": match.group(2).strip(),
+                        "quantity": qty,
+                        "unit": "EA",
+                        "unit_cost": unit_cost,
+                        "line_total": line_total,
+                    }
+                )
             except ValueError:
                 continue
 
@@ -231,6 +246,7 @@ def _is_api_available(db=None) -> bool:
     if db:
         try:
             from app.models.company_settings import CompanySettings
+
             settings = db.query(CompanySettings).first()
             if settings and settings.ai_provider == "anthropic" and settings.ai_api_key:
                 return True
@@ -248,6 +264,7 @@ def _get_api_key(db=None) -> str:
     if db:
         try:
             from app.models.company_settings import CompanySettings
+
             settings = db.query(CompanySettings).first()
             if settings and settings.ai_api_key:
                 return settings.ai_api_key
@@ -261,6 +278,7 @@ def _get_api_key(db=None) -> str:
 def _is_ollama_available() -> bool:
     """Check if Ollama is running locally."""
     import requests
+
     ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
     try:
         response = requests.get(f"{ollama_url}/api/tags", timeout=2)
@@ -289,6 +307,7 @@ def _get_anthropic_model(db=None) -> str:
     if db:
         try:
             from app.models.company_settings import CompanySettings
+
             settings = db.query(CompanySettings).first()
             if settings and settings.ai_anthropic_model:
                 return settings.ai_anthropic_model
@@ -318,7 +337,7 @@ def _parse_with_ollama(text: str) -> dict:
         response = requests.post(
             f"{ollama_url}/api/generate",
             json=payload,
-            timeout=60  # Give it time for larger invoices
+            timeout=60,  # Give it time for larger invoices
         )
         response.raise_for_status()
 
@@ -350,18 +369,18 @@ def _parse_with_ollama(text: str) -> dict:
 
 def _parse_csv_invoice(csv_bytes: bytes) -> dict:
     """Parse CSV invoice directly without AI."""
-    content = csv_bytes.decode('utf-8-sig')  # Handle BOM
+    content = csv_bytes.decode("utf-8-sig")  # Handle BOM
     reader = csv.DictReader(io.StringIO(content))
 
     lines = []
     line_num = 0
 
     # Common column name variations
-    sku_cols = ['sku', 'part', 'part_number', 'item', 'item_number', 'product_code']
-    desc_cols = ['description', 'desc', 'name', 'product', 'item_description']
-    qty_cols = ['quantity', 'qty', 'amount', 'units']
-    cost_cols = ['unit_cost', 'cost', 'price', 'unit_price', 'rate']
-    total_cols = ['total', 'line_total', 'amount', 'extended', 'ext_price']
+    sku_cols = ["sku", "part", "part_number", "item", "item_number", "product_code"]
+    desc_cols = ["description", "desc", "name", "product", "item_description"]
+    qty_cols = ["quantity", "qty", "amount", "units"]
+    cost_cols = ["unit_cost", "cost", "price", "unit_price", "rate"]
+    total_cols = ["total", "line_total", "amount", "extended", "ext_price"]
 
     def find_col(row: dict, candidates: list) -> Optional[str]:
         row_lower = {k.lower().strip(): k for k in row.keys()}
@@ -383,22 +402,24 @@ def _parse_csv_invoice(csv_bytes: bytes) -> dict:
             continue
 
         try:
-            qty = Decimal(str(row.get(qty_col, 1) or 1).replace(',', ''))
-            cost = Decimal(str(row.get(cost_col, 0) or 0).replace(',', '').replace('$', ''))
-            total = Decimal(str(row.get(total_col, 0) or 0).replace(',', '').replace('$', ''))
+            qty = Decimal(str(row.get(qty_col, 1) or 1).replace(",", ""))
+            cost = Decimal(str(row.get(cost_col, 0) or 0).replace(",", "").replace("$", ""))
+            total = Decimal(str(row.get(total_col, 0) or 0).replace(",", "").replace("$", ""))
 
             if total == 0 and qty > 0 and cost > 0:
                 total = qty * cost
 
-            lines.append({
-                "line_number": line_num,
-                "vendor_sku": str(row.get(sku_col, '')).strip(),
-                "description": str(row.get(desc_col, '')).strip() if desc_col else '',
-                "quantity": float(qty),
-                "unit": "EA",
-                "unit_cost": float(cost),
-                "line_total": float(total),
-            })
+            lines.append(
+                {
+                    "line_number": line_num,
+                    "vendor_sku": str(row.get(sku_col, "")).strip(),
+                    "description": str(row.get(desc_col, "")).strip() if desc_col else "",
+                    "quantity": float(qty),
+                    "unit": "EA",
+                    "unit_cost": float(cost),
+                    "line_total": float(total),
+                }
+            )
         except (InvalidOperation, ValueError) as e:
             logger.warning(f"Skipping CSV row {line_num}: {e}")
             continue
@@ -421,12 +442,7 @@ def _parse_with_claude(text: str, model: str = None, api_key: str = None) -> dic
     message = client.messages.create(
         model=model,
         max_tokens=4096,
-        messages=[
-            {
-                "role": "user",
-                "content": f"{INVOICE_EXTRACTION_PROMPT}\n\nInvoice text:\n{text}"
-            }
-        ]
+        messages=[{"role": "user", "content": f"{INVOICE_EXTRACTION_PROMPT}\n\nInvoice text:\n{text}"}],
     )
 
     response_text = message.content[0].text
@@ -451,7 +467,7 @@ def _parse_with_claude_vision(pdf_bytes: bytes, model: str = None, api_key: str 
     model = model or _get_anthropic_model()
 
     # Encode PDF as base64
-    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode('utf-8')
+    pdf_b64 = base64.standard_b64encode(pdf_bytes).decode("utf-8")
 
     message = client.messages.create(
         model=model,
@@ -471,10 +487,10 @@ def _parse_with_claude_vision(pdf_bytes: bytes, model: str = None, api_key: str 
                     {
                         "type": "text",
                         "text": INVOICE_EXTRACTION_PROMPT,
-                    }
-                ]
+                    },
+                ],
             }
-        ]
+        ],
     )
 
     response_text = message.content[0].text
@@ -498,9 +514,7 @@ def _match_vendor(db: Session, vendor_name: str) -> Tuple[Optional[int], MatchCo
         return None, MatchConfidence.NONE
 
     # Exact match
-    vendor = db.query(Vendor).filter(
-        Vendor.name.ilike(vendor_name)
-    ).first()
+    vendor = db.query(Vendor).filter(Vendor.name.ilike(vendor_name)).first()
 
     if vendor:
         return vendor.id, MatchConfidence.EXACT
@@ -514,11 +528,7 @@ def _match_vendor(db: Session, vendor_name: str) -> Tuple[Optional[int], MatchCo
     return None, MatchConfidence.NONE
 
 
-def _match_products(
-    db: Session,
-    lines: List[dict],
-    vendor_id: Optional[int]
-) -> List[ParsedInvoiceLine]:
+def _match_products(db: Session, lines: List[dict], vendor_id: Optional[int]) -> List[ParsedInvoiceLine]:
     """Match invoice lines to products using vendor_items and similarity."""
     result = []
 
@@ -539,11 +549,15 @@ def _match_products(
 
         # Try vendor_items first (if we have vendor_id)
         if vendor_id and vendor_sku:
-            vendor_item = db.query(VendorItem).filter(
-                VendorItem.vendor_id == vendor_id,
-                VendorItem.vendor_sku == vendor_sku,
-                VendorItem.product_id.isnot(None),
-            ).first()
+            vendor_item = (
+                db.query(VendorItem)
+                .filter(
+                    VendorItem.vendor_id == vendor_id,
+                    VendorItem.vendor_sku == vendor_sku,
+                    VendorItem.product_id.isnot(None),
+                )
+                .first()
+            )
 
             if vendor_item and vendor_item.product:
                 parsed_line.matched_product_id = vendor_item.product_id
@@ -556,10 +570,14 @@ def _match_products(
 
         # Try SKU similarity
         if vendor_sku:
-            product = db.query(Product).filter(
-                Product.sku.ilike(f"%{vendor_sku}%"),
-                Product.active.is_(True),
-            ).first()
+            product = (
+                db.query(Product)
+                .filter(
+                    Product.sku.ilike(f"%{vendor_sku}%"),
+                    Product.active.is_(True),
+                )
+                .first()
+            )
 
             if product:
                 parsed_line.matched_product_id = product.id
@@ -575,10 +593,14 @@ def _match_products(
             words = description.split()[:2]
             for word in words:
                 if len(word) >= 4:
-                    product = db.query(Product).filter(
-                        Product.name.ilike(f"%{word}%"),
-                        Product.active.is_(True),
-                    ).first()
+                    product = (
+                        db.query(Product)
+                        .filter(
+                            Product.name.ilike(f"%{word}%"),
+                            Product.active.is_(True),
+                        )
+                        .first()
+                    )
 
                     if product:
                         parsed_line.matched_product_id = product.id
@@ -619,16 +641,16 @@ def parse_invoice(
     ai_model = None
 
     # Determine file type
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    ext = filename.lower().split(".")[-1] if "." in filename else ""
 
     try:
-        if ext == 'csv':
+        if ext == "csv":
             # Direct CSV parsing (no AI needed)
             ai_provider = "csv"
             raw_data = _parse_csv_invoice(file_bytes)
-            raw_text = file_bytes.decode('utf-8-sig')[:2000]
+            raw_text = file_bytes.decode("utf-8-sig")[:2000]
 
-        elif ext == 'pdf':
+        elif ext == "pdf":
             # Extract text first (needed for both AI and basic parsing)
             text = _extract_text_from_pdf(file_bytes)
             raw_text = text[:2000]

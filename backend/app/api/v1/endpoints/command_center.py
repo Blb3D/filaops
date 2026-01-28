@@ -3,6 +3,7 @@ Command Center API endpoints.
 
 Provides dashboard data for the "What do I need to do NOW?" view.
 """
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
@@ -24,10 +25,7 @@ router = APIRouter()
 
 
 @router.get("/action-items", response_model=ActionItemsResponse)
-def get_action_items_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
-):
+def get_action_items_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     """
     Get prioritized list of action items requiring attention.
 
@@ -44,10 +42,7 @@ def get_action_items_endpoint(
 
 
 @router.get("/summary", response_model=TodaySummary)
-def get_summary_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
-):
+def get_summary_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     """
     Get aggregate statistics for today's operations.
 
@@ -60,10 +55,7 @@ def get_summary_endpoint(
 
 
 @router.get("/resources", response_model=ResourcesResponse)
-def get_resources_endpoint(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
-):
+def get_resources_endpoint(db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     """
     Get current status of all resources/machines.
 

@@ -8,6 +8,7 @@ Supports brand-agnostic printer management for:
 - Prusa Connect
 - Generic/Manual entry
 """
+
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
@@ -18,8 +19,10 @@ from enum import Enum
 # Enums
 # ============================================================================
 
+
 class PrinterBrand(str, Enum):
     """Supported printer brands"""
+
     BAMBULAB = "bambulab"
     KLIPPER = "klipper"
     OCTOPRINT = "octoprint"
@@ -30,6 +33,7 @@ class PrinterBrand(str, Enum):
 
 class PrinterStatus(str, Enum):
     """Printer status states"""
+
     OFFLINE = "offline"
     IDLE = "idle"
     PRINTING = "printing"
@@ -42,8 +46,10 @@ class PrinterStatus(str, Enum):
 # Printer Capabilities Schema
 # ============================================================================
 
+
 class PrinterCapabilities(BaseModel):
     """Printer capabilities/features"""
+
     bed_size_x: Optional[float] = Field(None, description="Bed width in mm")
     bed_size_y: Optional[float] = Field(None, description="Bed depth in mm")
     bed_size_z: Optional[float] = Field(None, description="Max height in mm")
@@ -59,8 +65,10 @@ class PrinterCapabilities(BaseModel):
 # Connection Configuration Schema
 # ============================================================================
 
+
 class PrinterConnectionConfig(BaseModel):
     """Brand-specific connection configuration"""
+
     # Common fields
     port: Optional[int] = Field(None, description="Port number for API")
     api_key: Optional[str] = Field(None, description="API key if required")
@@ -76,8 +84,10 @@ class PrinterConnectionConfig(BaseModel):
 # Printer CRUD Schemas
 # ============================================================================
 
+
 class PrinterBase(BaseModel):
     """Base printer fields"""
+
     code: str = Field(..., min_length=1, max_length=50, description="Unique printer code")
     name: str = Field(..., min_length=1, max_length=255, description="Printer name")
     model: str = Field(..., min_length=1, max_length=100, description="Printer model")
@@ -93,12 +103,14 @@ class PrinterBase(BaseModel):
 
 class PrinterCreate(PrinterBase):
     """Create a new printer"""
+
     connection_config: Optional[Dict[str, Any]] = Field(default_factory=dict)
     capabilities: Optional[Dict[str, Any]] = Field(default_factory=dict)
 
 
 class PrinterUpdate(BaseModel):
     """Update an existing printer"""
+
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     model: Optional[str] = Field(None, min_length=1, max_length=100)
@@ -116,6 +128,7 @@ class PrinterUpdate(BaseModel):
 
 class PrinterResponse(PrinterBase):
     """Printer response with computed fields"""
+
     id: int
     status: PrinterStatus = PrinterStatus.OFFLINE
     connection_config: Dict[str, Any] = {}
@@ -135,6 +148,7 @@ class PrinterResponse(PrinterBase):
 
 class PrinterListResponse(BaseModel):
     """Paginated list of printers"""
+
     items: List[PrinterResponse]
     total: int
     page: int
@@ -146,8 +160,10 @@ class PrinterListResponse(BaseModel):
 # Discovery Schemas
 # ============================================================================
 
+
 class DiscoveredPrinterResponse(BaseModel):
     """A printer found during network discovery"""
+
     brand: PrinterBrand
     model: str
     name: str
@@ -160,6 +176,7 @@ class DiscoveredPrinterResponse(BaseModel):
 
 class DiscoveryResultResponse(BaseModel):
     """Result of a discovery scan"""
+
     printers: List[DiscoveredPrinterResponse]
     scan_duration_seconds: float
     errors: List[str] = []
@@ -167,10 +184,8 @@ class DiscoveryResultResponse(BaseModel):
 
 class DiscoveryRequest(BaseModel):
     """Request to start printer discovery"""
-    brands: Optional[List[PrinterBrand]] = Field(
-        None,
-        description="Brands to scan for (None = all)"
-    )
+
+    brands: Optional[List[PrinterBrand]] = Field(None, description="Brands to scan for (None = all)")
     timeout_seconds: float = Field(5.0, ge=1.0, le=30.0)
 
 
@@ -178,8 +193,10 @@ class DiscoveryRequest(BaseModel):
 # Bulk Import Schemas
 # ============================================================================
 
+
 class PrinterCSVRow(BaseModel):
     """Single row from CSV import"""
+
     code: str
     name: str
     model: str
@@ -192,12 +209,14 @@ class PrinterCSVRow(BaseModel):
 
 class PrinterCSVImportRequest(BaseModel):
     """Request to import printers from CSV"""
+
     csv_data: str = Field(..., description="CSV content as string")
     skip_duplicates: bool = Field(True, description="Skip rows with existing codes")
 
 
 class PrinterCSVImportResult(BaseModel):
     """Result of CSV import"""
+
     total_rows: int
     imported: int
     skipped: int
@@ -208,13 +227,16 @@ class PrinterCSVImportResult(BaseModel):
 # Status Update Schemas
 # ============================================================================
 
+
 class PrinterStatusUpdate(BaseModel):
     """Update printer status"""
+
     status: PrinterStatus
 
 
 class PrinterConnectionTest(BaseModel):
     """Test connection to a printer"""
+
     ip_address: str
     brand: PrinterBrand
     connection_config: Optional[Dict[str, Any]] = {}
@@ -222,6 +244,7 @@ class PrinterConnectionTest(BaseModel):
 
 class PrinterConnectionTestResult(BaseModel):
     """Result of connection test"""
+
     success: bool
     message: Optional[str] = None
     response_time_ms: Optional[float] = None
@@ -231,8 +254,10 @@ class PrinterConnectionTestResult(BaseModel):
 # Brand Info Schemas
 # ============================================================================
 
+
 class PrinterModelInfo(BaseModel):
     """Information about a printer model"""
+
     value: str
     label: str
     capabilities: Optional[Dict[str, Any]] = None
@@ -240,6 +265,7 @@ class PrinterModelInfo(BaseModel):
 
 class PrinterBrandInfo(BaseModel):
     """Information about a supported brand"""
+
     code: str
     name: str
     supports_discovery: bool

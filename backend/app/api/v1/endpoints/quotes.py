@@ -4,6 +4,7 @@ Quote Management Endpoints - Community Edition
 Manual quote creation and management for small businesses.
 Supports creating quotes, updating status, and converting to sales orders.
 """
+
 from datetime import datetime, timedelta
 from typing import List, Optional
 from decimal import Decimal
@@ -31,8 +32,10 @@ router = APIRouter(prefix="/quotes", tags=["Quotes"])
 # SCHEMAS (Community Edition - Manual Quotes)
 # ============================================================================
 
+
 class ManualQuoteCreate(BaseModel):
     """Schema for creating a manual quote"""
+
     product_id: Optional[int] = Field(None, description="Link to product with BOM")
     product_name: str = Field(..., max_length=255, description="Product/item name")
     description: Optional[str] = Field(None, max_length=1000, description="Product description")
@@ -64,6 +67,7 @@ class ManualQuoteCreate(BaseModel):
 
 class ManualQuoteUpdate(BaseModel):
     """Schema for updating a quote"""
+
     product_name: Optional[str] = Field(None, max_length=255)
     description: Optional[str] = Field(None, max_length=1000)
     quantity: Optional[int] = Field(None, ge=1, le=10000)
@@ -95,6 +99,7 @@ class ManualQuoteUpdate(BaseModel):
 
 class QuoteStatusUpdate(BaseModel):
     """Schema for updating quote status"""
+
     status: str = Field(..., description="New status: pending, approved, rejected, accepted, cancelled")
     rejection_reason: Optional[str] = Field(None, max_length=500)
     admin_notes: Optional[str] = Field(None, max_length=1000)
@@ -102,6 +107,7 @@ class QuoteStatusUpdate(BaseModel):
 
 class QuoteListItem(BaseModel):
     """Quote list item response"""
+
     id: int
     quote_number: str
     product_id: Optional[int] = None
@@ -129,6 +135,7 @@ class QuoteListItem(BaseModel):
 
 class QuoteDetail(QuoteListItem):
     """Full quote detail response"""
+
     description: Optional[str] = None  # May not exist on legacy quotes
     customer_notes: Optional[str]
     admin_notes: Optional[str]
@@ -151,6 +158,7 @@ class QuoteDetail(QuoteListItem):
 
 class QuoteStatsResponse(BaseModel):
     """Quote statistics for dashboard"""
+
     total: int
     pending: int
     approved: int
@@ -166,14 +174,15 @@ class QuoteStatsResponse(BaseModel):
 # HELPER: Generate Quote Number
 # ============================================================================
 
+
 def generate_quote_number(db: Session) -> str:
     """Generate next quote number in format Q-YYYY-NNN"""
     year = datetime.utcnow().year
 
     # Get the highest quote number for this year
-    last_quote = db.query(Quote).filter(
-        Quote.quote_number.like(f"Q-{year}-%")
-    ).order_by(desc(Quote.quote_number)).first()
+    last_quote = (
+        db.query(Quote).filter(Quote.quote_number.like(f"Q-{year}-%")).order_by(desc(Quote.quote_number)).first()
+    )
 
     if last_quote:
         # Extract sequence number and increment
@@ -191,6 +200,7 @@ def generate_quote_number(db: Session) -> str:
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
 
 @router.get("/", response_model=List[QuoteListItem])
 async def list_quotes(
@@ -210,10 +220,10 @@ async def list_quotes(
     if search:
         search_term = f"%{search}%"
         query = query.filter(
-            (Quote.quote_number.ilike(search_term)) |
-            (Quote.product_name.ilike(search_term)) |
-            (Quote.customer_name.ilike(search_term)) |
-            (Quote.customer_email.ilike(search_term))
+            (Quote.quote_number.ilike(search_term))
+            | (Quote.product_name.ilike(search_term))
+            | (Quote.customer_name.ilike(search_term))
+            | (Quote.customer_email.ilike(search_term))
         )
 
     quotes = query.offset(skip).limit(limit).all()
@@ -234,15 +244,10 @@ async def get_quote_stats(
     accepted = db.query(Quote).filter(Quote.status == "accepted").count()
     rejected = db.query(Quote).filter(Quote.status == "rejected").count()
     converted = db.query(Quote).filter(Quote.status == "converted").count()
-    expired = db.query(Quote).filter(
-        Quote.status.in_(["pending", "approved"]),
-        Quote.expires_at < now
-    ).count()
+    expired = db.query(Quote).filter(Quote.status.in_(["pending", "approved"]), Quote.expires_at < now).count()
 
     total_value = db.query(func.sum(Quote.total_price)).scalar() or Decimal("0")
-    pending_value = db.query(func.sum(Quote.total_price)).filter(
-        Quote.status == "pending"
-    ).scalar() or Decimal("0")
+    pending_value = db.query(func.sum(Quote.total_price)).filter(Quote.status == "pending").scalar() or Decimal("0")
 
     return QuoteStatsResponse(
         total=total,
@@ -266,10 +271,7 @@ async def get_quote(
     """Get quote details"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
     return quote
 
 
@@ -310,19 +312,16 @@ async def create_quote(
 
     # Validate customer_id if provided
     if request.customer_id:
-        customer = db.query(User).filter(
-            User.id == request.customer_id,
-            User.account_type == "customer"
-        ).first()
+        customer = db.query(User).filter(User.id == request.customer_id, User.account_type == "customer").first()
         if not customer:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid customer_id - customer not found"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid customer_id - customer not found"
             )
 
     # Validate material exists if both material_type and color provided
     if request.material_type and request.color:
         from app.services.material_service import get_material_product
+
         material_product = get_material_product(db, request.material_type, request.color)
         if not material_product:
             raise HTTPException(
@@ -330,7 +329,7 @@ async def create_quote(
                 detail=(
                     f"Material not found: {request.material_type} in {request.color}. "
                     f"Check available materials at /api/v1/materials/combinations"
-                )
+                ),
             )
 
     quote = Quote(
@@ -376,29 +375,19 @@ async def update_quote(
     """Update quote details"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     # Don't allow editing converted quotes
     if quote.status == "converted":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot edit a converted quote"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot edit a converted quote")
 
     # Validate customer_id if provided
     if request.customer_id is not None:
         if request.customer_id:  # Not zero/null
-            customer = db.query(User).filter(
-                User.id == request.customer_id,
-                User.account_type == "customer"
-            ).first()
+            customer = db.query(User).filter(User.id == request.customer_id, User.account_type == "customer").first()
             if not customer:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid customer_id - customer not found"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid customer_id - customer not found"
                 )
 
     # Update fields (exclude apply_tax as it's not a model field)
@@ -459,24 +448,17 @@ async def update_quote_status(
     """Update quote status (approve, reject, cancel, accept)"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     allowed_statuses = ["pending", "approved", "rejected", "accepted", "cancelled"]
     if request.status not in allowed_statuses:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid status. Allowed: {', '.join(allowed_statuses)}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid status. Allowed: {', '.join(allowed_statuses)}"
         )
 
     # Validate status transitions
     if quote.status == "converted":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot change status of a converted quote"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change status of a converted quote")
 
     old_status = quote.status
     quote.status = request.status
@@ -496,7 +478,9 @@ async def update_quote_status(
     db.commit()
     db.refresh(quote)
 
-    logger.info(f"Quote {quote.quote_number} status changed from {old_status} to {request.status} by {current_user.email}")
+    logger.info(
+        f"Quote {quote.quote_number} status changed from {old_status} to {request.status} by {current_user.email}"
+    )
     return quote
 
 
@@ -509,40 +493,36 @@ async def convert_quote_to_order(
     """Convert an accepted/approved quote to a sales order"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     # Check quote can be converted
     if quote.status not in ["approved", "accepted"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Quote must be approved or accepted to convert. Current status: {quote.status}"
+            detail=f"Quote must be approved or accepted to convert. Current status: {quote.status}",
         )
 
     if quote.sales_order_id:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Quote already converted to order {quote.sales_order_id}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Quote already converted to order {quote.sales_order_id}"
         )
 
     # Check if expired
     if quote.expires_at < datetime.utcnow():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quote has expired"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quote has expired")
 
     # Generate order number - with collision check
     year = datetime.utcnow().year
     max_attempts = 100  # Prevent infinite loop
-    
+
     # Find the highest existing sequence number for this year
     # Use CAST to sort numerically, not alphabetically
-    last_order = db.query(SalesOrder).filter(
-        SalesOrder.order_number.like(f"SO-{year}-%")
-    ).order_by(desc(SalesOrder.order_number)).first()
+    last_order = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.order_number.like(f"SO-{year}-%"))
+        .order_by(desc(SalesOrder.order_number))
+        .first()
+    )
 
     if last_order:
         try:
@@ -551,29 +531,27 @@ async def convert_quote_to_order(
             next_seq = 1
     else:
         next_seq = 1
-    
+
     # Find next available order number
     order_number = None
     for attempt in range(max_attempts):
         candidate = f"SO-{year}-{next_seq:04d}"
-        
+
         # Check if this order number already exists
-        existing = db.query(SalesOrder).filter(
-            SalesOrder.order_number == candidate
-        ).first()
-        
+        existing = db.query(SalesOrder).filter(SalesOrder.order_number == candidate).first()
+
         if not existing:
             order_number = candidate
             break  # Found a unique order number
-        
+
         # Collision - increment and try again (don't re-query for max)
         logger.warning(f"Order number collision: {candidate} already exists, trying next")
         next_seq += 1
-    
+
     if not order_number:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Unable to generate unique order number after multiple attempts"
+            detail="Unable to generate unique order number after multiple attempts",
         )
 
     # Create sales order
@@ -670,16 +648,10 @@ async def delete_quote(
     """Delete a quote (only if not converted)"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     if quote.status == "converted":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete a converted quote"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot delete a converted quote")
 
     db.delete(quote)
     db.commit()
@@ -691,6 +663,7 @@ async def delete_quote(
 # QUOTE IMAGE ENDPOINTS
 # ============================================================================
 
+
 @router.post("/{quote_id}/image")
 async def upload_quote_image(
     quote_id: int,
@@ -701,27 +674,20 @@ async def upload_quote_image(
     """Upload an image for a quote (product photo/render)"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     # Validate file type
     allowed_types = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]
     if file.content_type not in allowed_types:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type. Allowed: PNG, JPEG, GIF, WebP"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file type. Allowed: PNG, JPEG, GIF, WebP"
         )
 
     # Limit file size (5MB for product images)
     max_size = 5 * 1024 * 1024
     content = await file.read()
     if len(content) > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size: 5MB"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large. Maximum size: 5MB")
 
     quote.image_data = content
     quote.image_filename = file.filename
@@ -743,23 +709,15 @@ async def get_quote_image(
     """Get the image for a quote"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     if not quote.image_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No image uploaded for this quote"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No image uploaded for this quote")
 
     return Response(
         content=quote.image_data,
         media_type=quote.image_mime_type or "image/png",
-        headers={
-            "Content-Disposition": f'inline; filename="{quote.image_filename or "quote_image.png"}"'
-        }
+        headers={"Content-Disposition": f'inline; filename="{quote.image_filename or "quote_image.png"}"'},
     )
 
 
@@ -772,10 +730,7 @@ async def delete_quote_image(
     """Delete the image for a quote"""
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     quote.image_data = None
     quote.image_filename = None
@@ -791,6 +746,7 @@ async def delete_quote_image(
 # ============================================================================
 # PDF GENERATION
 # ============================================================================
+
 
 @router.get("/{quote_id}/pdf")
 async def generate_quote_pdf(
@@ -808,24 +764,21 @@ async def generate_quote_pdf(
 
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Quote {quote_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Quote {quote_id} not found")
 
     # Get company settings
     company_settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
 
     # Create PDF buffer
     pdf_buffer = io.BytesIO()
-    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    doc = SimpleDocTemplate(pdf_buffer, pagesize=letter, topMargin=0.5 * inch, bottomMargin=0.5 * inch)
 
     # Styles
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('Title', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#2563eb'))
-    heading_style = ParagraphStyle('Heading', parent=styles['Heading2'], fontSize=12, textColor=colors.gray)
-    normal_style = styles['Normal']
-    small_style = ParagraphStyle('Small', parent=normal_style, fontSize=9)
+    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=24, textColor=colors.HexColor("#2563eb"))
+    heading_style = ParagraphStyle("Heading", parent=styles["Heading2"], fontSize=12, textColor=colors.gray)
+    normal_style = styles["Normal"]
+    small_style = ParagraphStyle("Small", parent=normal_style, fontSize=9)
 
     # Build content
     content = []
@@ -834,8 +787,8 @@ async def generate_quote_pdf(
     if company_settings and company_settings.logo_data:
         try:
             logo_buffer = io.BytesIO(company_settings.logo_data)
-            logo_img = Image(logo_buffer, width=1.5*inch, height=1.5*inch)
-            logo_img.hAlign = 'LEFT'
+            logo_img = Image(logo_buffer, width=1.5 * inch, height=1.5 * inch)
+            logo_img.hAlign = "LEFT"
 
             # Company info for header
             company_info = []
@@ -844,7 +797,9 @@ async def generate_quote_pdf(
             if company_settings.company_address_line1:
                 company_info.append(company_settings.company_address_line1)
             if company_settings.company_city or company_settings.company_state:
-                city_state = f"{company_settings.company_city or ''}, {company_settings.company_state or ''} {company_settings.company_zip or ''}".strip(", ")
+                city_state = f"{company_settings.company_city or ''}, {company_settings.company_state or ''} {company_settings.company_zip or ''}".strip(
+                    ", "
+                )
                 company_info.append(city_state)
             if company_settings.company_phone:
                 company_info.append(company_settings.company_phone)
@@ -853,19 +808,23 @@ async def generate_quote_pdf(
 
             # Create header table with logo and company info
             header_data = [[logo_img, Paragraph("<br/>".join(company_info), normal_style)]]
-            header_table = Table(header_data, colWidths=[2*inch, 4.5*inch])
-            header_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-            ]))
+            header_table = Table(header_data, colWidths=[2 * inch, 4.5 * inch])
+            header_table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]
+                )
+            )
             content.append(header_table)
-            content.append(Spacer(1, 0.3*inch))
+            content.append(Spacer(1, 0.3 * inch))
         except Exception:
             # If logo fails, just continue without it
             pass
     elif company_settings and company_settings.company_name:
         # No logo but have company name
         content.append(Paragraph(f"<b>{company_settings.company_name}</b>", title_style))
-        content.append(Spacer(1, 0.2*inch))
+        content.append(Spacer(1, 0.2 * inch))
 
     # Quote title, customer info, and optional image in a compact layout
     # Build left column content (quote info + customer)
@@ -873,7 +832,7 @@ async def generate_quote_pdf(
     left_content.append(Paragraph("QUOTE", title_style))
     left_content.append(Paragraph(f"<b>{quote.quote_number}</b>", normal_style))
     left_content.append(Paragraph(f"Date: {quote.created_at.strftime('%B %d, %Y')}", normal_style))
-    left_content.append(Spacer(1, 0.15*inch))
+    left_content.append(Spacer(1, 0.15 * inch))
     left_content.append(Paragraph("CUSTOMER", heading_style))
     left_content.append(Paragraph(f"<b>{quote.customer_name or 'N/A'}</b>", normal_style))
     if quote.customer_email:
@@ -884,18 +843,19 @@ async def generate_quote_pdf(
         try:
             img_buffer = io.BytesIO(quote.image_data)
             # Scale image to fit nicely - max 2 inches
-            quote_img = Image(img_buffer, width=2*inch, height=2*inch)
-            quote_img.hAlign = 'RIGHT'
+            quote_img = Image(img_buffer, width=2 * inch, height=2 * inch)
+            quote_img.hAlign = "RIGHT"
 
             # Create a table with quote info on left, image on right
-            info_table = Table(
-                [[left_content, quote_img]],
-                colWidths=[4.5*inch, 2.2*inch]
+            info_table = Table([[left_content, quote_img]], colWidths=[4.5 * inch, 2.2 * inch])
+            info_table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                    ]
+                )
             )
-            info_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-            ]))
             content.append(info_table)
         except Exception:
             # If image fails, just use the left content
@@ -906,13 +866,13 @@ async def generate_quote_pdf(
         for item in left_content:
             content.append(item)
 
-    content.append(Spacer(1, 0.2*inch))
+    content.append(Spacer(1, 0.2 * inch))
 
     # Quote Details Table
     content.append(Paragraph("QUOTE DETAILS", heading_style))
-    content.append(Spacer(1, 0.1*inch))
+    content.append(Spacer(1, 0.1 * inch))
 
-    material_desc = quote.material_type or 'N/A'
+    material_desc = quote.material_type or "N/A"
     if quote.color:
         material_desc += f" - {quote.color}"
 
@@ -921,18 +881,18 @@ async def generate_quote_pdf(
 
     # Build table with proper tax breakdown
     table_data = [
-        ['Description', 'Material', 'Qty', 'Unit Price', 'Amount'],
+        ["Description", "Material", "Qty", "Unit Price", "Amount"],
         [
-            quote.product_name or 'Custom Item',
+            quote.product_name or "Custom Item",
             material_desc,
             str(quote.quantity),
             f"${float(quote.unit_price or 0):,.2f}",
-            f"${subtotal:,.2f}"
+            f"${subtotal:,.2f}",
         ],
     ]
 
     # Add subtotal row
-    table_data.append(['', '', '', 'Subtotal:', f"${subtotal:,.2f}"])
+    table_data.append(["", "", "", "Subtotal:", f"${subtotal:,.2f}"])
 
     # Add tax row if applicable
     if quote.tax_rate and quote.tax_amount:
@@ -940,57 +900,60 @@ async def generate_quote_pdf(
         tax_name = "Sales Tax"
         if company_settings and company_settings.tax_name:
             tax_name = company_settings.tax_name
-        table_data.append(['', '', '', f'{tax_name} ({tax_percent:.2f}%):', f"${float(quote.tax_amount):,.2f}"])
+        table_data.append(["", "", "", f"{tax_name} ({tax_percent:.2f}%):", f"${float(quote.tax_amount):,.2f}"])
 
     # Add shipping row if applicable
     if quote.shipping_cost and float(quote.shipping_cost) > 0:
-        table_data.append(['', '', '', 'Shipping:', f"${float(quote.shipping_cost):,.2f}"])
+        table_data.append(["", "", "", "Shipping:", f"${float(quote.shipping_cost):,.2f}"])
 
     # Add total row
-    table_data.append(['', '', '', 'TOTAL:', f"${float(quote.total_price or 0):,.2f}"])
+    table_data.append(["", "", "", "TOTAL:", f"${float(quote.total_price or 0):,.2f}"])
 
-    table = Table(table_data, colWidths=[2.5*inch, 1.5*inch, 0.5*inch, 1.2*inch, 0.8*inch])
-    table.setStyle(TableStyle([
-        # Header row
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#f3f4f6')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 10),
-        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-        # Data rows
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 8),
-        # Total row (last row) - bold
-        ('FONTNAME', (3, -1), (-1, -1), 'Helvetica-Bold'),
-        ('LINEABOVE', (3, -1), (-1, -1), 1, colors.black),
-        # Grid
-        ('LINEBELOW', (0, 0), (-1, 0), 1, colors.HexColor('#e5e7eb')),
-        ('LINEBELOW', (0, 1), (-1, 1), 0.5, colors.HexColor('#e5e7eb')),
-        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
-    ]))
+    table = Table(table_data, colWidths=[2.5 * inch, 1.5 * inch, 0.5 * inch, 1.2 * inch, 0.8 * inch])
+    table.setStyle(
+        TableStyle(
+            [
+                # Header row
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f3f4f6")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, 0), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                # Data rows
+                ("FONTSIZE", (0, 1), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 1), (-1, -1), 8),
+                # Total row (last row) - bold
+                ("FONTNAME", (3, -1), (-1, -1), "Helvetica-Bold"),
+                ("LINEABOVE", (3, -1), (-1, -1), 1, colors.black),
+                # Grid
+                ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#e5e7eb")),
+                ("LINEBELOW", (0, 1), (-1, 1), 0.5, colors.HexColor("#e5e7eb")),
+                ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ]
+        )
+    )
     content.append(table)
-    content.append(Spacer(1, 0.3*inch))
+    content.append(Spacer(1, 0.3 * inch))
 
     # Notes
     if quote.customer_notes:
         content.append(Paragraph("NOTES", heading_style))
         content.append(Paragraph(quote.customer_notes, normal_style))
-        content.append(Spacer(1, 0.2*inch))
+        content.append(Spacer(1, 0.2 * inch))
 
     # Validity
-    content.append(Spacer(1, 0.2*inch))
-    validity_style = ParagraphStyle('Validity', parent=normal_style, backColor=colors.HexColor('#fef3c7'), borderPadding=10)
-    content.append(Paragraph(
-        f"<b>Quote Valid Until:</b> {quote.expires_at.strftime('%B %d, %Y')}",
-        validity_style
-    ))
-    content.append(Spacer(1, 0.3*inch))
+    content.append(Spacer(1, 0.2 * inch))
+    validity_style = ParagraphStyle(
+        "Validity", parent=normal_style, backColor=colors.HexColor("#fef3c7"), borderPadding=10
+    )
+    content.append(Paragraph(f"<b>Quote Valid Until:</b> {quote.expires_at.strftime('%B %d, %Y')}", validity_style))
+    content.append(Spacer(1, 0.3 * inch))
 
     # Terms (from company settings)
     if company_settings and company_settings.quote_terms:
         content.append(Paragraph("TERMS & CONDITIONS", heading_style))
         content.append(Paragraph(company_settings.quote_terms, small_style))
-        content.append(Spacer(1, 0.2*inch))
+        content.append(Spacer(1, 0.2 * inch))
 
     # Footer
     if company_settings and company_settings.quote_footer:
@@ -1006,7 +969,5 @@ async def generate_quote_pdf(
     return StreamingResponse(
         pdf_buffer,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="{quote.quote_number}.pdf"'
-        }
+        headers={"Content-Disposition": f'attachment; filename="{quote.quote_number}.pdf"'},
     )

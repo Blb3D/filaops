@@ -6,6 +6,7 @@ Uses centralized configuration from app.core.uom_config.
 
 IMPORTANT: All UOM constants come from uom_config.py - do not hardcode here.
 """
+
 from typing import Optional, Tuple
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -23,10 +24,26 @@ from app.core.uom_config import (
 
 # Category codes that indicate filament (continuous materials)
 FILAMENT_CATEGORY_CODES = {
-    'FILAMENT', 'PLA', 'PETG', 'ABS', 'TPU', 'ASA', 'NYLON',
-    'PLA_BASIC', 'PLA_MATTE', 'PLA_SILK', 'PLA_SILK_MULTI',
-    'PETG_BASIC', 'PETG_HF', 'PETG_CF', 'PETG_TRANSLUCENT',
-    'ABS_GF', 'TPU_68D', 'TPU_95A', 'MATERIAL', 'MATERIALS',
+    "FILAMENT",
+    "PLA",
+    "PETG",
+    "ABS",
+    "TPU",
+    "ASA",
+    "NYLON",
+    "PLA_BASIC",
+    "PLA_MATTE",
+    "PLA_SILK",
+    "PLA_SILK_MULTI",
+    "PETG_BASIC",
+    "PETG_HF",
+    "PETG_CF",
+    "PETG_TRANSLUCENT",
+    "ABS_GF",
+    "TPU_68D",
+    "TPU_95A",
+    "MATERIAL",
+    "MATERIALS",
 }
 
 
@@ -63,7 +80,7 @@ def is_hardware_sku(sku: Optional[str]) -> bool:
     """Check if SKU indicates a hardware product."""
     if not sku:
         return False
-    return sku.upper().startswith(('HW-',))
+    return sku.upper().startswith(("HW-",))
 
 
 def get_recommended_uoms(
@@ -185,7 +202,7 @@ def auto_configure_product_uoms(
             changed = True
 
     # Update unit
-    if force or not product.unit or product.unit == 'EA':
+    if force or not product.unit or product.unit == "EA":
         if product.unit != unit:
             product.unit = unit
             changed = True
@@ -215,14 +232,14 @@ def get_cost_display_info(product: Product) -> dict:
         - storage_unit: What inventory is tracked in
         - needs_conversion: Whether cost conversion is needed
     """
-    purchase_uom = (product.purchase_uom or product.unit or 'EA').upper()
-    storage_unit = (product.unit or 'EA').upper()
+    purchase_uom = (product.purchase_uom or product.unit or "EA").upper()
+    storage_unit = (product.unit or "EA").upper()
     cost = product.standard_cost or product.average_cost or product.last_cost
 
     return {
-        'cost': float(cost) if cost else None,
-        'cost_unit': purchase_uom,
-        'storage_unit': storage_unit,
-        'needs_conversion': purchase_uom != storage_unit,
-        'cost_display': f"${float(cost):.2f}/{purchase_uom}" if cost else None,
+        "cost": float(cost) if cost else None,
+        "cost_unit": purchase_uom,
+        "storage_unit": storage_unit,
+        "needs_conversion": purchase_uom != storage_unit,
+        "cost_display": f"${float(cost):.2f}/{purchase_uom}" if cost else None,
     }

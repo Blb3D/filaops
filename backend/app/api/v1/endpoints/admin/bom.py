@@ -3,6 +3,7 @@ BOM Management Endpoints (Admin Only)
 
 Handles Bill of Materials viewing, editing, and approval
 """
+
 from typing import Optional, List
 from decimal import Decimal
 
@@ -40,6 +41,7 @@ logger = get_logger(__name__)
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 def get_effective_cost(product: Product) -> Decimal:
     """Get the effective cost for a product using fallback priority.
 
@@ -59,11 +61,15 @@ def get_component_inventory(component_id: int, db: Session) -> dict:
     """Get total inventory for a component across all locations"""
     from sqlalchemy import func
 
-    result = db.query(
-        func.sum(Inventory.on_hand_quantity).label('on_hand'),
-        func.sum(Inventory.allocated_quantity).label('allocated'),
-        func.sum(Inventory.available_quantity).label('available')
-    ).filter(Inventory.product_id == component_id).first()
+    result = (
+        db.query(
+            func.sum(Inventory.on_hand_quantity).label("on_hand"),
+            func.sum(Inventory.allocated_quantity).label("allocated"),
+            func.sum(Inventory.available_quantity).label("available"),
+        )
+        .filter(Inventory.product_id == component_id)
+        .first()
+    )
 
     return {
         "on_hand": float(result.on_hand or 0) if result else 0,
@@ -73,19 +79,16 @@ def get_component_inventory(component_id: int, db: Session) -> dict:
 
 
 def calculate_material_line_cost(
-    effective_qty: Decimal,
-    line_unit: Optional[str],
-    cost_per_kg: Decimal,
-    db: Optional[Session] = None
+    effective_qty: Decimal, line_unit: Optional[str], cost_per_kg: Decimal, db: Optional[Session] = None
 ) -> Decimal:
     """Calculate material line cost by converting quantity to grams, then computing (qty_g/1000) × cost_per_kg.
-    
+
     Args:
         effective_qty: The effective quantity (including scrap factor)
         line_unit: The unit of the quantity (None, "G", "KG", or other)
         cost_per_kg: The cost per kilogram as Decimal
         db: Optional database session for UOM conversion
-        
+
     Returns:
         The line cost as Decimal: (qty_g / 1000) × cost_per_kg
     """
@@ -112,7 +115,7 @@ def calculate_material_line_cost(
                 f"effective_qty={effective_qty}. Assuming grams as fallback."
             )
             qty_g = effective_qty
-    
+
     # Compute and return (qty_g / 1000) × cost_per_kg as Decimal
     return (qty_g / Decimal("1000")) * cost_per_kg
 
@@ -130,7 +133,7 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
         Dict containing the standardized line response
     """
     from app.services.inventory_helpers import is_material
-    
+
     component_unit = component.unit if component else None
     is_mat = is_material(component) if component else False
 
@@ -148,12 +151,7 @@ def build_line_response(line: BOMLine, component: Optional[Product], comp_cost: 
         # Don't convert - keep as $/KG
         display_cost = comp_cost
     elif (
-        db is not None
-        and line.unit
-        and component_unit
-        and line.unit != component_unit
-        and comp_cost
-        and comp_cost > 0
+        db is not None and line.unit and component_unit and line.unit != component_unit and comp_cost and comp_cost > 0
     ):
         # Non-materials: Convert cost to BOM line's unit if different from component's unit
         # Cost is per component_unit, convert to per line.unit
@@ -211,43 +209,40 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
 
         # Get inventory status
         inventory = get_component_inventory(line.component_id, db)
-        
+
         # Convert effective_qty to inventory unit for comparison if needed
         qty_needed_in_inventory_unit = float(effective_qty)
         component_unit = component.unit if component else None
-        if (
-            line.unit
-            and component_unit
-            and line.unit != component_unit
-        ):
+        if line.unit and component_unit and line.unit != component_unit:
             # Convert effective_qty from line.unit to component.unit (inventory unit)
             # E.g., 25 G -> 0.025 KG
             # Use _safe variant to handle empty UOM table with inline fallbacks
             converted_qty, success = convert_quantity_safe(db, effective_qty, line.unit, component_unit)
             if success:
                 qty_needed_in_inventory_unit = float(converted_qty)
-        
+
         is_available = inventory["available"] >= qty_needed_in_inventory_unit
         shortage = max(0, qty_needed_in_inventory_unit - inventory["available"])
 
         # Check if component has its own BOM (is a sub-assembly)
-        component_has_bom = db.query(BOM).filter(
-            BOM.product_id == line.component_id,
-            BOM.active.is_(True)
-        ).first() is not None
+        component_has_bom = (
+            db.query(BOM).filter(BOM.product_id == line.component_id, BOM.active.is_(True)).first() is not None
+        )
 
         # Build base line response using helper
         line_dict = build_line_response(line, component, component_cost, db)
-        
+
         # Add inventory and sub-assembly info specific to this endpoint
-        line_dict.update({
-            "inventory_on_hand": inventory["on_hand"],
-            "inventory_available": inventory["available"],
-            "is_available": is_available,
-            "shortage": shortage,
-            "has_bom": component_has_bom,
-        })
-        
+        line_dict.update(
+            {
+                "inventory_on_hand": inventory["on_hand"],
+                "inventory_available": inventory["available"],
+                "is_available": is_available,
+                "shortage": shortage,
+                "has_bom": component_has_bom,
+            }
+        )
+
         lines.append(line_dict)
 
     product = bom.product
@@ -273,7 +268,7 @@ def build_bom_response(bom: BOM, db: Session) -> dict:
 def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
     """Recalculate total BOM cost from component costs, with UOM conversion"""
     from app.services.inventory_helpers import is_material
-    
+
     total = Decimal("0")
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -286,7 +281,7 @@ def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
                 effective_qty = qty * (1 + scrap / 100)
 
                 is_mat = is_material(component)
-                
+
                 if is_mat:
                     # Materials: Cost is per-KG, quantity might be in G
                     # Use helper function to calculate: (qty_g / 1000) × cost_per_kg
@@ -315,6 +310,7 @@ def recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
 # LIST & GET ENDPOINTS
 # ============================================================================
 
+
 @router.get("/", response_model=List[BOMListResponse])
 async def list_boms(
     current_admin: User = Depends(get_current_staff_user),
@@ -340,10 +336,10 @@ async def list_boms(
 
     if search:
         query = query.join(Product).filter(
-            (Product.sku.ilike(f"%{search}%")) |
-            (Product.name.ilike(f"%{search}%")) |
-            (BOM.code.ilike(f"%{search}%")) |
-            (BOM.name.ilike(f"%{search}%"))
+            (Product.sku.ilike(f"%{search}%"))
+            | (Product.name.ilike(f"%{search}%"))
+            | (BOM.code.ilike(f"%{search}%"))
+            | (BOM.name.ilike(f"%{search}%"))
         )
 
     query = query.order_by(desc(BOM.created_at))
@@ -355,31 +351,30 @@ async def list_boms(
         material_cost = bom.total_cost or Decimal("0")
 
         # Get routing process cost for this product
-        routing = db.query(Routing).filter(
-            Routing.product_id == bom.product_id,
-            Routing.is_active.is_(True)
-        ).first()
+        routing = db.query(Routing).filter(Routing.product_id == bom.product_id, Routing.is_active.is_(True)).first()
         process_cost = routing.total_cost if routing and routing.total_cost else Decimal("0")
 
         # Combined total
         combined_total = material_cost + process_cost
 
-        result.append({
-            "id": bom.id,
-            "product_id": bom.product_id,
-            "product_sku": product.sku if product else None,
-            "product_name": product.name if product else None,
-            "code": bom.code,
-            "name": bom.name,
-            "version": bom.version,
-            "revision": bom.revision,
-            "active": bom.active,
-            "material_cost": material_cost,
-            "process_cost": process_cost,
-            "total_cost": combined_total,
-            "line_count": len(bom.lines),
-            "created_at": bom.created_at,
-        })
+        result.append(
+            {
+                "id": bom.id,
+                "product_id": bom.product_id,
+                "product_sku": product.sku if product else None,
+                "product_name": product.name if product else None,
+                "code": bom.code,
+                "name": bom.name,
+                "version": bom.version,
+                "revision": bom.revision,
+                "active": bom.active,
+                "material_cost": material_cost,
+                "process_cost": process_cost,
+                "total_cost": combined_total,
+                "line_count": len(bom.lines),
+                "created_at": bom.created_at,
+            }
+        )
 
     return result
 
@@ -395,18 +390,10 @@ async def get_bom(
 
     Admin only.
     """
-    bom = (
-        db.query(BOM)
-        .options(joinedload(BOM.product), joinedload(BOM.lines))
-        .filter(BOM.id == bom_id)
-        .first()
-    )
+    bom = db.query(BOM).options(joinedload(BOM.product), joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
 
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM not found")
 
     return build_bom_response(bom, db)
 
@@ -414,6 +401,7 @@ async def get_bom(
 # ============================================================================
 # CREATE & UPDATE ENDPOINTS
 # ============================================================================
+
 
 @router.post("/", response_model=BOMResponse, status_code=status.HTTP_201_CREATED)
 async def create_bom(
@@ -434,16 +422,18 @@ async def create_bom(
     # Verify product exists
     product = db.query(Product).filter(Product.id == bom_data.product_id).first()
     if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Product not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     # Check for existing active BOM (use created_at as BOM model doesn't have updated_at)
-    existing_bom = db.query(BOM).filter(
-        BOM.product_id == bom_data.product_id,
-        BOM.active == True  # noqa: E712
-    ).order_by(desc(BOM.created_at)).first()
+    existing_bom = (
+        db.query(BOM)
+        .filter(
+            BOM.product_id == bom_data.product_id,
+            BOM.active == True,  # noqa: E712
+        )
+        .order_by(desc(BOM.created_at))
+        .first()
+    )
 
     # If BOM exists and we're not forcing a new version, add lines to existing BOM
     if existing_bom and not force_new:
@@ -454,7 +444,7 @@ async def create_bom(
                 "product_id": product.id,
                 "product_sku": product.sku,
                 "admin_id": current_admin.id,
-            }
+            },
         )
 
         # Add new lines to the existing BOM
@@ -465,15 +455,15 @@ async def create_bom(
                 component = db.query(Product).filter(Product.id == line_data.component_id).first()
                 if not component:
                     raise HTTPException(
-                        status_code=status.HTTP_400_BAD_REQUEST,
-                        detail=f"Component {line_data.component_id} not found"
+                        status_code=status.HTTP_400_BAD_REQUEST, detail=f"Component {line_data.component_id} not found"
                     )
 
                 # Check if component already exists in BOM
-                existing_line = db.query(BOMLine).filter(
-                    BOMLine.bom_id == existing_bom.id,
-                    BOMLine.component_id == line_data.component_id
-                ).first()
+                existing_line = (
+                    db.query(BOMLine)
+                    .filter(BOMLine.bom_id == existing_bom.id, BOMLine.component_id == line_data.component_id)
+                    .first()
+                )
 
                 if existing_line:
                     # Update existing line quantity (add to it)
@@ -510,10 +500,14 @@ async def create_bom(
 
     # Deactivate existing active BOMs if we're creating a new version
     if force_new:
-        existing_boms = db.query(BOM).filter(
-            BOM.product_id == bom_data.product_id,
-            BOM.active == True  # noqa: E712
-        ).all()
+        existing_boms = (
+            db.query(BOM)
+            .filter(
+                BOM.product_id == bom_data.product_id,
+                BOM.active == True,  # noqa: E712
+            )
+            .all()
+        )
         for old_bom in existing_boms:
             old_bom.active = False
 
@@ -551,8 +545,7 @@ async def create_bom(
             component = db.query(Product).filter(Product.id == line_data.component_id).first()
             if not component:
                 raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Component {line_data.component_id} not found"
+                    status_code=status.HTTP_400_BAD_REQUEST, detail=f"Component {line_data.component_id} not found"
                 )
 
             line = BOMLine(
@@ -585,8 +578,8 @@ async def create_bom(
             "product_id": product.id,
             "product_sku": product.sku,
             "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+            "admin_email": current_admin.email,
+        },
     )
 
     return build_bom_response(bom, db)
@@ -606,10 +599,7 @@ async def update_bom(
     """
     bom = db.query(BOM).filter(BOM.id == bom_id).first()
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM not found")
 
     # Update provided fields
     update_data = bom_data.model_dump(exclude_unset=True)
@@ -620,12 +610,7 @@ async def update_bom(
     db.refresh(bom)
 
     logger.info(
-        "BOM updated",
-        extra={
-            "bom_id": bom_id,
-            "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+        "BOM updated", extra={"bom_id": bom_id, "admin_id": current_admin.id, "admin_email": current_admin.email}
     )
 
     return build_bom_response(bom, db)
@@ -644,28 +629,21 @@ async def delete_bom(
     """
     bom = db.query(BOM).filter(BOM.id == bom_id).first()
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM not found")
 
     # Soft delete
     bom.active = False
     db.commit()
 
     logger.info(
-        "BOM deactivated",
-        extra={
-            "bom_id": bom_id,
-            "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+        "BOM deactivated", extra={"bom_id": bom_id, "admin_id": current_admin.id, "admin_email": current_admin.email}
     )
 
 
 # ============================================================================
 # BOM LINE ENDPOINTS
 # ============================================================================
+
 
 @router.post("/{bom_id}/lines", response_model=BOMLineResponse, status_code=status.HTTP_201_CREATED)
 async def add_bom_line(
@@ -681,18 +659,12 @@ async def add_bom_line(
     """
     bom = db.query(BOM).filter(BOM.id == bom_id).first()
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM not found")
 
     # Verify component exists
     component = db.query(Product).filter(Product.id == line_data.component_id).first()
     if not component:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Component not found"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Component not found")
 
     # Get next sequence if not provided
     if line_data.sequence is None:
@@ -732,8 +704,8 @@ async def add_bom_line(
             "line_id": line.id,
             "component_id": line.component_id,
             "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+            "admin_email": current_admin.email,
+        },
     )
 
     return build_line_response(line, component, comp_cost, db)
@@ -752,25 +724,16 @@ async def update_bom_line(
 
     Admin only.
     """
-    line = db.query(BOMLine).filter(
-        BOMLine.id == line_id,
-        BOMLine.bom_id == bom_id
-    ).first()
+    line = db.query(BOMLine).filter(BOMLine.id == line_id, BOMLine.bom_id == bom_id).first()
 
     if not line:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM line not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM line not found")
 
     # If changing component, verify it exists
     if line_data.component_id is not None:
         component = db.query(Product).filter(Product.id == line_data.component_id).first()
         if not component:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Component not found"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Component not found")
 
     # Update provided fields
     update_data = line_data.model_dump(exclude_unset=True)
@@ -790,12 +753,7 @@ async def update_bom_line(
 
     logger.info(
         "BOM line updated",
-        extra={
-            "bom_id": bom_id,
-            "line_id": line_id,
-            "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+        extra={"bom_id": bom_id, "line_id": line_id, "admin_id": current_admin.id, "admin_email": current_admin.email},
     )
 
     return build_line_response(line, component, comp_cost, db)
@@ -813,16 +771,10 @@ async def delete_bom_line(
 
     Admin only.
     """
-    line = db.query(BOMLine).filter(
-        BOMLine.id == line_id,
-        BOMLine.bom_id == bom_id
-    ).first()
+    line = db.query(BOMLine).filter(BOMLine.id == line_id, BOMLine.bom_id == bom_id).first()
 
     if not line:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM line not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM line not found")
 
     db.delete(line)
 
@@ -835,18 +787,14 @@ async def delete_bom_line(
 
     logger.info(
         "BOM line deleted",
-        extra={
-            "bom_id": bom_id,
-            "line_id": line_id,
-            "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+        extra={"bom_id": bom_id, "line_id": line_id, "admin_id": current_admin.id, "admin_email": current_admin.email},
     )
 
 
 # ============================================================================
 # BULK & UTILITY ENDPOINTS
 # ============================================================================
+
 
 @router.post("/{bom_id}/recalculate", response_model=BOMRecalculateResponse)
 async def recalculate_bom(
@@ -859,29 +807,21 @@ async def recalculate_bom(
 
     Admin only. Useful after component prices change.
     """
-    bom = (
-        db.query(BOM)
-        .options(joinedload(BOM.lines))
-        .filter(BOM.id == bom_id)
-        .first()
-    )
+    bom = db.query(BOM).options(joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
 
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="BOM not found")
 
     previous_cost = bom.total_cost
 
     # Calculate line costs for response (with UOM conversion)
     from app.services.inventory_helpers import is_material
-    
+
     line_costs = []
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
         component_cost = get_effective_cost(component) if component else Decimal("0")
-        
+
         if component and component_cost and component_cost > 0:
             qty = line.quantity or Decimal("0")
             scrap = line.scrap_factor or Decimal("0")
@@ -917,13 +857,15 @@ async def recalculate_bom(
             line_cost = 0
             unit_cost = Decimal("0")
 
-        line_costs.append({
-            "line_id": line.id,
-            "component_sku": component.sku if component else None,
-            "quantity": float(line.quantity) if line.quantity else 0,
-            "unit_cost": float(unit_cost) if unit_cost else 0,
-            "line_cost": line_cost,
-        })
+        line_costs.append(
+            {
+                "line_id": line.id,
+                "component_sku": component.sku if component else None,
+                "quantity": float(line.quantity) if line.quantity else 0,
+                "unit_cost": float(unit_cost) if unit_cost else 0,
+                "line_cost": line_cost,
+            }
+        )
 
     # Update total - use rolled-up cost to include sub-assembly costs
     new_cost = calculate_rolled_up_cost(bom_id, db)
@@ -937,8 +879,8 @@ async def recalculate_bom(
             "previous_cost": str(previous_cost),
             "new_cost": str(new_cost),
             "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+            "admin_email": current_admin.email,
+        },
     )
 
     return {
@@ -962,26 +904,15 @@ async def copy_bom(
     Admin only. Useful for creating similar products.
     """
     # Get source BOM
-    source_bom = (
-        db.query(BOM)
-        .options(joinedload(BOM.lines))
-        .filter(BOM.id == bom_id)
-        .first()
-    )
+    source_bom = db.query(BOM).options(joinedload(BOM.lines)).filter(BOM.id == bom_id).first()
 
     if not source_bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Source BOM not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source BOM not found")
 
     # Verify target product exists
     target_product = db.query(Product).filter(Product.id == copy_data.target_product_id).first()
     if not target_product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Target product not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target product not found")
 
     # Create new BOM
     new_bom = BOM(
@@ -1032,8 +963,8 @@ async def copy_bom(
             "target_product_sku": target_product.sku,
             "new_bom_id": new_bom.id,
             "admin_id": current_admin.id,
-            "admin_email": current_admin.email
-        }
+            "admin_email": current_admin.email,
+        },
     )
 
     return build_bom_response(new_bom, db)
@@ -1059,10 +990,7 @@ async def get_bom_by_product(
     )
 
     if not bom:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No active BOM found for this product"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No active BOM found for this product")
 
     return build_bom_response(bom, db)
 
@@ -1071,13 +999,14 @@ async def get_bom_by_product(
 # SUB-ASSEMBLY / MULTI-LEVEL BOM ENDPOINTS
 # ============================================================================
 
+
 def explode_bom_recursive(
     bom_id: int,
     db: Session,
     parent_qty: Decimal = Decimal("1"),
     level: int = 0,
     visited: set = None,
-    max_depth: int = 10
+    max_depth: int = 10,
 ) -> list:
     """
     Recursively explode a BOM into all leaf components.
@@ -1098,20 +1027,18 @@ def explode_bom_recursive(
 
     # Circular reference check
     if bom_id in visited:
-        return [{
-            "error": "circular_reference",
-            "bom_id": bom_id,
-            "level": level,
-            "message": f"Circular reference detected at BOM {bom_id}"
-        }]
+        return [
+            {
+                "error": "circular_reference",
+                "bom_id": bom_id,
+                "level": level,
+                "message": f"Circular reference detected at BOM {bom_id}",
+            }
+        ]
 
     # Depth limit check
     if level > max_depth:
-        return [{
-            "error": "max_depth_exceeded",
-            "level": level,
-            "message": f"Maximum depth of {max_depth} exceeded"
-        }]
+        return [{"error": "max_depth_exceeded", "level": level, "message": f"Maximum depth of {max_depth} exceeded"}]
 
     visited.add(bom_id)
 
@@ -1173,7 +1100,7 @@ def explode_bom_recursive(
                 parent_qty=effective_qty,
                 level=level + 1,
                 visited=visited.copy(),  # Copy to allow parallel branches
-                max_depth=max_depth
+                max_depth=max_depth,
             )
             exploded.extend(sub_exploded)
 
@@ -1298,21 +1225,23 @@ async def explode_bom(
     # Transform component data for frontend compatibility
     lines = []
     for comp in exploded:
-        lines.append({
-            "level": comp.get("level", 0),
-            "component_id": comp.get("component_id"),
-            "component_sku": comp.get("component_sku"),
-            "component_name": comp.get("component_name"),
-            "component_unit": comp.get("component_unit"),
-            "quantity_per_unit": comp.get("base_quantity", 0),
-            "extended_quantity": comp.get("effective_quantity", 0),
-            "unit_cost": comp.get("component_cost", 0),
-            "line_cost": comp.get("line_cost", 0),
-            "is_sub_assembly": comp.get("is_sub_assembly", False),
-            "sub_bom_id": comp.get("sub_bom_id"),
-            "inventory_available": comp.get("inventory_available", 0),
-            "parent_bom_id": comp.get("parent_bom_id"),
-        })
+        lines.append(
+            {
+                "level": comp.get("level", 0),
+                "component_id": comp.get("component_id"),
+                "component_sku": comp.get("component_sku"),
+                "component_name": comp.get("component_name"),
+                "component_unit": comp.get("component_unit"),
+                "quantity_per_unit": comp.get("base_quantity", 0),
+                "extended_quantity": comp.get("effective_quantity", 0),
+                "unit_cost": comp.get("component_cost", 0),
+                "line_cost": comp.get("line_cost", 0),
+                "is_sub_assembly": comp.get("is_sub_assembly", False),
+                "sub_bom_id": comp.get("sub_bom_id"),
+                "inventory_available": comp.get("inventory_available", 0),
+                "parent_bom_id": comp.get("parent_bom_id"),
+            }
+        )
 
     return {
         "bom_id": bom_id,
@@ -1401,18 +1330,20 @@ async def get_cost_rollup(
 
         total += line_cost
 
-        breakdown.append({
-            "component_id": component.id,
-            "component_sku": component.sku,
-            "component_name": component.name,
-            "quantity": float(qty),
-            "effective_quantity": float(effective_qty),
-            "unit_cost": float(unit_cost),
-            "line_cost": float(line_cost),
-            "cost_source": cost_source,
-            "is_sub_assembly": sub_bom is not None,
-            "sub_bom_id": sub_bom.id if sub_bom else None,
-        })
+        breakdown.append(
+            {
+                "component_id": component.id,
+                "component_sku": component.sku,
+                "component_name": component.name,
+                "quantity": float(qty),
+                "effective_quantity": float(effective_qty),
+                "unit_cost": float(unit_cost),
+                "line_cost": float(line_cost),
+                "cost_source": cost_source,
+                "is_sub_assembly": sub_bom is not None,
+                "sub_bom_id": sub_bom.id if sub_bom else None,
+            }
+        )
 
     # Calculate sub-assembly totals
     sub_assembly_items = [b for b in breakdown if b["is_sub_assembly"]]
@@ -1514,63 +1445,64 @@ async def validate_bom(
 
     # Check for empty BOM
     if not bom.lines:
-        issues.append({
-            "severity": "warning",
-            "code": "empty_bom",
-            "message": "BOM has no components"
-        })
+        issues.append({"severity": "warning", "code": "empty_bom", "message": "BOM has no components"})
 
     # Check each line
     for line in bom.lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
 
         if not component:
-            issues.append({
-                "severity": "error",
-                "code": "missing_component",
-                "message": f"Component ID {line.component_id} not found",
-                "line_id": line.id
-            })
+            issues.append(
+                {
+                    "severity": "error",
+                    "code": "missing_component",
+                    "message": f"Component ID {line.component_id} not found",
+                    "line_id": line.id,
+                }
+            )
             continue
 
         # Missing cost
         component_cost = get_effective_cost(component)
         if not component_cost or component_cost <= 0:
             # Check if it's a sub-assembly
-            sub_bom = db.query(BOM).filter(
-                BOM.product_id == component.id,
-                BOM.active.is_(True)
-            ).first()
+            sub_bom = db.query(BOM).filter(BOM.product_id == component.id, BOM.active.is_(True)).first()
 
             if not sub_bom:
-                issues.append({
-                    "severity": "warning",
-                    "code": "missing_cost",
-                    "message": f"Component {component.sku} has no cost defined",
-                    "component_id": component.id,
-                    "line_id": line.id
-                })
+                issues.append(
+                    {
+                        "severity": "warning",
+                        "code": "missing_cost",
+                        "message": f"Component {component.sku} has no cost defined",
+                        "component_id": component.id,
+                        "line_id": line.id,
+                    }
+                )
 
         # Zero quantity
         if not line.quantity or line.quantity <= 0:
-            issues.append({
-                "severity": "error",
-                "code": "invalid_quantity",
-                "message": f"Line for {component.sku} has invalid quantity",
-                "line_id": line.id
-            })
+            issues.append(
+                {
+                    "severity": "error",
+                    "code": "invalid_quantity",
+                    "message": f"Line for {component.sku} has invalid quantity",
+                    "line_id": line.id,
+                }
+            )
 
     # Check for circular references
     exploded = explode_bom_recursive(bom_id, db, max_depth=15)
     circular_errors = [e for e in exploded if isinstance(e, dict) and e.get("error") == "circular_reference"]
 
     for err in circular_errors:
-        issues.append({
-            "severity": "error",
-            "code": "circular_reference",
-            "message": err.get("message", "Circular reference detected"),
-            "bom_id": err.get("bom_id")
-        })
+        issues.append(
+            {
+                "severity": "error",
+                "code": "circular_reference",
+                "message": err.get("message", "Circular reference detected"),
+                "bom_id": err.get("bom_id"),
+            }
+        )
 
     return {
         "bom_id": bom_id,

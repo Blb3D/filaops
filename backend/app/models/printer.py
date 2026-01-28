@@ -1,6 +1,7 @@
 """
 Printer model - Brand-agnostic printer management
 """
+
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON
 from sqlalchemy.orm import relationship
@@ -19,6 +20,7 @@ class Printer(Base):
     - Prusa Connect
     - Generic/Manual entry
     """
+
     __tablename__ = "printers"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -49,7 +51,7 @@ class Printer(Base):
     capabilities = Column(JSON, nullable=True, default=dict)
 
     # Status
-    status = Column(String(50), nullable=True, default='offline')
+    status = Column(String(50), nullable=True, default="offline")
     # offline, idle, printing, paused, error, maintenance
 
     # Last communication timestamp

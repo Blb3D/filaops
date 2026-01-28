@@ -3,6 +3,7 @@ File Storage Service for Quote Files
 
 Handles local filesystem storage with Google Cloud Storage backup
 """
+
 import hashlib
 from datetime import datetime
 from pathlib import Path
@@ -40,12 +41,7 @@ class FileStorageService:
         # Ensure upload directory exists
         self.upload_dir.mkdir(parents=True, exist_ok=True)
 
-    async def save_file(
-        self,
-        file: UploadFile,
-        user_id: int,
-        quote_id: Optional[int] = None
-    ) -> dict:
+    async def save_file(self, file: UploadFile, user_id: int, quote_id: Optional[int] = None) -> dict:
         """
         Save uploaded file to local storage and optionally backup to GCS
 
@@ -73,10 +69,7 @@ class FileStorageService:
         # Validate file format
         file_ext = Path(file.filename).suffix.lower()
         if file_ext not in self.allowed_formats:
-            raise ValueError(
-                f"Invalid file format: {file_ext}. "
-                f"Allowed formats: {', '.join(self.allowed_formats)}"
-            )
+            raise ValueError(f"Invalid file format: {file_ext}. " f"Allowed formats: {', '.join(self.allowed_formats)}")
 
         # Read file content
         content = await file.read()
@@ -86,10 +79,7 @@ class FileStorageService:
         if file_size > self.max_file_size:
             max_mb = self.max_file_size / (1024 * 1024)
             actual_mb = file_size / (1024 * 1024)
-            raise ValueError(
-                f"File too large: {actual_mb:.2f}MB. "
-                f"Maximum allowed: {max_mb:.0f}MB"
-            )
+            raise ValueError(f"File too large: {actual_mb:.2f}MB. " f"Maximum allowed: {max_mb:.0f}MB")
 
         # Calculate SHA256 hash
         file_hash = hashlib.sha256(content).hexdigest()
@@ -119,10 +109,7 @@ class FileStorageService:
         if settings.GCS_ENABLED:
             try:
                 gcs_path = await self._backup_to_gcs(
-                    content=content,
-                    filename=stored_filename,
-                    year=now.year,
-                    month=now.month
+                    content=content, filename=stored_filename, year=now.year, month=now.month
                 )
                 gcs_backed_up = True
                 logger.info(f"Backed up to GCS: {gcs_path}")
@@ -131,14 +118,14 @@ class FileStorageService:
                 logger.error(f"GCS backup failed (non-critical): {e}")
 
         return {
-            'original_filename': file.filename,
-            'stored_filename': stored_filename,
-            'file_path': str(file_path),
-            'file_size_bytes': file_size,
-            'file_format': file_ext,
-            'file_hash': file_hash,
-            'mime_type': file.content_type or 'application/octet-stream',
-            'gcs_backed_up': gcs_backed_up
+            "original_filename": file.filename,
+            "stored_filename": stored_filename,
+            "file_path": str(file_path),
+            "file_size_bytes": file_size,
+            "file_format": file_ext,
+            "file_hash": file_hash,
+            "mime_type": file.content_type or "application/octet-stream",
+            "gcs_backed_up": gcs_backed_up,
         }
 
     def get_file_path(self, stored_filename: str) -> Optional[Path]:
@@ -184,13 +171,7 @@ class FileStorageService:
                 return False
         return False
 
-    async def _backup_to_gcs(
-        self,
-        content: bytes,
-        filename: str,
-        year: int,
-        month: int
-    ) -> str:
+    async def _backup_to_gcs(self, content: bytes, filename: str, year: int, month: int) -> str:
         """
         Backup file to Google Cloud Storage
 
@@ -213,8 +194,7 @@ class FileStorageService:
             # Use credentials file if specified, otherwise use default
             if settings.GCS_CREDENTIALS_PATH:
                 self._gcs_client = storage.Client.from_service_account_json(
-                    settings.GCS_CREDENTIALS_PATH,
-                    project=settings.GCS_PROJECT_ID
+                    settings.GCS_CREDENTIALS_PATH, project=settings.GCS_PROJECT_ID
                 )
             else:
                 # Use default credentials (from gcloud or Workspace account)
@@ -227,13 +207,10 @@ class FileStorageService:
         blob = self._gcs_bucket.blob(blob_name)
 
         # Upload with Nearline storage class for cost savings
-        blob.upload_from_string(
-            content,
-            content_type='application/octet-stream'
-        )
+        blob.upload_from_string(content, content_type="application/octet-stream")
 
         # Set to Nearline storage class (cold storage, accessed < 1/month)
-        blob.update_storage_class('NEARLINE')
+        blob.update_storage_class("NEARLINE")
 
         return blob_name
 
@@ -259,10 +236,10 @@ class FileStorageService:
         # Check content type
         if file.content_type:
             valid_mime_types = [
-                'application/octet-stream',
-                'application/vnd.ms-package.3dmanufacturing-3dmodel+xml',  # .3mf
-                'model/stl',  # .stl
-                'application/sla'  # .stl
+                "application/octet-stream",
+                "application/vnd.ms-package.3dmanufacturing-3dmodel+xml",  # .3mf
+                "model/stl",  # .stl
+                "application/sla",  # .stl
             ]
             if file.content_type not in valid_mime_types:
                 logger.warning(f"Unusual MIME type: {file.content_type} for {file.filename}")

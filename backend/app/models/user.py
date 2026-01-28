@@ -1,6 +1,7 @@
 """
 User model for customer portal authentication
 """
+
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -13,6 +14,7 @@ class User(Base):
 
     Represents a customer who can place orders through the portal
     """
+
     __tablename__ = "users"
 
     # Primary Key
@@ -39,7 +41,7 @@ class User(Base):
     billing_city = Column(String(100), nullable=True)
     billing_state = Column(String(50), nullable=True)
     billing_zip = Column(String(20), nullable=True)
-    billing_country = Column(String(100), default='USA', nullable=True)
+    billing_country = Column(String(100), default="USA", nullable=True)
 
     # Shipping Address
     shipping_address_line1 = Column(String(255), nullable=True)
@@ -47,11 +49,11 @@ class User(Base):
     shipping_city = Column(String(100), nullable=True)
     shipping_state = Column(String(50), nullable=True)
     shipping_zip = Column(String(20), nullable=True)
-    shipping_country = Column(String(100), default='USA', nullable=True)
+    shipping_country = Column(String(100), default="USA", nullable=True)
 
     # Account Status
-    status = Column(String(20), default='active', nullable=False, index=True)  # active, inactive, suspended
-    account_type = Column(String(20), default='customer', nullable=False)  # customer, admin, operator
+    status = Column(String(20), default="active", nullable=False, index=True)  # active, inactive, suspended
+    account_type = Column(String(20), default="customer", nullable=False)  # customer, admin, operator
 
     # Timestamps (using timezone=False for PostgreSQL TIMESTAMP compatibility)
     created_at = Column(DateTime(timezone=False), server_default=func.now(), nullable=False)
@@ -64,20 +66,22 @@ class User(Base):
 
     # Customer Organization Link (B2B)
     # Portal users can be linked to a Customer organization
-    customer_id = Column(Integer, ForeignKey('customers.id', ondelete='SET NULL'), nullable=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Relationships
     customer = relationship("Customer", back_populates="users")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     quotes = relationship("Quote", back_populates="user", foreign_keys="[Quote.user_id]", cascade="all, delete-orphan")
-    sales_orders = relationship("SalesOrder", back_populates="user", foreign_keys="[SalesOrder.user_id]", cascade="all, delete-orphan")
-    
+    sales_orders = relationship(
+        "SalesOrder", back_populates="user", foreign_keys="[SalesOrder.user_id]", cascade="all, delete-orphan"
+    )
+
     # Multi-customer access (B2B portal)
     customer_access = relationship(
         "UserCustomerAccess",
         back_populates="user",
         foreign_keys="[UserCustomerAccess.user_id]",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self):
@@ -97,12 +101,12 @@ class User(Base):
     @property
     def is_active(self) -> bool:
         """Check if user account is active"""
-        return self.status == 'active'
+        return self.status == "active"
 
     @property
     def is_admin(self) -> bool:
         """Check if user is an admin"""
-        return self.account_type == 'admin'
+        return self.account_type == "admin"
 
 
 class RefreshToken(Base):
@@ -111,6 +115,7 @@ class RefreshToken(Base):
 
     Stores hashed refresh tokens for secure token refresh
     """
+
     __tablename__ = "refresh_tokens"
 
     # Primary Key
@@ -138,6 +143,7 @@ class RefreshToken(Base):
     def is_valid(self) -> bool:
         """Check if refresh token is still valid (not revoked and not expired)"""
         from datetime import datetime
+
         # Using naive datetime (no timezone) for PostgreSQL TIMESTAMP compatibility
         now = datetime.utcnow()
         return not self.revoked and self.expires_at > now
@@ -153,6 +159,7 @@ class PasswordResetRequest(Base):
     3. Admin approves request
     4. User can now reset password with the token
     """
+
     __tablename__ = "password_reset_requests"
 
     # Primary Key
@@ -168,7 +175,7 @@ class PasswordResetRequest(Base):
     approval_token = Column(String(255), unique=True, nullable=False, index=True)
 
     # Status: pending, approved, denied, completed, expired
-    status = Column(String(20), default='pending', nullable=False, index=True)
+    status = Column(String(20), default="pending", nullable=False, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=False), server_default=func.now(), nullable=False)
@@ -189,12 +196,14 @@ class PasswordResetRequest(Base):
     def is_valid(self) -> bool:
         """Check if reset request can be used"""
         from datetime import datetime
+
         now = datetime.utcnow()
-        return self.status == 'approved' and self.expires_at > now
+        return self.status == "approved" and self.expires_at > now
 
     @property
     def is_pending(self) -> bool:
         """Check if waiting for admin approval"""
         from datetime import datetime
+
         now = datetime.utcnow()
-        return self.status == 'pending' and self.expires_at > now
+        return self.status == "pending" and self.expires_at > now

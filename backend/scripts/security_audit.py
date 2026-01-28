@@ -11,6 +11,7 @@ Usage:
   python scripts/security_audit.py --json
   python scripts/security_audit.py --json --output report.json
 """
+
 import sys
 import os
 import json
@@ -29,6 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 class CheckStatus(str, Enum):
     """Status of a security check"""
+
     PASS = "pass"
     FAIL = "fail"
     WARN = "warn"
@@ -37,6 +39,7 @@ class CheckStatus(str, Enum):
 
 class CheckCategory(str, Enum):
     """Category/severity of a security check"""
+
     CRITICAL = "critical"
     WARNING = "warning"
     INFO = "info"
@@ -45,6 +48,7 @@ class CheckCategory(str, Enum):
 @dataclass
 class CheckResult:
     """Result of a single security check"""
+
     id: str
     name: str
     category: CheckCategory
@@ -86,6 +90,7 @@ class SecurityAuditor:
         """Load application settings"""
         try:
             from app.core.settings import get_settings
+
             self._settings = get_settings()
         except Exception:
             # Settings couldn't be loaded - we'll check for .env directly
@@ -126,8 +131,7 @@ class SecurityAuditor:
 
         # Overall status: FAIL if any critical fails, WARN if any warnings, else PASS
         critical_fails = any(
-            r.status == CheckStatus.FAIL and r.category == CheckCategory.CRITICAL
-            for r in self.results
+            r.status == CheckStatus.FAIL and r.category == CheckCategory.CRITICAL for r in self.results
         )
         has_warnings = any(r.status == CheckStatus.WARN for r in self.results)
 
@@ -144,7 +148,7 @@ class SecurityAuditor:
             "failed": failed,
             "warnings": warnings,
             "info": info,
-            "overall_status": overall
+            "overall_status": overall,
         }
 
     def get_system_info(self) -> Dict[str, Any]:
@@ -153,13 +157,14 @@ class SecurityAuditor:
             "os": f"{platform.system()} {platform.release()}",
             "python_version": platform.python_version(),
             "database": "Unknown",
-            "reverse_proxy": "Unknown"
+            "reverse_proxy": "Unknown",
         }
 
         # Try to get database version
         try:
             from app.db.session import SessionLocal
             from sqlalchemy import text
+
             db = SessionLocal()
             result = db.execute(text("SELECT version()")).scalar()
             if result:
@@ -171,12 +176,7 @@ class SecurityAuditor:
 
         # Check for Caddy
         try:
-            result = subprocess.run(
-                ["caddy", "version"],
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
+            result = subprocess.run(["caddy", "version"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0:
                 info["reverse_proxy"] = f"Caddy {result.stdout.strip()}"
         except Exception:
@@ -197,7 +197,7 @@ class SecurityAuditor:
             "environment": self._settings.ENVIRONMENT if self._settings else "unknown",
             "summary": self.get_summary(),
             "checks": [asdict(r) for r in self.results],
-            "system_info": self.get_system_info()
+            "system_info": self.get_system_info(),
         }
 
     # ==================
@@ -212,42 +212,54 @@ class SecurityAuditor:
         remediation = 'Generate a secure key: python -c "import secrets; print(secrets.token_urlsafe(64))"'
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.FAIL,
-                message="Could not load settings to check SECRET_KEY",
-                remediation="Ensure .env file exists and is readable"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.FAIL,
+                    message="Could not load settings to check SECRET_KEY",
+                    remediation="Ensure .env file exists and is readable",
+                )
+            )
             return
 
         secret = self._settings.SECRET_KEY
 
         # Check against known weak secrets
         if secret.lower() in [s.lower() for s in KNOWN_WEAK_SECRETS]:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.FAIL,
-                message="Default/known weak SECRET_KEY detected!",
-                remediation=remediation
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.FAIL,
+                    message="Default/known weak SECRET_KEY detected!",
+                    remediation=remediation,
+                )
+            )
             return
 
         # Check for common weak patterns
         weak_patterns = ["change", "default", "test", "example", "secret", "password"]
         if any(p in secret.lower() for p in weak_patterns):
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="SECRET_KEY may contain weak patterns",
-                remediation=remediation
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="SECRET_KEY may contain weak patterns",
+                    remediation=remediation,
+                )
+            )
             return
 
-        self.results.append(CheckResult(
-            id=check_id, name=name, category=category,
-            status=CheckStatus.PASS,
-            message="Strong key configured"
-        ))
+        self.results.append(
+            CheckResult(
+                id=check_id, name=name, category=category, status=CheckStatus.PASS, message="Strong key configured"
+            )
+        )
 
     def _check_secret_key_entropy(self):
         """Check that SECRET_KEY has sufficient entropy"""
@@ -257,12 +269,16 @@ class SecurityAuditor:
         remediation = "Generate a longer key with high entropy (at least 64 characters)"
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.FAIL,
-                message="Could not load settings to check SECRET_KEY",
-                remediation="Ensure .env file exists and is readable"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.FAIL,
+                    message="Could not load settings to check SECRET_KEY",
+                    remediation="Ensure .env file exists and is readable",
+                )
+            )
             return
 
         secret = self._settings.SECRET_KEY
@@ -272,32 +288,48 @@ class SecurityAuditor:
         entropy = self._calculate_entropy(secret)
 
         if length < 32:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.FAIL,
-                message=f"SECRET_KEY too short ({length} chars, need 64+)",
-                remediation=remediation
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.FAIL,
+                    message=f"SECRET_KEY too short ({length} chars, need 64+)",
+                    remediation=remediation,
+                )
+            )
         elif length < 64:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message=f"SECRET_KEY could be longer ({length} chars)",
-                remediation=remediation
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message=f"SECRET_KEY could be longer ({length} chars)",
+                    remediation=remediation,
+                )
+            )
         elif entropy < 3.5:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message=f"SECRET_KEY has low entropy ({entropy:.2f} bits/char)",
-                remediation=remediation
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message=f"SECRET_KEY has low entropy ({entropy:.2f} bits/char)",
+                    remediation=remediation,
+                )
+            )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message=f"{length} characters (good)"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message=f"{length} characters (good)",
+                )
+            )
 
     def _check_environment_production(self):
         """Check that ENVIRONMENT is set to production"""
@@ -306,36 +338,48 @@ class SecurityAuditor:
         category = CheckCategory.CRITICAL
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Could not load settings",
-                remediation="Set ENVIRONMENT=production in .env"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Could not load settings",
+                    remediation="Set ENVIRONMENT=production in .env",
+                )
+            )
             return
 
         env = self._settings.ENVIRONMENT.lower()
 
         if env == "production":
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="ENVIRONMENT=production"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id, name=name, category=category, status=CheckStatus.PASS, message="ENVIRONMENT=production"
+                )
+            )
         elif env == "development":
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="ENVIRONMENT=development (expected for local dev)",
-                details="Set to 'production' before deploying"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="ENVIRONMENT=development (expected for local dev)",
+                    details="Set to 'production' before deploying",
+                )
+            )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message=f"ENVIRONMENT={env} (should be 'production')",
-                remediation="Set ENVIRONMENT=production in .env"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message=f"ENVIRONMENT={env} (should be 'production')",
+                    remediation="Set ENVIRONMENT=production in .env",
+                )
+            )
 
     def _check_debug_disabled(self):
         """Check that DEBUG mode is disabled"""
@@ -344,36 +388,46 @@ class SecurityAuditor:
         category = CheckCategory.CRITICAL
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Could not load settings",
-                remediation="Set DEBUG=false in .env"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Could not load settings",
+                    remediation="Set DEBUG=false in .env",
+                )
+            )
             return
 
         if self._settings.DEBUG:
             # Check if we're in development
             if self._settings.ENVIRONMENT.lower() == "development":
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="DEBUG=true (acceptable for development)",
-                    details="Disable before deploying to production"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="DEBUG=true (acceptable for development)",
+                        details="Disable before deploying to production",
+                    )
+                )
             else:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.FAIL,
-                    message="DEBUG=true in non-development environment!",
-                    remediation="Set DEBUG=false in .env"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.FAIL,
+                        message="DEBUG=true in non-development environment!",
+                        remediation="Set DEBUG=false in .env",
+                    )
+                )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="DEBUG=false"
-            ))
+            self.results.append(
+                CheckResult(id=check_id, name=name, category=category, status=CheckStatus.PASS, message="DEBUG=false")
+            )
 
     def _check_https_enabled(self):
         """Check if application is served over HTTPS"""
@@ -391,7 +445,7 @@ class SecurityAuditor:
                 https_configured = True
 
             # Also check if ALLOWED_ORIGINS contains any https URLs
-            allowed_origins = getattr(self._settings, 'ALLOWED_ORIGINS', [])
+            allowed_origins = getattr(self._settings, "ALLOWED_ORIGINS", [])
             if allowed_origins:
                 for origin in allowed_origins:
                     if origin.startswith("https://"):
@@ -400,12 +454,16 @@ class SecurityAuditor:
 
         # Check for localhost (development)
         if self._settings and self._settings.ENVIRONMENT.lower() == "development":
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Development mode - HTTPS not required",
-                details="Configure TLS for production deployment"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Development mode - HTTPS not required",
+                    details="Configure TLS for production deployment",
+                )
+            )
             return
 
         # Check for Caddy (handles TLS automatically)
@@ -419,11 +477,7 @@ class SecurityAuditor:
         # Check for caddy executable
         try:
             # Try system caddy first
-            result = subprocess.run(
-                ["caddy", "version"],
-                capture_output=True,
-                timeout=5
-            )
+            result = subprocess.run(["caddy", "version"], capture_output=True, timeout=5)
             caddy_found = result.returncode == 0
         except Exception:
             pass
@@ -435,39 +489,55 @@ class SecurityAuditor:
                 caddy_found = True
 
         if https_configured:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="HTTPS URLs configured"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id, name=name, category=category, status=CheckStatus.PASS, message="HTTPS URLs configured"
+                )
+            )
         elif caddy_found and caddyfile_exists:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="TLS available via Caddy",
-                details="Caddyfile configured and Caddy installed"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message="TLS available via Caddy",
+                    details="Caddyfile configured and Caddy installed",
+                )
+            )
         elif caddyfile_exists and https_origin_found:
             # Caddyfile exists and CORS has https origin - likely configured
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="HTTPS configured via Caddy",
-                details="Caddyfile found with HTTPS origins in CORS"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message="HTTPS configured via Caddy",
+                    details="Caddyfile found with HTTPS origins in CORS",
+                )
+            )
         elif caddy_found:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="TLS available via Caddy"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message="TLS available via Caddy",
+                )
+            )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="HTTPS not detected",
-                remediation="Configure Caddy or another reverse proxy with TLS"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="HTTPS not detected",
+                    remediation="Configure Caddy or another reverse proxy with TLS",
+                )
+            )
 
     def _check_admin_password_changed(self):
         """Check that default admin password has been changed"""
@@ -487,12 +557,16 @@ class SecurityAuditor:
             admin_users = db.query(User).filter(User.account_type == "admin").all()
 
             if not admin_users:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="No admin users found",
-                    details="Admin users may not exist yet"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="No admin users found",
+                        details="Admin users may not exist yet",
+                    )
+                )
                 db.close()
                 return
 
@@ -503,32 +577,44 @@ class SecurityAuditor:
                 for pwd in default_passwords:
                     try:
                         if pwd_context.verify(pwd, admin_user.password_hash):
-                            self.results.append(CheckResult(
-                                id=check_id, name=name, category=category,
-                                status=CheckStatus.FAIL,
-                                message=f"Admin '{admin_user.email}' uses a default password!",
-                                remediation="Change admin password via Settings > Users"
-                            ))
+                            self.results.append(
+                                CheckResult(
+                                    id=check_id,
+                                    name=name,
+                                    category=category,
+                                    status=CheckStatus.FAIL,
+                                    message=f"Admin '{admin_user.email}' uses a default password!",
+                                    remediation="Change admin password via Settings > Users",
+                                )
+                            )
                             db.close()
                             return
                     except Exception:
                         # Password hash may be in different format
                         pass
 
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="Admin passwords have been changed"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message="Admin passwords have been changed",
+                )
+            )
             db.close()
 
         except Exception as e:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message=f"Could not verify admin password: {str(e)[:50]}",
-                remediation="Manually verify admin password has been changed"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message=f"Could not verify admin password: {str(e)[:50]}",
+                    remediation="Manually verify admin password has been changed",
+                )
+            )
 
     def _check_env_file_not_exposed(self):
         """Check that .env file is not web-accessible"""
@@ -538,17 +624,21 @@ class SecurityAuditor:
 
         # In development, this is less critical
         if self._settings and self._settings.ENVIRONMENT.lower() == "development":
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Development mode - .env protection not critical",
-                details="Ensure reverse proxy blocks dotfiles in production"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Development mode - .env protection not critical",
+                    details="Ensure reverse proxy blocks dotfiles in production",
+                )
+            )
             return
 
         # Find a production URL to test - prefer HTTPS origins over FRONTEND_URL
         test_url = None
-        allowed_origins = getattr(self._settings, 'ALLOWED_ORIGINS', []) if self._settings else []
+        allowed_origins = getattr(self._settings, "ALLOWED_ORIGINS", []) if self._settings else []
 
         # First, look for HTTPS origins in ALLOWED_ORIGINS
         for origin in allowed_origins:
@@ -559,21 +649,22 @@ class SecurityAuditor:
         # Fall back to FRONTEND_URL if no HTTPS origin found
         if not test_url:
             frontend_url = self._settings.FRONTEND_URL if self._settings else ""
-            is_localhost = any(
-                h in frontend_url.lower()
-                for h in ["localhost", "127.0.0.1", "0.0.0.0"]
-            )
+            is_localhost = any(h in frontend_url.lower() for h in ["localhost", "127.0.0.1", "0.0.0.0"])
             if not is_localhost:
                 test_url = frontend_url
 
         # If we only have localhost URLs, skip the check
         if not test_url:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Localhost detected - .env check skipped",
-                details="This check runs on real production URLs only"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Localhost detected - .env check skipped",
+                    details="This check runs on real production URLs only",
+                )
+            )
             return
 
         # Try to access .env via the production URL
@@ -585,38 +676,54 @@ class SecurityAuditor:
                 # Use verify=False for self-signed certs (like Caddy's local TLS)
                 response = requests.get(url, timeout=5, allow_redirects=False, verify=False)
                 if response.status_code == 200:
-                    self.results.append(CheckResult(
-                        id=check_id, name=name, category=category,
-                        status=CheckStatus.FAIL,
-                        message=".env file is web-accessible!",
-                        remediation="Configure reverse proxy to block dotfiles"
-                    ))
+                    self.results.append(
+                        CheckResult(
+                            id=check_id,
+                            name=name,
+                            category=category,
+                            status=CheckStatus.FAIL,
+                            message=".env file is web-accessible!",
+                            remediation="Configure reverse proxy to block dotfiles",
+                        )
+                    )
                     return
                 else:
-                    self.results.append(CheckResult(
-                        id=check_id, name=name, category=category,
-                        status=CheckStatus.PASS,
-                        message=f".env blocked (HTTP {response.status_code})",
-                        details=f"Tested via {test_url}"
-                    ))
+                    self.results.append(
+                        CheckResult(
+                            id=check_id,
+                            name=name,
+                            category=category,
+                            status=CheckStatus.PASS,
+                            message=f".env blocked (HTTP {response.status_code})",
+                            details=f"Tested via {test_url}",
+                        )
+                    )
                     return
             except requests.exceptions.RequestException as e:
                 # Can't reach URL - might be offline or blocked
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="Could not test .env exposure",
-                    details=f"URL {test_url} not reachable: {str(e)[:50]}"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="Could not test .env exposure",
+                        details=f"URL {test_url} not reachable: {str(e)[:50]}",
+                    )
+                )
                 return
 
         except ImportError:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Could not test .env exposure (requests not installed)",
-                remediation="Manually verify .env is blocked by reverse proxy"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Could not test .env exposure (requests not installed)",
+                    remediation="Manually verify .env is blocked by reverse proxy",
+                )
+            )
 
     # ==================
     # Warning Checks
@@ -629,11 +736,15 @@ class SecurityAuditor:
         category = CheckCategory.WARNING
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Could not load settings"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Could not load settings",
+                )
+            )
             return
 
         origins = self._settings.ALLOWED_ORIGINS
@@ -643,40 +754,60 @@ class SecurityAuditor:
         has_https = any(o.startswith("https://") for o in origins)
 
         if "*" in origins:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="Wildcard (*) origin detected",
-                remediation="Set specific origins in ALLOWED_ORIGINS"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="Wildcard (*) origin detected",
+                    remediation="Set specific origins in ALLOWED_ORIGINS",
+                )
+            )
         elif has_localhost:
             if self._settings.ENVIRONMENT.lower() == "development":
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.PASS,
-                    message="Localhost origins configured (OK for development)"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.PASS,
+                        message="Localhost origins configured (OK for development)",
+                    )
+                )
             elif has_https:
                 # Hybrid setup: localhost for dev + HTTPS for production access
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.PASS,
-                    message="Hybrid setup: localhost + HTTPS origins",
-                    details="Localhost for development, HTTPS for production access"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.PASS,
+                        message="Hybrid setup: localhost + HTTPS origins",
+                        details="Localhost for development, HTTPS for production access",
+                    )
+                )
             else:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.WARN,
-                    message="Localhost origins in non-development environment",
-                    remediation="Remove localhost origins for production"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.WARN,
+                        message="Localhost origins in non-development environment",
+                        remediation="Remove localhost origins for production",
+                    )
+                )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message=f"{len(origins)} specific origins configured"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message=f"{len(origins)} specific origins configured",
+                )
+            )
 
     def _check_rate_limiting_enabled(self):
         """Check if rate limiting is enabled"""
@@ -688,25 +819,37 @@ class SecurityAuditor:
             from app.core.limiter import HAS_SLOWAPI
 
             if HAS_SLOWAPI:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.PASS,
-                    message="SlowAPI rate limiting available"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.PASS,
+                        message="SlowAPI rate limiting available",
+                    )
+                )
             else:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.WARN,
-                    message="Rate limiting not installed",
-                    remediation="Install slowapi: pip install slowapi"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.WARN,
+                        message="Rate limiting not installed",
+                        remediation="Install slowapi: pip install slowapi",
+                    )
+                )
         except ImportError:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="Could not check rate limiting status",
-                remediation="Verify rate_limit.py middleware is active"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="Could not check rate limiting status",
+                    remediation="Verify rate_limit.py middleware is active",
+                )
+            )
 
     def _check_database_ssl(self):
         """Check if database connection uses SSL"""
@@ -715,35 +858,51 @@ class SecurityAuditor:
         category = CheckCategory.WARNING
 
         if not self._settings:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Could not load settings"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Could not load settings",
+                )
+            )
             return
 
         db_url = self._settings.database_url
 
         # Check for SSL in connection string
         if "sslmode=require" in db_url or "sslmode=verify" in db_url:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message="SSL enabled for database connection"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message="SSL enabled for database connection",
+                )
+            )
         elif "localhost" in db_url or "127.0.0.1" in db_url:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Local database - SSL not required"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Local database - SSL not required",
+                )
+            )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="Database SSL not detected",
-                remediation="Add ?sslmode=require to DATABASE_URL"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="Database SSL not detected",
+                    remediation="Add ?sslmode=require to DATABASE_URL",
+                )
+            )
 
     def _check_dependencies_secure(self):
         """Check for known vulnerabilities in dependencies"""
@@ -754,10 +913,7 @@ class SecurityAuditor:
         try:
             # Try pip-audit first
             result = subprocess.run(
-                [sys.executable, "-m", "pip_audit", "--format", "json"],
-                capture_output=True,
-                text=True,
-                timeout=120
+                [sys.executable, "-m", "pip_audit", "--format", "json"], capture_output=True, text=True, timeout=120
             )
 
             # pip-audit returns exit code 1 when vulnerabilities are found (not just 0)
@@ -773,48 +929,72 @@ class SecurityAuditor:
 
                     if vulnerable_packages:
                         vuln_count = len(vulnerable_packages)
-                        self.results.append(CheckResult(
-                            id=check_id, name=name, category=category,
-                            status=CheckStatus.WARN,
-                            message=f"{vuln_count} packages have known CVEs",
-                            remediation="Run: pip install pip-audit && pip-audit --fix"
-                        ))
+                        self.results.append(
+                            CheckResult(
+                                id=check_id,
+                                name=name,
+                                category=category,
+                                status=CheckStatus.WARN,
+                                message=f"{vuln_count} packages have known CVEs",
+                                remediation="Run: pip install pip-audit && pip-audit --fix",
+                            )
+                        )
                     else:
-                        self.results.append(CheckResult(
-                            id=check_id, name=name, category=category,
-                            status=CheckStatus.PASS,
-                            message="No known vulnerabilities found"
-                        ))
+                        self.results.append(
+                            CheckResult(
+                                id=check_id,
+                                name=name,
+                                category=category,
+                                status=CheckStatus.PASS,
+                                message="No known vulnerabilities found",
+                            )
+                        )
                 except json.JSONDecodeError:
                     # JSON parsing failed, pip-audit might not be working properly
-                    self.results.append(CheckResult(
-                        id=check_id, name=name, category=category,
-                        status=CheckStatus.INFO,
-                        message="pip-audit output error",
-                        remediation="Run: pip install pip-audit && pip-audit"
-                    ))
+                    self.results.append(
+                        CheckResult(
+                            id=check_id,
+                            name=name,
+                            category=category,
+                            status=CheckStatus.INFO,
+                            message="pip-audit output error",
+                            remediation="Run: pip install pip-audit && pip-audit",
+                        )
+                    )
             else:
                 # No valid JSON output - pip-audit probably not installed
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="pip-audit not installed",
-                    remediation="Run: pip install pip-audit && pip-audit"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="pip-audit not installed",
+                        remediation="Run: pip install pip-audit && pip-audit",
+                    )
+                )
 
         except subprocess.TimeoutExpired:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="Dependency check timed out"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="Dependency check timed out",
+                )
+            )
         except Exception as e:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message=f"Could not check dependencies: {str(e)[:50]}",
-                remediation="Run: pip install pip-audit && pip-audit"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message=f"Could not check dependencies: {str(e)[:50]}",
+                    remediation="Run: pip install pip-audit && pip-audit",
+                )
+            )
 
     def _check_backup_configured(self):
         """Check if database backup is configured"""
@@ -827,12 +1007,7 @@ class SecurityAuditor:
 
         # Check for pg_dump in scheduled tasks (Windows)
         try:
-            result = subprocess.run(
-                ["schtasks", "/query", "/fo", "csv"],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
+            result = subprocess.run(["schtasks", "/query", "/fo", "csv"], capture_output=True, text=True, timeout=10)
             if "pg_dump" in result.stdout.lower() or "backup" in result.stdout.lower():
                 backup_indicators.append("Windows scheduled task")
         except Exception:
@@ -851,18 +1026,26 @@ class SecurityAuditor:
                 backup_indicators.append(f"Backup script: {path}")
 
         if backup_indicators:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.PASS,
-                message=f"Backup detected: {backup_indicators[0]}"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.PASS,
+                    message=f"Backup detected: {backup_indicators[0]}",
+                )
+            )
         else:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.WARN,
-                message="No backup configuration detected",
-                remediation="Set up pg_dump cron job or backup service"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.WARN,
+                    message="No backup configuration detected",
+                    remediation="Set up pg_dump cron job or backup service",
+                )
+            )
 
     # ==================
     # Informational Checks
@@ -881,33 +1064,43 @@ class SecurityAuditor:
             db = SessionLocal()
 
             # Check company_settings for external_ai_blocked
-            result = db.execute(
-                text("SELECT external_ai_blocked FROM company_settings LIMIT 1")
-            ).scalar()
+            result = db.execute(text("SELECT external_ai_blocked FROM company_settings LIMIT 1")).scalar()
 
             db.close()
 
             if result is True:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.PASS,
-                    message="External AI services blocked"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.PASS,
+                        message="External AI services blocked",
+                    )
+                )
             else:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="External AI services allowed",
-                    details="Enable in Settings > AI Configuration if data privacy required"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="External AI services allowed",
+                        details="Enable in Settings > AI Configuration if data privacy required",
+                    )
+                )
 
         except Exception:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="AI configuration not found",
-                details="Configure AI settings in admin dashboard"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="AI configuration not found",
+                    details="Configure AI settings in admin dashboard",
+                )
+            )
 
     def _check_data_privacy_mode(self):
         """Check AI provider configuration for data privacy"""
@@ -921,38 +1114,52 @@ class SecurityAuditor:
 
             db = SessionLocal()
 
-            result = db.execute(
-                text("SELECT ai_provider FROM company_settings LIMIT 1")
-            ).scalar()
+            result = db.execute(text("SELECT ai_provider FROM company_settings LIMIT 1")).scalar()
 
             db.close()
 
             if result and result.lower() == "ollama":
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.PASS,
-                    message="Ollama (local) configured - data stays on-premise"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.PASS,
+                        message="Ollama (local) configured - data stays on-premise",
+                    )
+                )
             elif result:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message=f"AI Provider: {result}",
-                    details="Data may be sent to external services"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message=f"AI Provider: {result}",
+                        details="Data may be sent to external services",
+                    )
+                )
             else:
-                self.results.append(CheckResult(
-                    id=check_id, name=name, category=category,
-                    status=CheckStatus.INFO,
-                    message="No AI provider configured"
-                ))
+                self.results.append(
+                    CheckResult(
+                        id=check_id,
+                        name=name,
+                        category=category,
+                        status=CheckStatus.INFO,
+                        message="No AI provider configured",
+                    )
+                )
 
         except Exception:
-            self.results.append(CheckResult(
-                id=check_id, name=name, category=category,
-                status=CheckStatus.INFO,
-                message="AI provider configuration not available"
-            ))
+            self.results.append(
+                CheckResult(
+                    id=check_id,
+                    name=name,
+                    category=category,
+                    status=CheckStatus.INFO,
+                    message="AI provider configuration not available",
+                )
+            )
 
     # ==================
     # Utility Methods
@@ -992,7 +1199,7 @@ def print_console_report(auditor: SecurityAuditor):
     # Status icons - use ASCII fallbacks for Windows compatibility
     try:
         # Test if we can print unicode
-        "\u2705".encode(sys.stdout.encoding or 'utf-8')
+        "\u2705".encode(sys.stdout.encoding or "utf-8")
         icons = {
             CheckStatus.PASS: "\u2705",  # Green check
             CheckStatus.FAIL: "\u274c",  # Red X
@@ -1099,18 +1306,10 @@ Examples:
   python scripts/security_audit.py           # Console output
   python scripts/security_audit.py --json    # JSON to stdout
   python scripts/security_audit.py --json --output report.json
-        """
+        """,
     )
-    parser.add_argument(
-        "--json",
-        action="store_true",
-        help="Output results as JSON"
-    )
-    parser.add_argument(
-        "--output", "-o",
-        type=str,
-        help="Write output to file"
-    )
+    parser.add_argument("--json", action="store_true", help="Output results as JSON")
+    parser.add_argument("--output", "-o", type=str, help="Write output to file")
 
     args = parser.parse_args()
 

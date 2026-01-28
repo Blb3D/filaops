@@ -1,10 +1,11 @@
-﻿"""
+"""
 Facade over optional Google Drive integration.
 
 Exports:
 - get_drive_service(token: str) -> service client
 - upload_file(token: str, file_path: str, mime_type: str, folder_id: Optional[str]) -> str
 """
+
 from __future__ import annotations
 from typing import Optional
 

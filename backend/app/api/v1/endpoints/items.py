@@ -1,6 +1,7 @@
 """
 Items API Endpoints - Unified item management for products, components, supplies, and services
 """
+
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from typing import List, Optional
 from datetime import datetime
@@ -53,24 +54,24 @@ DEFAULT_PRICE_MARKUP = 3.5
 
 UOM_CONVERSIONS = {
     # Mass conversions (to KG)
-    'G': {'base': 'KG', 'factor': Decimal('0.001')},
-    'KG': {'base': 'KG', 'factor': Decimal('1')},
-    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
-    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
+    "G": {"base": "KG", "factor": Decimal("0.001")},
+    "KG": {"base": "KG", "factor": Decimal("1")},
+    "LB": {"base": "KG", "factor": Decimal("0.453592")},
+    "OZ": {"base": "KG", "factor": Decimal("0.0283495")},
     # Length conversions (to M)
-    'MM': {'base': 'M', 'factor': Decimal('0.001')},
-    'CM': {'base': 'M', 'factor': Decimal('0.01')},
-    'M': {'base': 'M', 'factor': Decimal('1')},
-    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
-    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
+    "MM": {"base": "M", "factor": Decimal("0.001")},
+    "CM": {"base": "M", "factor": Decimal("0.01")},
+    "M": {"base": "M", "factor": Decimal("1")},
+    "IN": {"base": "M", "factor": Decimal("0.0254")},
+    "FT": {"base": "M", "factor": Decimal("0.3048")},
     # Volume conversions (to L)
-    'ML': {'base': 'L', 'factor': Decimal('0.001')},
-    'L': {'base': 'L', 'factor': Decimal('1')},
+    "ML": {"base": "L", "factor": Decimal("0.001")},
+    "L": {"base": "L", "factor": Decimal("1")},
     # Count units (no conversion)
-    'EA': {'base': 'EA', 'factor': Decimal('1')},
-    'PK': {'base': 'PK', 'factor': Decimal('1')},
-    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
-    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
+    "EA": {"base": "EA", "factor": Decimal("1")},
+    "PK": {"base": "PK", "factor": Decimal("1")},
+    "BOX": {"base": "BOX", "factor": Decimal("1")},
+    "ROLL": {"base": "ROLL", "factor": Decimal("1")},
 }
 
 
@@ -79,31 +80,32 @@ def convert_uom_inline(quantity: Decimal, from_unit: str, to_unit: str) -> Decim
     Convert quantity using inline conversion factors (no database lookup).
     Used as fallback when database UOM table is empty.
     """
-    from_unit = (from_unit or 'EA').upper().strip()
-    to_unit = (to_unit or 'EA').upper().strip()
-    
+    from_unit = (from_unit or "EA").upper().strip()
+    to_unit = (to_unit or "EA").upper().strip()
+
     if from_unit == to_unit:
         return quantity
-    
+
     from_info = UOM_CONVERSIONS.get(from_unit)
     to_info = UOM_CONVERSIONS.get(to_unit)
-    
+
     if not from_info or not to_info:
         return quantity  # Unknown unit, return as-is
-    
-    if from_info['base'] != to_info['base']:
+
+    if from_info["base"] != to_info["base"]:
         return quantity  # Incompatible bases
-    
+
     # Convert: from_unit -> base -> to_unit
-    quantity_in_base = quantity * from_info['factor']
-    quantity_in_target = quantity_in_base / to_info['factor']
-    
+    quantity_in_base = quantity * from_info["factor"]
+    quantity_in_target = quantity_in_base / to_info["factor"]
+
     return quantity_in_target
 
 
 # ============================================================================
 # Item Categories
 # ============================================================================
+
 
 @router.get("/categories", response_model=List[ItemCategoryResponse])
 async def list_categories(
@@ -153,9 +155,12 @@ async def get_category_tree(
 ):
     """Get categories as a nested tree structure"""
     # Get all active categories
-    categories = db.query(ItemCategory).filter(
-        ItemCategory.is_active.is_(True)
-    ).order_by(ItemCategory.sort_order, ItemCategory.name).all()
+    categories = (
+        db.query(ItemCategory)
+        .filter(ItemCategory.is_active.is_(True))
+        .order_by(ItemCategory.sort_order, ItemCategory.name)
+        .all()
+    )
 
     # Build tree
     def build_tree(parent_id: Optional[int] = None) -> List[ItemCategoryTreeNode]:
@@ -320,26 +325,16 @@ async def delete_category(
         raise HTTPException(status_code=404, detail=f"Category {category_id} not found")
 
     # Check for child categories
-    children = db.query(ItemCategory).filter(
-        ItemCategory.parent_id == category_id,
-        ItemCategory.is_active.is_(True)
-    ).count()
+    children = (
+        db.query(ItemCategory).filter(ItemCategory.parent_id == category_id, ItemCategory.is_active.is_(True)).count()
+    )
     if children > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete category with {children} active child categories"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot delete category with {children} active child categories")
 
     # Check for items in this category
-    items = db.query(Product).filter(
-        Product.category_id == category_id,
-        Product.active.is_(True)
-    ).count()
+    items = db.query(Product).filter(Product.category_id == category_id, Product.active.is_(True)).count()
     if items > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete category with {items} active items"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot delete category with {items} active items")
 
     category.is_active = False
     category.updated_at = datetime.utcnow()
@@ -353,6 +348,7 @@ async def delete_category(
 # ============================================================================
 # Items (Products with extended fields)
 # ============================================================================
+
 
 @router.get("", response_model=dict)
 async def list_items(
@@ -384,12 +380,7 @@ async def list_items(
             query = query.filter(Product.material_type_id.isnot(None))
         elif item_type == "material":
             # Material type - includes both new item_type='material' and legacy filaments
-            query = query.filter(
-                or_(
-                    Product.item_type == "material",
-                    Product.material_type_id.isnot(None)
-                )
-            )
+            query = query.filter(or_(Product.item_type == "material", Product.material_type_id.isnot(None)))
         else:
             query = query.filter(Product.item_type == item_type)
 
@@ -424,9 +415,13 @@ async def list_items(
     result = []
     for item in items:
         # Get inventory on-hand totals
-        inv = db.query(
-            func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
-        ).filter(Inventory.product_id == item.id).first()
+        inv = (
+            db.query(
+                func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
+            )
+            .filter(Inventory.product_id == item.id)
+            .first()
+        )
 
         # STAR SCHEMA: Inventory stores GRAMS for materials, native unit for others
         # No conversion needed - inventory is already in transaction unit
@@ -434,17 +429,17 @@ async def list_items(
 
         # Calculate allocated from active production orders (not stale Inventory.allocated_quantity)
         allocated = float(get_allocated_quantity(db, item.id))
-        
+
         # Check if material for reorder point conversion
         is_material = item.material_type_id is not None
         reorder_point = float(item.reorder_point) if item.reorder_point else None
         if is_material and reorder_point:
             # Reorder point is stored in product_unit (KG), convert to grams for display
             reorder_point = reorder_point * 1000
-        
+
         available = on_hand - allocated
         # Only stocked items can "need reorder" - on_demand items are MRP-driven
-        is_stocked = item.stocking_policy == 'stocked'
+        is_stocked = item.stocking_policy == "stocked"
         item_needs_reorder = is_stocked and reorder_point is not None and on_hand <= reorder_point
 
         # Skip if needs_reorder filter is on and item doesn't need reorder
@@ -456,26 +451,28 @@ async def list_items(
         if item.standard_cost:
             suggested_price = float(item.standard_cost) * DEFAULT_PRICE_MARKUP
 
-        result.append(ItemListResponse(
-            id=item.id,
-            sku=item.sku,
-            name=item.name,
-            item_type=item.item_type or "finished_good",
-            procurement_type=item.procurement_type or "buy",
-            category_id=item.category_id,
-            category_name=item.item_category.name if item.item_category else None,
-            unit=item.unit,
-            standard_cost=item.standard_cost,
-            average_cost=item.average_cost,
-            selling_price=item.selling_price,
-            suggested_price=suggested_price,
-            active=item.active,
-            on_hand_qty=on_hand,
-            available_qty=available,
-            reorder_point=reorder_point,
-            stocking_policy=item.stocking_policy or "on_demand",
-            needs_reorder=item_needs_reorder,
-        ))
+        result.append(
+            ItemListResponse(
+                id=item.id,
+                sku=item.sku,
+                name=item.name,
+                item_type=item.item_type or "finished_good",
+                procurement_type=item.procurement_type or "buy",
+                category_id=item.category_id,
+                category_name=item.item_category.name if item.item_category else None,
+                unit=item.unit,
+                standard_cost=item.standard_cost,
+                average_cost=item.average_cost,
+                selling_price=item.selling_price,
+                suggested_price=suggested_price,
+                active=item.active,
+                on_hand_qty=on_hand,
+                available_qty=available,
+                reorder_point=reorder_point,
+                stocking_policy=item.stocking_policy or "on_demand",
+                needs_reorder=item_needs_reorder,
+            )
+        )
 
     return {
         "total": total,
@@ -499,13 +496,11 @@ async def create_item(
             "supply": "SUP",
             "service": "SRV",
             "material": get_default_material_sku_prefix(),  # "MAT"
-        }.get(request.item_type.value if hasattr(request.item_type, 'value') else str(request.item_type), "ITM")
-        
+        }.get(request.item_type.value if hasattr(request.item_type, "value") else str(request.item_type), "ITM")
+
         # Find the highest existing SKU with this prefix
-        existing_skus = db.query(Product.sku).filter(
-            Product.sku.like(f"{item_type_prefix}-%")
-        ).all()
-        
+        existing_skus = db.query(Product.sku).filter(Product.sku.like(f"{item_type_prefix}-%")).all()
+
         max_num = 0
         for (sku,) in existing_skus:
             try:
@@ -516,11 +511,11 @@ async def create_item(
                     max_num = max(max_num, num)
             except (ValueError, IndexError):
                 pass
-        
+
         # Generate new SKU with zero-padded number
         new_num = max_num + 1
         request.sku = f"{item_type_prefix}-{new_num:03d}"
-    
+
     # Check for duplicate SKU
     existing = db.query(Product).filter(Product.sku == request.sku.upper()).first()
     if existing:
@@ -533,21 +528,23 @@ async def create_item(
             raise HTTPException(status_code=400, detail=f"Category {request.category_id} not found")
 
     # Get item_type value for UOM configuration
-    item_type_value = request.item_type.value if hasattr(request.item_type, 'value') else str(request.item_type)
+    item_type_value = request.item_type.value if hasattr(request.item_type, "value") else str(request.item_type)
 
     # Auto-configure UOM for materials (default to filament profile: G/KG/1000)
     # Users can override these values for CNC/laser materials
-    if item_type_value == 'material':
+    if item_type_value == "material":
         # Use request values if provided, otherwise use defaults
         final_unit = request.unit if request.unit else DEFAULT_MATERIAL_UOM.unit  # G
         final_purchase_uom = request.purchase_uom if request.purchase_uom else DEFAULT_MATERIAL_UOM.purchase_uom  # KG
-        final_purchase_factor = getattr(request, 'purchase_factor', None) or DEFAULT_MATERIAL_UOM.purchase_factor  # 1000
+        final_purchase_factor = (
+            getattr(request, "purchase_factor", None) or DEFAULT_MATERIAL_UOM.purchase_factor
+        )  # 1000
         final_is_raw_material = True  # Materials are always raw materials
     else:
         # Use provided values or defaults
         final_unit = request.unit or "EA"
         final_purchase_uom = request.purchase_uom or request.unit or "EA"
-        final_purchase_factor = getattr(request, 'purchase_factor', None)
+        final_purchase_factor = getattr(request, "purchase_factor", None)
         final_is_raw_material = request.is_raw_material or False
 
     item = Product(
@@ -604,7 +601,7 @@ async def create_material_item(
     - Sets unit='G' (grams) - STAR SCHEMA design
     - Links material_type_id and color_id
     - Creates Inventory record
-    
+
     The SKU is auto-generated as: MAT-{material_type_code}-{color_code}
     Note: Costs are still tracked as $/KG, but quantities use grams.
     """
@@ -616,7 +613,7 @@ async def create_material_item(
         ColorNotFoundError,
     )
     from app.models.item_category import ItemCategory
-    
+
     # Validate material type and color exist
     try:
         material_type = get_material_type(db, request.material_type_code)
@@ -625,7 +622,7 @@ async def create_material_item(
         raise HTTPException(status_code=400, detail=str(e))
     except ColorNotFoundError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
+
     # Check if product already exists
     sku = f"MAT-{material_type.code}-{color.code}"
     existing = db.query(Product).filter(Product.sku == sku).first()
@@ -637,57 +634,49 @@ async def create_material_item(
             existing.selling_price = request.selling_price
         if request.category_id is not None:
             existing.category_id = request.category_id
-        
+
         # Update initial inventory if provided
         if request.initial_qty_kg and request.initial_qty_kg > 0:
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == existing.id
-            ).first()
+            inventory = db.query(Inventory).filter(Inventory.product_id == existing.id).first()
             if inventory:
                 inventory.on_hand_quantity = request.initial_qty_kg
             else:
                 # Get default location
-                location = db.query(InventoryLocation).filter(
-                    InventoryLocation.code == 'MAIN'
-                ).first()
+                location = db.query(InventoryLocation).filter(InventoryLocation.code == "MAIN").first()
                 if not location:
-                    location = InventoryLocation(
-                        name="Main Warehouse",
-                        code="MAIN",
-                        type="warehouse"
-                    )
+                    location = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse")
                     db.add(location)
                     db.flush()
-                
+
                 inventory = Inventory(
                     product_id=existing.id,
                     location_id=location.id,
                     on_hand_quantity=request.initial_qty_kg,
-                    allocated_quantity=0
+                    allocated_quantity=0,
                 )
                 db.add(inventory)
-        
+
         db.commit()
         db.refresh(existing)
         logger.info(f"Updated existing material item: {existing.sku}")
         return _build_item_response(existing, db)
-    
+
     # Create new material product
     product = create_material_product(
         db,
         material_type_code=request.material_type_code,
         color_code=request.color_code,
-        commit=False  # We'll commit after setting additional fields
+        commit=False,  # We'll commit after setting additional fields
     )
-    
+
     # Override cost if provided
     if request.cost_per_kg is not None:
         product.standard_cost = request.cost_per_kg
-    
+
     # Set selling price if provided
     if request.selling_price is not None:
         product.selling_price = request.selling_price
-    
+
     # Set category if provided, otherwise try to find Materials category
     if request.category_id:
         category = db.query(ItemCategory).filter(ItemCategory.id == request.category_id).first()
@@ -696,32 +685,29 @@ async def create_material_item(
         product.category_id = request.category_id
     else:
         # Try to find a Materials category
-        materials_category = db.query(ItemCategory).filter(
-            ItemCategory.code.ilike('%MATERIAL%')
-        ).first()
+        materials_category = db.query(ItemCategory).filter(ItemCategory.code.ilike("%MATERIAL%")).first()
         if materials_category:
             product.category_id = materials_category.id
-    
+
     # Set initial inventory quantity if provided
     if request.initial_qty_kg and request.initial_qty_kg > 0:
         # Find the inventory record we just created
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == product.id
-        ).first()
+        inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
         if inventory:
             inventory.on_hand_quantity = request.initial_qty_kg
-    
+
     db.commit()
     db.refresh(product)
-    
+
     logger.info(f"Created material item: {product.sku}")
-    
+
     return _build_item_response(product, db)
 
 
 # ============================================================================
 # Low Stock / Reorder Alerts
 # ============================================================================
+
 
 @router.get("/low-stock")
 async def get_low_stock_items(
@@ -748,13 +734,15 @@ async def get_low_stock_items(
     # 1. Get STOCKED items below reorder point (proactive low stock)
     # Only items with stocking_policy='stocked' are considered for reorder point alerts
     # Exclude "make" items - those need Work Orders, not Purchase Orders
-    query = db.query(Product, Inventory).outerjoin(
-        Inventory, Product.id == Inventory.product_id
-    ).filter(
-        Product.active.is_(True),  # noqa: E712
-        Product.stocking_policy == 'stocked',  # Only stocked items for reorder point alerts
-        Product.reorder_point.isnot(None),
-        or_(Product.procurement_type != 'make', Product.procurement_type.is_(None)),
+    query = (
+        db.query(Product, Inventory)
+        .outerjoin(Inventory, Product.id == Inventory.product_id)
+        .filter(
+            Product.active.is_(True),  # noqa: E712
+            Product.stocking_policy == "stocked",  # Only stocked items for reorder point alerts
+            Product.reorder_point.isnot(None),
+            or_(Product.procurement_type != "make", Product.procurement_type.is_(None)),
+        )
     )
 
     if not include_zero_reorder:
@@ -764,7 +752,7 @@ async def get_low_stock_items(
     query = query.filter(
         or_(
             Inventory.available_quantity <= Product.reorder_point,
-            Inventory.id.is_(None)  # No inventory record = 0 stock
+            Inventory.id.is_(None),  # No inventory record = 0 stock
         )
     )
 
@@ -803,26 +791,28 @@ async def get_low_stock_items(
 
         # Get active sales orders that DON'T have linked production orders
         # (POs already account for their demand via inventory allocations)
-        so_ids_with_po = db.query(ProductionOrder.sales_order_id).filter(
-            ProductionOrder.sales_order_id.isnot(None)
-        ).distinct()
+        so_ids_with_po = (
+            db.query(ProductionOrder.sales_order_id).filter(ProductionOrder.sales_order_id.isnot(None)).distinct()
+        )
 
-        active_orders = db.query(SalesOrder).filter(
-            SalesOrder.status.notin_(["cancelled", "completed", "delivered"]),
-            ~SalesOrder.id.in_(so_ids_with_po),
-        ).all()
+        active_orders = (
+            db.query(SalesOrder)
+            .filter(
+                SalesOrder.status.notin_(["cancelled", "completed", "delivered"]),
+                ~SalesOrder.id.in_(so_ids_with_po),
+            )
+            .all()
+        )
 
         mrp_service = MRPService(db)
-        
+
         # Aggregate requirements across all active orders
         all_requirements = []
         for order in active_orders:
             if order.order_type == "line_item":
                 # Get order lines
-                lines = db.query(SalesOrderLine).filter(
-                    SalesOrderLine.sales_order_id == order.id
-                ).all()
-                
+                lines = db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order.id).all()
+
                 for line in lines:
                     if line.product_id:
                         # Explode BOM for this line
@@ -831,7 +821,7 @@ async def get_low_stock_items(
                                 product_id=line.product_id,
                                 quantity=Decimal(str(line.quantity)),
                                 source_demand_type="sales_order",
-                                source_demand_id=order.id
+                                source_demand_id=order.id,
                             )
                             all_requirements.extend(requirements)
                         except Exception:
@@ -844,7 +834,7 @@ async def get_low_stock_items(
                         product_id=order.product_id,
                         quantity=Decimal(str(order.quantity)),
                         source_demand_type="sales_order",
-                        source_demand_id=order.id
+                        source_demand_id=order.id,
                     )
                     all_requirements.extend(requirements)
                 except Exception:
@@ -853,9 +843,13 @@ async def get_low_stock_items(
 
         # Also get demand from active Production Orders
         # (POs that have sales_order_id are already excluded from SO processing above)
-        active_pos = db.query(ProductionOrder).filter(
-            ProductionOrder.status.in_(["draft", "released", "in_progress"]),
-        ).all()
+        active_pos = (
+            db.query(ProductionOrder)
+            .filter(
+                ProductionOrder.status.in_(["draft", "released", "in_progress"]),
+            )
+            .all()
+        )
 
         # Collect PO IDs to pass to MRP - these POs' allocations should be
         # added back to available since their demand is in gross requirements
@@ -871,7 +865,7 @@ async def get_low_stock_items(
                             product_id=po.product_id,
                             quantity=remaining_qty,
                             source_demand_type="production_order",
-                            source_demand_id=po.id
+                            source_demand_id=po.id,
                         )
                         all_requirements.extend(requirements)
                         # Track this PO for allocation adjustment
@@ -902,6 +896,7 @@ async def get_low_stock_items(
         # double-count by also subtracting their allocations from available)
         if aggregated_requirements:
             from app.services.mrp import ComponentRequirement
+
             component_reqs = []
             for req_data in aggregated_requirements.values():
                 component_reqs.append(
@@ -915,38 +910,38 @@ async def get_low_stock_items(
                 )
 
             net_requirements = mrp_service.calculate_net_requirements(
-                component_reqs,
-                source_production_order_ids=source_po_ids if source_po_ids else None
+                component_reqs, source_production_order_ids=source_po_ids if source_po_ids else None
             )
-            
+
             # Add MRP shortages to items_dict
             for net_req in net_requirements:
                 if net_req.net_shortage > 0:
                     product_id = net_req.product_id
                     mrp_shortage = float(net_req.net_shortage)
-                    
+
                     if product_id in items_dict:
                         # Update existing item (already verified as non-make item)
                         items_dict[product_id]["mrp_shortage"] = mrp_shortage
-                        items_dict[product_id]["shortfall"] = max(
-                            items_dict[product_id]["shortfall"],
-                            mrp_shortage
-                        )
+                        items_dict[product_id]["shortfall"] = max(items_dict[product_id]["shortfall"], mrp_shortage)
                         items_dict[product_id]["shortage_source"] = "both"
                     else:
                         # Add new item (not below reorder point, but has MRP shortage)
                         # Skip "make" items - those need Work Orders, not Purchase Orders
                         product = db.query(Product).filter(Product.id == product_id).first()
-                        if product and product.active and product.procurement_type != 'make':
-                            inv = db.query(
-                                func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
-                                func.coalesce(func.sum(Inventory.allocated_quantity), 0).label("allocated"),
-                            ).filter(Inventory.product_id == product_id).first()
-                            
+                        if product and product.active and product.procurement_type != "make":
+                            inv = (
+                                db.query(
+                                    func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
+                                    func.coalesce(func.sum(Inventory.allocated_quantity), 0).label("allocated"),
+                                )
+                                .filter(Inventory.product_id == product_id)
+                                .first()
+                            )
+
                             on_hand = float(inv.on_hand) if inv else 0
                             allocated = float(inv.allocated) if inv else 0
                             available = on_hand - allocated
-                            
+
                             items_dict[product_id] = {
                                 "id": product.id,
                                 "sku": product.sku,
@@ -990,7 +985,7 @@ async def get_low_stock_items(
             "low_count": low_count,  # Above 50% but below reorder point
             "mrp_shortage_count": mrp_shortage_count,  # Items with MRP-driven shortages
             "total_shortfall_value": total_shortfall_value,
-        }
+        },
     }
 
 
@@ -1028,9 +1023,7 @@ async def get_item(
     db: Session = Depends(get_db),
 ):
     """Get a specific item by ID"""
-    item = db.query(Product).options(
-        joinedload(Product.item_category)
-    ).filter(Product.id == item_id).first()
+    item = db.query(Product).options(joinedload(Product.item_category)).filter(Product.id == item_id).first()
 
     if not item:
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
@@ -1044,9 +1037,7 @@ async def get_item_by_sku(
     db: Session = Depends(get_db),
 ):
     """Get a specific item by SKU"""
-    item = db.query(Product).options(
-        joinedload(Product.item_category)
-    ).filter(Product.sku == sku.upper()).first()
+    item = db.query(Product).options(joinedload(Product.item_category)).filter(Product.sku == sku.upper()).first()
 
     if not item:
         raise HTTPException(status_code=404, detail=f"Item with SKU '{sku}' not found")
@@ -1084,32 +1075,28 @@ async def update_item(
     if request.unit and request.unit.upper() != (old_unit or "").upper():
         new_unit = request.unit.upper().strip()
         old_unit_normalized = (old_unit or "EA").upper().strip()
-        
+
         # Convert all inventory quantities to new unit
         if old_unit_normalized != new_unit:
             from app.services.uom_service import convert_quantity_safe
-            
+
             # Get all inventory records for this product
-            inventory_records = db.query(Inventory).filter(
-                Inventory.product_id == item.id
-            ).all()
-            
+            inventory_records = db.query(Inventory).filter(Inventory.product_id == item.id).all()
+
             if inventory_records:
                 # Check if conversion is possible
                 test_qty = Decimal("1")
-                converted_test, can_convert = convert_quantity_safe(
-                    db, test_qty, old_unit_normalized, new_unit
-                )
-                
+                converted_test, can_convert = convert_quantity_safe(db, test_qty, old_unit_normalized, new_unit)
+
                 if not can_convert:
                     raise HTTPException(
                         status_code=400,
                         detail=(
                             f"Cannot change unit from {old_unit} to {new_unit}. "
                             f"Units are incompatible. Existing inventory would be invalidated."
-                        )
+                        ),
                     )
-                
+
                 # Convert all inventory quantities
                 for inv in inventory_records:
                     if inv.on_hand_quantity and inv.on_hand_quantity > 0:
@@ -1122,16 +1109,16 @@ async def update_item(
                                 f"Converted inventory for {item.sku}: "
                                 f"{inv.on_hand_quantity} {old_unit} -> {converted_qty} {new_unit}"
                             )
-                    
+
                     if inv.allocated_quantity and inv.allocated_quantity > 0:
                         converted_allocated, success = convert_quantity_safe(
                             db, inv.allocated_quantity, old_unit_normalized, new_unit
                         )
                         if success:
                             inv.allocated_quantity = converted_allocated
-                    
+
                     inv.updated_at = datetime.utcnow()
-                
+
                 logger.info(
                     f"Converted {len(inventory_records)} inventory records for {item.sku} "
                     f"from {old_unit} to {new_unit}"
@@ -1179,25 +1166,14 @@ async def delete_item(
         raise HTTPException(status_code=404, detail=f"Item {item_id} not found")
 
     # Check for inventory
-    inv = db.query(func.sum(Inventory.on_hand_quantity)).filter(
-        Inventory.product_id == item_id
-    ).scalar()
+    inv = db.query(func.sum(Inventory.on_hand_quantity)).filter(Inventory.product_id == item_id).scalar()
     if inv and float(inv) > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete item with {inv} units on hand"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot delete item with {inv} units on hand")
 
     # Check for active BOMs using this item
-    bom_count = db.query(BOM).filter(
-        BOM.product_id == item_id,
-        BOM.active.is_(True)
-    ).count()
+    bom_count = db.query(BOM).filter(BOM.product_id == item_id, BOM.active.is_(True)).count()
     if bom_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete item used in {bom_count} active BOMs"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot delete item used in {bom_count} active BOMs")
 
     item.active = False
     item.updated_at = datetime.utcnow()
@@ -1211,6 +1187,7 @@ async def delete_item(
 # ============================================================================
 # Bulk Operations
 # ============================================================================
+
 
 @router.post("/import", response_model=ItemCSVImportResult)
 async def import_items_csv(
@@ -1245,98 +1222,202 @@ async def import_items_csv(
     # Marketplace column mappings for SKU
     SKU_COLUMNS = [
         # Standard variations
-        "sku", "SKU", "Sku", "product_sku", "Product SKU", "product-sku",
+        "sku",
+        "SKU",
+        "Sku",
+        "product_sku",
+        "Product SKU",
+        "product-sku",
         # Shopify
-        "Variant SKU", "variant_sku", "variant-sku", "VariantSKU",
+        "Variant SKU",
+        "variant_sku",
+        "variant-sku",
+        "VariantSKU",
         # TikTok Shop
-        "SKU Code", "sku_code", "sku-code", "SKUCode",
+        "SKU Code",
+        "sku_code",
+        "sku-code",
+        "SKUCode",
         # Amazon (ASIN can be used as SKU)
-        "ASIN", "asin", "Amazon ASIN",
+        "ASIN",
+        "asin",
+        "Amazon ASIN",
         # Generic
-        "Product Code", "product_code", "product-code",
-        "Item SKU", "item_sku", "item-sku",
-        "Product ID", "product_id", "product-id",
+        "Product Code",
+        "product_code",
+        "product-code",
+        "Item SKU",
+        "item_sku",
+        "item-sku",
+        "Product ID",
+        "product_id",
+        "product-id",
     ]
-    
+
     # Marketplace column mappings for Name
     NAME_COLUMNS = [
         # Standard variations
-        "name", "Name", "product_name", "Product Name", "product-name",
+        "name",
+        "Name",
+        "product_name",
+        "Product Name",
+        "product-name",
         # Squarespace
-        "title", "Title", "Product Title", "product-title",
+        "title",
+        "Title",
+        "Product Title",
+        "product-title",
         # Shopify
-        "Variant Title", "variant_title", "variant-title", "VariantTitle",
+        "Variant Title",
+        "variant_title",
+        "variant-title",
+        "VariantTitle",
         # TikTok Shop
-        "Product Title", "product_title", "product-title", "ProductTitle",
+        "Product Title",
+        "product_title",
+        "product-title",
+        "ProductTitle",
         # Amazon
-        "Title", "title", "Product Title",
+        "Title",
+        "title",
+        "Product Title",
         # Generic
-        "Item Name", "item_name", "item-name",
-        "Product Name", "product-name",
+        "Item Name",
+        "item_name",
+        "item-name",
+        "Product Name",
+        "product-name",
     ]
-    
+
     # Marketplace column mappings for Description
     DESCRIPTION_COLUMNS = [
         # Standard variations
-        "description", "Description", "product_description", "Product Description",
+        "description",
+        "Description",
+        "product_description",
+        "Product Description",
         # Shopify
-        "Body (HTML)", "body_html", "Body", "body", "Body HTML",
+        "Body (HTML)",
+        "body_html",
+        "Body",
+        "body",
+        "Body HTML",
         # WooCommerce
-        "Short Description", "short_description", "short-description", "Short description",
-        "Description", "description",  # WooCommerce also has Description
+        "Short Description",
+        "short_description",
+        "short-description",
+        "Short description",
+        "Description",
+        "description",  # WooCommerce also has Description
         # Generic
-        "Long Description", "long_description", "long-description",
-        "Product Description", "product-description",
-        "Item Description", "item_description",
+        "Long Description",
+        "long_description",
+        "long-description",
+        "Product Description",
+        "product-description",
+        "Item Description",
+        "item_description",
     ]
-    
+
     # Marketplace column mappings for Price
     PRICE_COLUMNS = [
         # Standard variations
-        "selling_price", "Selling Price", "selling-price",
-        "price", "Price",  # Squarespace, Generic
+        "selling_price",
+        "Selling Price",
+        "selling-price",
+        "price",
+        "Price",  # Squarespace, Generic
         # Shopify
-        "Variant Price", "variant_price", "variant-price", "VariantPrice",
-        "Variant Compare At Price", "variant_compare_at_price", "variant-compare-at-price",  # Original price
+        "Variant Price",
+        "variant_price",
+        "variant-price",
+        "VariantPrice",
+        "Variant Compare At Price",
+        "variant_compare_at_price",
+        "variant-compare-at-price",  # Original price
         # WooCommerce (Sale price takes priority)
-        "Sale price", "sale_price", "sale-price", "Sale Price",
-        "Regular price", "regular_price", "regular-price", "Regular Price",
+        "Sale price",
+        "sale_price",
+        "sale-price",
+        "Sale Price",
+        "Regular price",
+        "regular_price",
+        "regular-price",
+        "Regular Price",
         # TikTok Shop
-        "Unit Price", "unit_price", "unit-price", "UnitPrice",
+        "Unit Price",
+        "unit_price",
+        "unit-price",
+        "UnitPrice",
         # Generic
-        "Retail Price", "retail_price", "retail-price",
-        "List Price", "list_price", "list-price",
-        "Selling Price", "selling-price",
+        "Retail Price",
+        "retail_price",
+        "retail-price",
+        "List Price",
+        "list_price",
+        "list-price",
+        "Selling Price",
+        "selling-price",
     ]
-    
+
     # Marketplace column mappings for Cost
     COST_COLUMNS = [
         # Standard variations
-        "standard_cost", "Standard Cost", "standard-cost",
-        "cost", "Cost",  # Squarespace, Generic
+        "standard_cost",
+        "Standard Cost",
+        "standard-cost",
+        "cost",
+        "Cost",  # Squarespace, Generic
         # Shopify
-        "Variant Cost", "variant_cost", "variant-cost", "VariantCost",
+        "Variant Cost",
+        "variant_cost",
+        "variant-cost",
+        "VariantCost",
         # Squarespace
-        "Wholesale Price", "wholesale_price", "wholesale-price",
+        "Wholesale Price",
+        "wholesale_price",
+        "wholesale-price",
         # TikTok Shop
-        "Cost Price", "cost_price", "cost-price", "CostPrice",
+        "Cost Price",
+        "cost_price",
+        "cost-price",
+        "CostPrice",
         # Amazon Business
-        "Purchase PPU", "purchase_ppu", "purchase-ppu",  # Per unit price
-        "Item Subtotal", "item_subtotal",  # Could be cost
+        "Purchase PPU",
+        "purchase_ppu",
+        "purchase-ppu",  # Per unit price
+        "Item Subtotal",
+        "item_subtotal",  # Could be cost
         # Generic
-        "Purchase Cost", "purchase_cost", "purchase-cost",
-        "Unit Cost", "unit_cost", "unit-cost",
-        "Wholesale Cost", "wholesale_cost",
+        "Purchase Cost",
+        "purchase_cost",
+        "purchase-cost",
+        "Unit Cost",
+        "unit_cost",
+        "unit-cost",
+        "Wholesale Cost",
+        "wholesale_cost",
     ]
 
     # UOM column mappings
     UNIT_COLUMNS = [
-        "unit", "Unit", "UOM", "uom", "Unit of Measure", "unit_of_measure",
+        "unit",
+        "Unit",
+        "UOM",
+        "uom",
+        "Unit of Measure",
+        "unit_of_measure",
     ]
 
     PURCHASE_UOM_COLUMNS = [
-        "purchase_uom", "Purchase UOM", "purchase_unit", "Purchase Unit",
-        "buying_unit", "Buying Unit", "order_unit", "Order Unit",
+        "purchase_uom",
+        "Purchase UOM",
+        "purchase_unit",
+        "Purchase Unit",
+        "buying_unit",
+        "Buying Unit",
+        "order_unit",
+        "Order Unit",
     ]
 
     # Import UOM validation service
@@ -1352,12 +1433,11 @@ async def import_items_csv(
                 if row.get(col, "").strip():
                     sku = row.get(col, "").strip().upper()
                     break
-            
+
             if not sku:
-                result.errors.append({
-                    "row": row_num, 
-                    "error": "SKU is required. Looked for: sku, SKU, Variant SKU, Product SKU, etc."
-                })
+                result.errors.append(
+                    {"row": row_num, "error": "SKU is required. Looked for: sku, SKU, Variant SKU, Product SKU, etc."}
+                )
                 result.skipped += 1
                 continue
 
@@ -1367,13 +1447,15 @@ async def import_items_csv(
                 if row.get(col, "").strip():
                     name = row.get(col, "").strip()
                     break
-            
+
             if not name:
-                result.errors.append({
-                    "row": row_num, 
-                    "error": "Name is required. Looked for: name, title, Product Name, Variant Title, etc.",
-                    "sku": sku
-                })
+                result.errors.append(
+                    {
+                        "row": row_num,
+                        "error": "Name is required. Looked for: name, title, Product Name, Variant Title, etc.",
+                        "sku": sku,
+                    }
+                )
                 result.skipped += 1
                 continue
 
@@ -1383,32 +1465,35 @@ async def import_items_csv(
             if existing:
                 # Protect seeded example items from being overwritten
                 if existing.sku.startswith("SEED-EXAMPLE-"):
-                    result.errors.append({
-                        "row": row_num,
-                        "error": f"SKU '{sku}' is a seeded example item and cannot be overwritten. Please use a different SKU.",
-                        "sku": sku
-                    })
+                    result.errors.append(
+                        {
+                            "row": row_num,
+                            "error": f"SKU '{sku}' is a seeded example item and cannot be overwritten. Please use a different SKU.",
+                            "sku": sku,
+                        }
+                    )
                     result.skipped += 1
                     continue
-                
+
                 if not update_existing:
                     result.skipped += 1
                     continue
 
                 # Update existing - use same column detection logic
                 existing.name = name
-                
+
                 # Update description
                 for col in DESCRIPTION_COLUMNS:
                     value = row.get(col, "").strip()
                     if value:
                         if "<" in value and ">" in value:
                             import re
-                            existing.description = re.sub(r'<[^>]+>', '', value).strip()
+
+                            existing.description = re.sub(r"<[^>]+>", "", value).strip()
                         else:
                             existing.description = value
                         break
-                
+
                 # Update unit using column mappings
                 unit_value = ""
                 for col in UNIT_COLUMNS:
@@ -1442,12 +1527,10 @@ async def import_items_csv(
                         "raw_material": "material",
                     }
                     existing.item_type = item_type_map.get(item_type_raw.lower(), existing.item_type)
-                
+
                 # Update category - handle all marketplace formats
                 category_id_raw = (
-                    row.get("category_id", "") or
-                    row.get("Category ID", "") or
-                    row.get("category-id", "")
+                    row.get("category_id", "") or row.get("Category ID", "") or row.get("category-id", "")
                 ).strip()
                 if category_id_raw:
                     try:
@@ -1457,27 +1540,28 @@ async def import_items_csv(
                 else:
                     # Try category name (Squarespace, WooCommerce, etc.)
                     category_name_raw = (
-                        row.get("Category", "") or
-                        row.get("category", "") or
-                        row.get("Categories", "") or  # WooCommerce (comma-separated)
-                        row.get("Product Category", "") or
-                        row.get("Type", "") or  # Shopify uses Type
-                        row.get("Product Type", "")
+                        row.get("Category", "")
+                        or row.get("category", "")
+                        or row.get("Categories", "")  # WooCommerce (comma-separated)
+                        or row.get("Product Category", "")
+                        or row.get("Type", "")  # Shopify uses Type
+                        or row.get("Product Type", "")
                     ).strip()
-                    
+
                     if category_name_raw:
                         # Handle WooCommerce comma-separated categories (take first)
                         if "," in category_name_raw:
                             category_name_raw = category_name_raw.split(",")[0].strip()
-                        
+
                         # Try to find category by name (if categories exist)
                         from app.models.item_category import ItemCategory
-                        category = db.query(ItemCategory).filter(
-                            ItemCategory.name.ilike(f"%{category_name_raw}%")
-                        ).first()
+
+                        category = (
+                            db.query(ItemCategory).filter(ItemCategory.name.ilike(f"%{category_name_raw}%")).first()
+                        )
                         if category:
                             existing.category_id = category.id
-                
+
                 # Update cost
                 cost_raw = ""
                 for col in COST_COLUMNS:
@@ -1490,7 +1574,7 @@ async def import_items_csv(
                         existing.standard_cost = float(cost_clean)
                     except ValueError:
                         pass
-                
+
                 # Update price
                 selling_price_raw = ""
                 for col in PRICE_COLUMNS:
@@ -1502,45 +1586,43 @@ async def import_items_csv(
                         elif not selling_price_raw:
                             selling_price_raw = value
                 if selling_price_raw:
-                    price_clean = selling_price_raw.replace("$", "").replace(",", "").replace("€", "").replace("£", "").strip()
+                    price_clean = (
+                        selling_price_raw.replace("$", "").replace(",", "").replace("€", "").replace("£", "").strip()
+                    )
                     try:
                         existing.selling_price = float(price_clean)
                     except ValueError:
                         pass
-                
+
                 # Update reorder point
                 if row.get("reorder_point"):
                     try:
                         existing.reorder_point = float(row["reorder_point"])
                     except ValueError:
                         pass
-                
+
                 # Update UPC - handle all marketplace formats
                 upc = (
-                    row.get("upc", "") or 
-                    row.get("UPC", "") or
-                    row.get("barcode", "") or
-                    row.get("Barcode", "") or
-                    row.get("EAN", "") or
-                    row.get("GTIN", "") or
-                    row.get("Product Code", "") or  # TikTok Shop
-                    row.get("product_code", "") or
-                    row.get("ASIN", "") or  # Amazon ASIN
-                    row.get("asin", "")
+                    row.get("upc", "")
+                    or row.get("UPC", "")
+                    or row.get("barcode", "")
+                    or row.get("Barcode", "")
+                    or row.get("EAN", "")
+                    or row.get("GTIN", "")
+                    or row.get("Product Code", "")  # TikTok Shop
+                    or row.get("product_code", "")
+                    or row.get("ASIN", "")  # Amazon ASIN
+                    or row.get("asin", "")
                 ).strip()
                 if upc:
                     existing.upc = upc
-                
+
                 existing.updated_at = datetime.utcnow()
 
                 # Validate UOM configuration for updated items
                 is_valid, warning_msg = validate_product_uoms(db, existing)
                 if not is_valid:
-                    result.warnings.append({
-                        "row": row_num,
-                        "sku": sku,
-                        "warning": warning_msg
-                    })
+                    result.warnings.append({"row": row_num, "sku": sku, "warning": warning_msg})
 
                 result.updated += 1
             else:
@@ -1556,27 +1638,27 @@ async def import_items_csv(
                             break
                         elif not selling_price_raw:  # Use first found as fallback
                             selling_price_raw = value
-                
+
                 selling_price = None
                 if selling_price_raw:
                     # Remove $ signs, commas, and currency symbols
-                    selling_price_clean = selling_price_raw.replace("$", "").replace(",", "").replace("€", "").replace("£", "").strip()
+                    selling_price_clean = (
+                        selling_price_raw.replace("$", "").replace(",", "").replace("€", "").replace("£", "").strip()
+                    )
                     try:
                         selling_price = float(selling_price_clean)
                     except ValueError:
-                        result.errors.append({
-                            "row": row_num, 
-                            "error": f"Invalid price format: {selling_price_raw}", 
-                            "sku": sku
-                        })
-                
+                        result.errors.append(
+                            {"row": row_num, "error": f"Invalid price format: {selling_price_raw}", "sku": sku}
+                        )
+
                 # Find cost using all possible column names
                 cost_raw = ""
                 for col in COST_COLUMNS:
                     if row.get(col, "").strip():
                         cost_raw = row.get(col, "").strip()
                         break
-                
+
                 standard_cost = None
                 if cost_raw:
                     # Remove $ signs, commas, and currency symbols
@@ -1585,7 +1667,7 @@ async def import_items_csv(
                         standard_cost = float(cost_clean)
                     except ValueError:
                         pass  # Cost is optional, just skip if invalid
-                
+
                 # Find description using all possible column names
                 description = None
                 for col in DESCRIPTION_COLUMNS:
@@ -1594,49 +1676,49 @@ async def import_items_csv(
                         # Strip HTML tags if present (Shopify exports HTML)
                         if "<" in value and ">" in value:
                             import re
-                            description = re.sub(r'<[^>]+>', '', value).strip()
+
+                            description = re.sub(r"<[^>]+>", "", value).strip()
                         else:
                             description = value
                         break
-                
+
                 # Handle category - can be ID or name (all marketplace formats)
                 final_category_id = default_category_id
                 # Try category_id first (numeric)
                 category_id_raw = (
-                    row.get("category_id", "") or
-                    row.get("Category ID", "") or
-                    row.get("category-id", "")
+                    row.get("category_id", "") or row.get("Category ID", "") or row.get("category-id", "")
                 ).strip()
                 if category_id_raw:
                     try:
                         final_category_id = int(category_id_raw)
                     except ValueError:
                         pass
-                
+
                 # If no numeric ID, try category name (Squarespace, WooCommerce, etc.)
                 if not final_category_id or final_category_id == default_category_id:
                     category_name_raw = (
-                        row.get("Category", "") or
-                        row.get("category", "") or
-                        row.get("Categories", "") or  # WooCommerce (comma-separated)
-                        row.get("Product Category", "") or
-                        row.get("Type", "") or  # Shopify uses Type
-                        row.get("Product Type", "")
+                        row.get("Category", "")
+                        or row.get("category", "")
+                        or row.get("Categories", "")  # WooCommerce (comma-separated)
+                        or row.get("Product Category", "")
+                        or row.get("Type", "")  # Shopify uses Type
+                        or row.get("Product Type", "")
                     ).strip()
-                    
+
                     if category_name_raw:
                         # Handle WooCommerce comma-separated categories (take first)
                         if "," in category_name_raw:
                             category_name_raw = category_name_raw.split(",")[0].strip()
-                        
+
                         # Try to find category by name (if categories exist)
                         from app.models.item_category import ItemCategory
-                        category = db.query(ItemCategory).filter(
-                            ItemCategory.name.ilike(f"%{category_name_raw}%")
-                        ).first()
+
+                        category = (
+                            db.query(ItemCategory).filter(ItemCategory.name.ilike(f"%{category_name_raw}%")).first()
+                        )
                         if category:
                             final_category_id = category.id
-                
+
                 # Get unit from CSV
                 unit_value = ""
                 for col in UNIT_COLUMNS:
@@ -1677,7 +1759,19 @@ async def import_items_csv(
                     standard_cost=standard_cost,
                     selling_price=selling_price,
                     reorder_point=float(row["reorder_point"]) if row.get("reorder_point") else None,
-                    upc=(row.get("upc", "") or row.get("UPC", "") or row.get("barcode", "") or row.get("Barcode", "") or row.get("EAN", "") or row.get("GTIN", "") or row.get("Product Code", "") or row.get("product_code", "") or row.get("ASIN", "") or row.get("asin", "")).strip() or None,
+                    upc=(
+                        row.get("upc", "")
+                        or row.get("UPC", "")
+                        or row.get("barcode", "")
+                        or row.get("Barcode", "")
+                        or row.get("EAN", "")
+                        or row.get("GTIN", "")
+                        or row.get("Product Code", "")
+                        or row.get("product_code", "")
+                        or row.get("ASIN", "")
+                        or row.get("asin", "")
+                    ).strip()
+                    or None,
                     active=True,
                 )
                 db.add(item)
@@ -1686,11 +1780,7 @@ async def import_items_csv(
                 # Validate UOM configuration and collect warnings
                 is_valid, warning_msg = validate_product_uoms(db, item)
                 if not is_valid:
-                    result.warnings.append({
-                        "row": row_num,
-                        "sku": sku,
-                        "warning": warning_msg
-                    })
+                    result.warnings.append({"row": row_num, "sku": sku, "warning": warning_msg})
 
                 result.created += 1
 
@@ -1700,7 +1790,9 @@ async def import_items_csv(
 
     db.commit()
 
-    logger.info(f"CSV import complete: {result.created} created, {result.updated} updated, {result.skipped} skipped, {len(result.warnings)} UOM warnings")
+    logger.info(
+        f"CSV import complete: {result.created} created, {result.updated} updated, {result.skipped} skipped, {len(result.warnings)} UOM warnings"
+    )
 
     return result
 
@@ -1723,13 +1815,13 @@ async def bulk_update_items(
 
     updated = 0
     errors = []
-    
+
     for item_id in request.item_ids:
         item = db.query(Product).filter(Product.id == item_id).first()
         if not item:
             errors.append({"item_id": item_id, "error": "Item not found"})
             continue
-            
+
         try:
             if request.category_id is not None:
                 # Allow setting to None (0) to clear category
@@ -1740,10 +1832,10 @@ async def bulk_update_items(
             if request.item_type is not None:
                 # Handle both enum and string values
                 item_type_value = request.item_type
-                if hasattr(item_type_value, 'value'):
+                if hasattr(item_type_value, "value"):
                     item_type_value = item_type_value.value
                 # Validate item type
-                valid_item_types = ['finished_good', 'component', 'supply', 'service', 'material']
+                valid_item_types = ["finished_good", "component", "supply", "service", "material"]
                 if item_type_value in valid_item_types:
                     item.item_type = item_type_value
                 else:
@@ -1751,10 +1843,10 @@ async def bulk_update_items(
             if request.procurement_type is not None:
                 # Handle both enum and string values
                 proc_type_value = request.procurement_type
-                if hasattr(proc_type_value, 'value'):
+                if hasattr(proc_type_value, "value"):
                     proc_type_value = proc_type_value.value
                 # Validate procurement type
-                valid_proc_types = ['make', 'buy', 'make_or_buy']
+                valid_proc_types = ["make", "buy", "make_or_buy"]
                 if proc_type_value in valid_proc_types:
                     item.procurement_type = proc_type_value
                 else:
@@ -1774,13 +1866,14 @@ async def bulk_update_items(
         "message": f"{updated} items updated",
         "updated_count": updated,
         "error_count": len(errors),
-        "errors": errors
+        "errors": errors,
     }
 
 
 # ============================================================================
 # Recost Operations
 # ============================================================================
+
 
 def _recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
     """
@@ -1797,9 +1890,7 @@ def _recalculate_bom_cost(bom: BOM, db: Session) -> Decimal:
     total = Decimal("0")
 
     # Get all BOM lines (BOMLine doesn't have active flag - only BOM does)
-    lines = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom.id
-    ).all()
+    lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
 
     for line in lines:
         component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -1851,10 +1942,7 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
     cost_source = None
 
     # Check for active BOM (indicates manufactured item)
-    bom = db.query(BOM).filter(
-        BOM.product_id == item.id,
-        BOM.active.is_(True)
-    ).first()
+    bom = db.query(BOM).filter(BOM.product_id == item.id, BOM.active.is_(True)).first()
 
     if bom:
         # Manufactured item: recalculate BOM + add Routing
@@ -1865,10 +1953,7 @@ def _calculate_item_cost(item: Product, db: Session) -> dict:
         bom_cost = float(_recalculate_bom_cost(bom, db))
 
         # Get active Routing cost
-        routing = db.query(Routing).filter(
-            Routing.product_id == item.id,
-            Routing.is_active.is_(True)
-        ).first()
+        routing = db.query(Routing).filter(Routing.product_id == item.id, Routing.is_active.is_(True)).first()
         if routing and routing.total_cost:
             routing_cost = float(routing.total_cost)
             routing_id = routing.id
@@ -1951,16 +2036,18 @@ async def recost_all_items(
         item.updated_at = datetime.utcnow()
         updated += 1
 
-        results.append({
-            "id": item.id,
-            "sku": item.sku,
-            "old_cost": old_cost,
-            "new_cost": cost_data["total_cost"],
-            "cost_source": cost_data["cost_source"],
-            "bom_cost": cost_data["bom_cost"],
-            "routing_cost": cost_data["routing_cost"],
-            "purchase_cost": cost_data["purchase_cost"],
-        })
+        results.append(
+            {
+                "id": item.id,
+                "sku": item.sku,
+                "old_cost": old_cost,
+                "new_cost": cost_data["total_cost"],
+                "cost_source": cost_data["cost_source"],
+                "bom_cost": cost_data["bom_cost"],
+                "routing_cost": cost_data["routing_cost"],
+                "purchase_cost": cost_data["purchase_cost"],
+            }
+        )
 
     db.commit()
 
@@ -2019,6 +2106,7 @@ async def recost_item(
 # Helper Functions
 # ============================================================================
 
+
 def _get_category_and_descendants(db: Session, category_id: int) -> list[int]:
     """
     Get a category ID and all its descendant category IDs.
@@ -2027,9 +2115,7 @@ def _get_category_and_descendants(db: Session, category_id: int) -> list[int]:
     result = [category_id]
 
     # Get direct children
-    children = db.query(ItemCategory.id).filter(
-        ItemCategory.parent_id == category_id
-    ).all()
+    children = db.query(ItemCategory.id).filter(ItemCategory.parent_id == category_id).all()
 
     # Recursively get descendants
     for (child_id,) in children:
@@ -2041,10 +2127,14 @@ def _get_category_and_descendants(db: Session, category_id: int) -> list[int]:
 def _build_item_response(item: Product, db: Session) -> ItemResponse:
     """Build full item response with inventory and BOM info"""
     # Get inventory totals
-    inv = db.query(
-        func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
-        func.coalesce(func.sum(Inventory.allocated_quantity), 0).label("allocated"),
-    ).filter(Inventory.product_id == item.id).first()
+    inv = (
+        db.query(
+            func.coalesce(func.sum(Inventory.on_hand_quantity), 0).label("on_hand"),
+            func.coalesce(func.sum(Inventory.allocated_quantity), 0).label("allocated"),
+        )
+        .filter(Inventory.product_id == item.id)
+        .first()
+    )
 
     on_hand = float(inv.on_hand) if inv else 0
     allocated = float(inv.allocated) if inv else 0

@@ -9,6 +9,7 @@ Creates three-line BOMs:
 2. Packaging line (shipping box)
 3. Machine time line (production cost @ $1.50/hr fully-burdened)
 """
+
 import re
 from typing import Tuple, Optional
 from sqlalchemy.orm import Session
@@ -78,8 +79,8 @@ def get_or_create_machine_time_product(db: Session) -> Product:
         sku=MACHINE_TIME_SKU,
         name="Machine Time - 3D Printer (Mfg Overhead)",
         description="Manufacturing overhead: fully-burdened machine time cost including depreciation, "
-                    f"electricity, and maintenance. Rate: ${MACHINE_HOURLY_RATE}/hr. "
-                    "Not physical inventory - cost allocation only.",
+        f"electricity, and maintenance. Rate: ${MACHINE_HOURLY_RATE}/hr. "
+        "Not physical inventory - cost allocation only.",
         category="Manufacturing",
         type="overhead",
         unit="HR",
@@ -115,7 +116,7 @@ def parse_box_dimensions(box_name: str) -> Optional[Tuple[float, float, float]]:
         Tuple of (length, width, height) in inches, or None if not parseable
     """
     # Match patterns like "4x4x4in", "8x8x16in"
-    pattern_with_in = r'(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*in'
+    pattern_with_in = r"(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*in"
     match = re.search(pattern_with_in, box_name, re.IGNORECASE)
 
     if match:
@@ -123,7 +124,7 @@ def parse_box_dimensions(box_name: str) -> Optional[Tuple[float, float, float]]:
         return (length, width, height)
 
     # Match patterns like "9x6x4 Black", "12x9x4" (dimensions at start of name)
-    pattern_no_in = r'^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)'
+    pattern_no_in = r"^(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)\s*x\s*(\d+(?:\.\d+)?)"
     match = re.search(pattern_no_in, box_name)
 
     if match:
@@ -170,12 +171,16 @@ def determine_best_box(quote: Quote, db: Session) -> Optional[Product]:
     # Search for boxes by:
     # 1. Products with "box" in the name
     # 2. Products in packaging/shipping categories
-    box_products = db.query(Product).filter(
-        and_(
-            Product.active.is_(True),  # noqa: E712
-            Product.name.like('%box%')  # Match boxes by name
+    box_products = (
+        db.query(Product)
+        .filter(
+            and_(
+                Product.active.is_(True),  # noqa: E712
+                Product.name.like("%box%"),  # Match boxes by name
+            )
         )
-    ).all()
+        .all()
+    )
 
     # Find suitable boxes
     suitable_boxes = []
@@ -274,14 +279,14 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
         sku=product_sku,
         name=f"Custom Print - Quote #{quote.quote_number}",
         description=f"Auto-created from quote {quote.quote_number}. "
-                    f"Material: {quote.material_type}, Color: {quote.color}",
+        f"Material: {quote.material_type}, Color: {quote.color}",
         category="Finished Goods",
         type="custom",
         cost=float(quote.unit_price) if quote.unit_price else None,
         selling_price=float(quote.total_price) if quote.total_price else None,
         gcode_file_path=quote.gcode_file_path,  # Link to the sliced G-code
         has_bom=True,
-        active=True
+        active=True,
     )
 
     db.add(product)
@@ -299,26 +304,24 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
             slot_material = qm.material_type or quote.material_type
 
             try:
-                mat_product = get_material_product(
-                    db,
-                    material_type_code=slot_material,
-                    color_code=slot_color
-                )
+                mat_product = get_material_product(db, material_type_code=slot_material, color_code=slot_color)
                 if not mat_product:
                     mat_product = create_material_product(
                         db,
                         material_type_code=slot_material,
                         color_code=slot_color,
-                        commit=False # Commit will be done at the end of the service
+                        commit=False,  # Commit will be done at the end of the service
                     )
 
-                material_entries.append({
-                    "product": mat_product,
-                    "grams": float(qm.material_grams),
-                    "slot": qm.slot_number,
-                    "is_primary": qm.is_primary,
-                    "color_name": qm.color_name or slot_color,
-                })
+                material_entries.append(
+                    {
+                        "product": mat_product,
+                        "grams": float(qm.material_grams),
+                        "slot": qm.slot_number,
+                        "is_primary": qm.is_primary,
+                        "color_name": qm.color_name or slot_color,
+                    }
+                )
             except (MaterialNotFoundError, ColorNotFoundError) as e:
                 raise RuntimeError(
                     f"Could not find material for slot {qm.slot_number}: {slot_material} + {slot_color}. "
@@ -328,25 +331,23 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
     else:
         # Single material quote - use quote.material_type and quote.color
         try:
-            material_product = get_material_product(
-                db,
-                material_type_code=quote.material_type,
-                color_code=quote.color
-            )
+            material_product = get_material_product(db, material_type_code=quote.material_type, color_code=quote.color)
             if not material_product:
                 material_product = create_material_product(
                     db,
                     material_type_code=quote.material_type,
                     color_code=quote.color,
-                    commit=False # Commit will be done at the end of the service
+                    commit=False,  # Commit will be done at the end of the service
                 )
-            material_entries.append({
-                "product": material_product,
-                "grams": float(quote.material_grams) if quote.material_grams else 0.0,
-                "slot": 1,
-                "is_primary": True,
-                "color_name": quote.color,
-            })
+            material_entries.append(
+                {
+                    "product": material_product,
+                    "grams": float(quote.material_grams) if quote.material_grams else 0.0,
+                    "slot": 1,
+                    "is_primary": True,
+                    "color_name": quote.color,
+                }
+            )
         except (MaterialNotFoundError, ColorNotFoundError) as e:
             raise RuntimeError(
                 f"Could not find material for quote: {quote.material_type} + {quote.color}. "
@@ -377,8 +378,7 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
         version=1,
         revision="1.0",
         active=True,
-        notes=f"Auto-created from quote {quote.quote_number}. "
-              f"{material_note}. Qty: {quote.quantity}."
+        notes=f"Auto-created from quote {quote.quote_number}. " f"{material_note}. Qty: {quote.quantity}.",
     )
 
     db.add(bom)
@@ -395,15 +395,12 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
 
         # Get the material's consumption UOM (e.g., KG, G, LB)
         material_uom = get_product_consumption_uom(db, int(mat_product.id), default_unit="KG")
-        
+
         # Convert material quantity from grams to the material's UOM
         # Material is always provided in grams from the quote
         material_quantity_per_part_grams = Decimal(str(mat_grams))
         material_quantity_per_part = convert_quantity(
-            db,
-            material_quantity_per_part_grams,
-            from_unit="G",
-            to_unit=material_uom
+            db, material_quantity_per_part_grams, from_unit="G", to_unit=material_uom
         )
         total_material_quantity = float(material_quantity_per_part) * quote.quantity
 
@@ -416,8 +413,8 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
             unit=material_uom,  # Use material's actual UOM instead of hardcoded KG
             consume_stage="production",
             notes=f"Material{slot_info}: {mat_product.name}. "
-                  f"{quote.quantity} parts @ {material_quantity_per_part:.3f}{material_uom} each. "
-                  f"Color: {color_name}. SKU: {mat_product.sku}"
+            f"{quote.quantity} parts @ {material_quantity_per_part:.3f}{material_uom} each. "
+            f"Color: {color_name}. SKU: {mat_product.sku}",
         )
 
         db.add(bom_line_material)
@@ -432,8 +429,8 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
         sequence=line_sequence,
         quantity=1.0,  # One box per order
         unit="EA",
-        consume_stage='shipping',  # Consumed when label is purchased, not at production
-        notes=f"Shipping box: {box_product.name}"
+        consume_stage="shipping",  # Consumed when label is purchased, not at production
+        notes=f"Shipping box: {box_product.name}",
     )
 
     db.add(bom_line_box)
@@ -452,7 +449,7 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
             quantity=print_hours,  # Hours of machine time
             unit="HR",
             is_cost_only=True,  # Machine time is for costing, not inventory
-            notes=f"Machine time: {print_hours:.2f}hr @ ${MACHINE_HOURLY_RATE}/hr = ${machine_cost:.2f}"
+            notes=f"Machine time: {print_hours:.2f}hr @ ${MACHINE_HOURLY_RATE}/hr = ${machine_cost:.2f}",
         )
 
         db.add(bom_line_machine)
@@ -471,16 +468,16 @@ def auto_create_product_and_bom(quote: Quote, db: Session) -> Tuple[Product, BOM
 def validate_quote_for_bom(quote: Quote, db: Session) -> Tuple[bool, str]:
     """
     Validate that a quote has all required data for BOM creation.
-    
+
     Args:
         quote: Quote to validate
         db: Database session
-    
+
     Returns:
         Tuple of (is_valid: bool, message: str)
     """
     errors = []
-    
+
     if not quote.material_type:
         errors.append("Missing material_type")
     if not quote.color:
@@ -491,34 +488,27 @@ def validate_quote_for_bom(quote: Quote, db: Session) -> Tuple[bool, str]:
         errors.append("Invalid quantity")
     if not quote.material_grams:
         errors.append("Missing material_grams")
-    
+
     # Check if material-color combo exists
     if quote.material_type and quote.color:
         try:
-            product = get_material_product(
-                db,
-                material_type_code=quote.material_type,
-                color_code=quote.color
-            )
+            product = get_material_product(db, material_type_code=quote.material_type, color_code=quote.color)
             if not product:
                 # Try to create it to see if it's a valid combination
                 create_material_product(
-                    db,
-                    material_type_code=quote.material_type,
-                    color_code=quote.color,
-                    commit=False
+                    db, material_type_code=quote.material_type, color_code=quote.color, commit=False
                 )
-                db.rollback() # Rollback the creation, we are only validating
+                db.rollback()  # Rollback the creation, we are only validating
         except Exception as e:
             errors.append(f"Material not available: {str(e)}")
-    
+
     # Check if suitable box exists
     if quote.dimensions_x and quote.dimensions_y and quote.dimensions_z and quote.quantity:
         box = determine_best_box(quote, db)
         if not box:
             errors.append("No suitable shipping box found")
-    
+
     if errors:
         return False, "; ".join(errors)
-    
+
     return True, "Valid"

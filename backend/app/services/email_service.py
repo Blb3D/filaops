@@ -6,6 +6,7 @@ Handles SMTP email sending for:
 - Password reset confirmation
 - Order notifications
 """
+
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -28,13 +29,7 @@ class EmailService:
         self.from_email = settings.SMTP_FROM_EMAIL
         self.from_name = settings.SMTP_FROM_NAME
 
-    def _send_email(
-        self,
-        to_email: str,
-        subject: str,
-        html_body: str,
-        text_body: Optional[str] = None
-    ) -> bool:
+    def _send_email(self, to_email: str, subject: str, html_body: str, text_body: Optional[str] = None) -> bool:
         """
         Send an email via SMTP
 
@@ -73,12 +68,7 @@ class EmailService:
             return False
 
     def send_password_reset_approval_request(
-        self,
-        admin_email: str,
-        user_email: str,
-        user_name: str,
-        approval_token: str,
-        frontend_url: str
+        self, admin_email: str, user_email: str, user_name: str, approval_token: str, frontend_url: str
     ) -> bool:
         """
         Send password reset approval request to admin
@@ -160,11 +150,7 @@ class EmailService:
         return self._send_email(admin_email, subject, html_body, text_body)
 
     def send_password_reset_approved(
-        self,
-        user_email: str,
-        user_name: str,
-        reset_token: str,
-        frontend_url: str
+        self, user_email: str, user_name: str, reset_token: str, frontend_url: str
     ) -> bool:
         """
         Send password reset link to user after admin approval
@@ -235,12 +221,7 @@ class EmailService:
 
         return self._send_email(user_email, subject, html_body, text_body)
 
-    def send_password_reset_denied(
-        self,
-        user_email: str,
-        user_name: str,
-        reason: Optional[str] = None
-    ) -> bool:
+    def send_password_reset_denied(self, user_email: str, user_name: str, reason: Optional[str] = None) -> bool:
         """
         Notify user that their password reset was denied
         """
@@ -297,11 +278,7 @@ class EmailService:
 
         return self._send_email(user_email, subject, html_body, text_body)
 
-    def send_password_reset_completed(
-        self,
-        user_email: str,
-        user_name: str
-    ) -> bool:
+    def send_password_reset_completed(self, user_email: str, user_name: str) -> bool:
         """
         Confirm to user that their password was successfully changed
         """

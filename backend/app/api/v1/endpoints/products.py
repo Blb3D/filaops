@@ -1,6 +1,7 @@
 """
 Products API Endpoints
 """
+
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional
 from pydantic import BaseModel
@@ -21,6 +22,7 @@ from app.schemas.routing_operations import (
 router = APIRouter()
 logger = get_logger(__name__)
 
+
 def _product_has_transactions(db: Session, product_id: int) -> tuple[bool, str]:
     """
     Check if product has any transactional history that would prevent SKU changes.
@@ -38,30 +40,26 @@ def _product_has_transactions(db: Session, product_id: int) -> tuple[bool, str]:
     from app.models.traceability import MaterialLot
 
     # Check purchase order lines
-    po_lines = db.query(PurchaseOrderLine).filter(
-        PurchaseOrderLine.product_id == product_id
-    ).count()
+    po_lines = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.product_id == product_id).count()
     if po_lines > 0:
         return True, f"Product has {po_lines} purchase order line(s)"
 
     # Check inventory transactions
-    inv_txns = db.query(InventoryTransaction).filter(
-        InventoryTransaction.product_id == product_id
-    ).count()
+    inv_txns = db.query(InventoryTransaction).filter(InventoryTransaction.product_id == product_id).count()
     if inv_txns > 0:
         return True, f"Product has {inv_txns} inventory transaction(s)"
 
     # Check material lots
-    lots = db.query(MaterialLot).filter(
-        MaterialLot.product_id == product_id
-    ).count()
+    lots = db.query(MaterialLot).filter(MaterialLot.product_id == product_id).count()
     if lots > 0:
         return True, f"Product has {lots} material lot(s)"
 
     return False, ""
 
+
 class ProductCreate(BaseModel):
     """Create product request"""
+
     sku: str
     name: str
     description: Optional[str] = None
@@ -75,6 +73,7 @@ class ProductCreate(BaseModel):
 
 class ProductUpdate(BaseModel):
     """Update product request"""
+
     sku: Optional[str] = None
     name: Optional[str] = None
     description: Optional[str] = None
@@ -88,6 +87,7 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(BaseModel):
     """Product response"""
+
     id: int
     sku: str
     name: str
@@ -106,10 +106,13 @@ class ProductResponse(BaseModel):
     class Config:
         from_attributes = True
 
+
 class ProductListResponse(BaseModel):
     """Product list response"""
+
     total: int
     items: List[ProductResponse]
+
 
 @router.get("", response_model=ProductListResponse)
 async def list_products(
@@ -121,7 +124,7 @@ async def list_products(
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     List products with optional filtering
@@ -145,6 +148,7 @@ async def list_products(
         if category:
             # Filter by category name through ItemCategory relationship
             from app.models.item_category import ItemCategory
+
             query = query.join(ItemCategory, Product.category_id == ItemCategory.id).filter(
                 ItemCategory.name.ilike(f"%{category}%")
             )
@@ -157,10 +161,7 @@ async def list_products(
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                (Product.sku.like(search_pattern)) |
-                (Product.name.like(search_pattern))
-            )
+            query = query.filter((Product.sku.like(search_pattern)) | (Product.name.like(search_pattern)))
 
         # Get total count
         total = query.count()
@@ -168,21 +169,15 @@ async def list_products(
         # Get paginated results
         products = query.order_by(Product.id).offset(offset).limit(limit).all()
 
-        return ProductListResponse(
-            total=total,
-            items=[ProductResponse.from_orm(p) for p in products]
-        )
+        return ProductListResponse(total=total, items=[ProductResponse.from_orm(p) for p in products])
 
     except Exception as e:
         logger.error(f"Failed to list products: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/{id}", response_model=ProductResponse)
-async def get_product(
-    id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_product(id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get a specific product by ID"""
     try:
         product = db.query(Product).filter(Product.id == id).first()
@@ -198,12 +193,9 @@ async def get_product(
         logger.error(f"Failed to get product: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @router.get("/sku/{sku}", response_model=ProductResponse)
-async def get_product_by_sku(
-    sku: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
+async def get_product_by_sku(sku: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get a specific product by SKU"""
     try:
         product = db.query(Product).filter(Product.sku == sku).first()
@@ -222,19 +214,14 @@ async def get_product_by_sku(
 
 @router.post("", response_model=ProductResponse)
 async def create_product(
-    request: ProductCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    request: ProductCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Create a new product"""
     try:
         # Check if SKU already exists
         existing = db.query(Product).filter(Product.sku == request.sku).first()
         if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Product with SKU '{request.sku}' already exists"
-            )
+            raise HTTPException(status_code=400, detail=f"Product with SKU '{request.sku}' already exists")
 
         # Create product
         product = Product(
@@ -266,10 +253,7 @@ async def create_product(
 
 @router.put("/{id}", response_model=ProductResponse)
 async def update_product(
-    id: int,
-    request: ProductUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    id: int, request: ProductUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Update an existing product"""
     try:
@@ -283,17 +267,13 @@ async def update_product(
             has_txns, reason = _product_has_transactions(db, id)
             if has_txns:
                 raise HTTPException(
-                    status_code=400,
-                    detail=f"Cannot change SKU: {reason}. Create a new product instead."
+                    status_code=400, detail=f"Cannot change SKU: {reason}. Create a new product instead."
                 )
 
             # Check uniqueness
             existing = db.query(Product).filter(Product.sku == request.sku).first()
             if existing:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Product with SKU '{request.sku}' already exists"
-                )
+                raise HTTPException(status_code=400, detail=f"Product with SKU '{request.sku}' already exists")
 
         # Update fields
         update_data = request.model_dump(exclude_unset=True)
@@ -319,16 +299,8 @@ async def update_product(
 # =============================================================================
 
 
-@router.get(
-    "/{product_id}/routing",
-    response_model=ProductRoutingResponse,
-    summary="Get routing for a product"
-)
-def get_product_routing(
-    product_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+@router.get("/{product_id}/routing", response_model=ProductRoutingResponse, summary="Get routing for a product")
+def get_product_routing(product_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Get routing details for a product."""
     product = db.get(Product, product_id)
     if not product:
@@ -337,19 +309,13 @@ def get_product_routing(
     routing_info = get_product_routing_details(db, product_id)
 
     if not routing_info:
-        return ProductRoutingResponse(
-            product_id=product_id,
-            routing_id=None,
-            operations=[]
-        )
+        return ProductRoutingResponse(product_id=product_id, routing_id=None, operations=[])
 
     return ProductRoutingResponse(
         product_id=product_id,
-        routing_id=routing_info['routing_id'],
-        routing_code=routing_info['routing_code'],
-        routing_name=routing_info['routing_name'],
-        is_active=routing_info['is_active'],
-        operations=[
-            RoutingOperationInfo(**op) for op in routing_info['operations']
-        ]
+        routing_id=routing_info["routing_id"],
+        routing_code=routing_info["routing_code"],
+        routing_name=routing_info["routing_name"],
+        is_active=routing_info["is_active"],
+        operations=[RoutingOperationInfo(**op) for op in routing_info["operations"]],
     )

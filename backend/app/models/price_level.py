@@ -7,6 +7,7 @@ Price levels define discount percentages for different customer tiers:
 - Tier C (10%) - Standard wholesale
 - Tier D (0%) - Retail pricing
 """
+
 from decimal import Decimal
 from sqlalchemy import Column, Integer, String, Numeric, Text, Boolean, DateTime
 from sqlalchemy.orm import relationship
@@ -21,6 +22,7 @@ class PriceLevel(Base):
     Each customer can be assigned a price level which determines
     their base discount percentage on all products.
     """
+
     __tablename__ = "price_levels"
 
     # Primary Key
@@ -53,4 +55,4 @@ class PriceLevel(Base):
 
         Example: 25% discount -> multiplier of 0.75
         """
-        return Decimal('1') - (Decimal(str(self.discount_percent)) / Decimal('100'))
+        return Decimal("1") - (Decimal(str(self.discount_percent)) / Decimal("100"))

@@ -3,6 +3,7 @@ Manufacturing Routes Pydantic Schemas
 
 Work Centers, Resources, Routings, and Routing Operations.
 """
+
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime, date
@@ -11,7 +12,7 @@ from enum import Enum
 
 
 # Valid UOM codes - should match uom_service.INLINE_UOM_CONVERSIONS
-VALID_UOM_CODES = ['EA', 'G', 'KG', 'LB', 'OZ', 'M', 'MM', 'CM', 'IN', 'FT', 'L', 'ML', 'PK', 'BOX', 'ROLL', 'HR']
+VALID_UOM_CODES = ["EA", "G", "KG", "LB", "OZ", "M", "MM", "CM", "IN", "FT", "L", "ML", "PK", "BOX", "ROLL", "HR"]
 
 
 def validate_uom_code(value: Optional[str]) -> Optional[str]:
@@ -20,7 +21,7 @@ def validate_uom_code(value: Optional[str]) -> Optional[str]:
     Returns None if input is None/empty, otherwise normalizes to uppercase.
     Raises ValueError if the unit is not in the allowed list.
     """
-    if value is None or value.strip() == '':
+    if value is None or value.strip() == "":
         return None
 
     normalized = value.upper().strip()
@@ -33,8 +34,10 @@ def validate_uom_code(value: Optional[str]) -> Optional[str]:
 # Enums
 # ============================================================================
 
+
 class WorkCenterType(str, Enum):
     """Type of work center"""
+
     MACHINE = "machine"
     STATION = "station"
     LABOR = "labor"
@@ -42,6 +45,7 @@ class WorkCenterType(str, Enum):
 
 class ResourceStatus(str, Enum):
     """Resource availability status"""
+
     AVAILABLE = "available"
     BUSY = "busy"
     MAINTENANCE = "maintenance"
@@ -50,6 +54,7 @@ class ResourceStatus(str, Enum):
 
 class RuntimeSource(str, Enum):
     """Where the operation runtime comes from"""
+
     MANUAL = "manual"
     SLICER = "slicer"
     CALCULATED = "calculated"
@@ -59,8 +64,10 @@ class RuntimeSource(str, Enum):
 # Work Center Schemas
 # ============================================================================
 
+
 class WorkCenterBase(BaseModel):
     """Base work center fields"""
+
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
@@ -84,11 +91,13 @@ class WorkCenterBase(BaseModel):
 
 class WorkCenterCreate(WorkCenterBase):
     """Create a new work center"""
+
     pass
 
 
 class WorkCenterUpdate(BaseModel):
     """Update an existing work center"""
+
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -105,6 +114,7 @@ class WorkCenterUpdate(BaseModel):
 
 class WorkCenterResponse(WorkCenterBase):
     """Work center response"""
+
     id: int
     created_at: datetime
     updated_at: datetime
@@ -117,6 +127,7 @@ class WorkCenterResponse(WorkCenterBase):
 
 class WorkCenterListResponse(BaseModel):
     """Work center list item"""
+
     id: int
     code: str
     name: str
@@ -135,8 +146,10 @@ class WorkCenterListResponse(BaseModel):
 # Resource Schemas
 # ============================================================================
 
+
 class ResourceBase(BaseModel):
     """Base resource fields"""
+
     code: str = Field(..., min_length=1, max_length=50)
     name: str = Field(..., min_length=1, max_length=200)
     machine_type: Optional[str] = Field(None, max_length=100)
@@ -150,11 +163,13 @@ class ResourceBase(BaseModel):
 
 class ResourceCreate(ResourceBase):
     """Create a new resource (work_center_id is optional, taken from URL path)"""
+
     work_center_id: Optional[int] = None
 
 
 class ResourceUpdate(BaseModel):
     """Update an existing resource"""
+
     work_center_id: Optional[int] = None  # Allow reassigning to different work center
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=200)
@@ -169,6 +184,7 @@ class ResourceUpdate(BaseModel):
 
 class ResourceResponse(ResourceBase):
     """Resource response"""
+
     id: int
     work_center_id: int
     work_center_code: Optional[str] = None
@@ -184,8 +200,10 @@ class ResourceResponse(ResourceBase):
 # Routing Operation Schemas
 # ============================================================================
 
+
 class RoutingOperationBase(BaseModel):
     """Base routing operation fields"""
+
     work_center_id: int
     sequence: int = Field(..., ge=1)
     operation_code: Optional[str] = Field(None, max_length=50)
@@ -218,11 +236,13 @@ class RoutingOperationBase(BaseModel):
 
 class RoutingOperationCreate(RoutingOperationBase):
     """Create a new routing operation"""
+
     pass
 
 
 class RoutingOperationUpdate(BaseModel):
     """Update an existing routing operation"""
+
     work_center_id: Optional[int] = None
     sequence: Optional[int] = None
     operation_code: Optional[str] = None
@@ -245,6 +265,7 @@ class RoutingOperationUpdate(BaseModel):
 
 class RoutingOperationResponse(RoutingOperationBase):
     """Routing operation response"""
+
     id: int
     routing_id: int
     work_center_code: Optional[str] = None
@@ -262,8 +283,10 @@ class RoutingOperationResponse(RoutingOperationBase):
 # Routing Schemas
 # ============================================================================
 
+
 class RoutingBase(BaseModel):
     """Base routing fields"""
+
     product_id: Optional[int] = None  # Optional for templates
     code: Optional[str] = Field(None, max_length=50)
     name: Optional[str] = Field(None, max_length=200)
@@ -277,11 +300,13 @@ class RoutingBase(BaseModel):
 
 class RoutingCreate(RoutingBase):
     """Create a new routing"""
+
     operations: List[RoutingOperationCreate] = Field(default_factory=list)
 
 
 class RoutingUpdate(BaseModel):
     """Update an existing routing"""
+
     code: Optional[str] = None
     name: Optional[str] = None
     is_template: Optional[bool] = None
@@ -293,6 +318,7 @@ class RoutingUpdate(BaseModel):
 
 class RoutingResponse(RoutingBase):
     """Routing response with operations"""
+
     id: int
     product_sku: Optional[str] = None
     product_name: Optional[str] = None
@@ -309,6 +335,7 @@ class RoutingResponse(RoutingBase):
 
 class RoutingListResponse(BaseModel):
     """Routing list item"""
+
     id: int
     product_id: Optional[int] = None  # Nullable for templates
     product_sku: Optional[str] = None
@@ -332,8 +359,10 @@ class RoutingListResponse(BaseModel):
 # Capacity Schemas
 # ============================================================================
 
+
 class CapacitySummary(BaseModel):
     """Capacity summary for a work center"""
+
     work_center_id: int
     work_center_code: str
     work_center_name: str
@@ -346,6 +375,7 @@ class CapacitySummary(BaseModel):
 
 class CapacityCheckRequest(BaseModel):
     """Request to check if we can produce X units by date Y"""
+
     product_id: int
     quantity: int = Field(..., ge=1)
     required_date: date
@@ -353,6 +383,7 @@ class CapacityCheckRequest(BaseModel):
 
 class CapacityCheckResponse(BaseModel):
     """Response to capacity check"""
+
     can_fulfill: bool
     earliest_completion_date: date
     bottleneck_work_center: Optional[str] = None
@@ -363,8 +394,10 @@ class CapacityCheckResponse(BaseModel):
 # Apply Template Schemas
 # ============================================================================
 
+
 class OperationTimeOverride(BaseModel):
     """Override times for a specific operation when applying a template"""
+
     operation_code: str  # e.g., "PRINT", "QC", "ASSEMBLE"
     run_time_minutes: Optional[Decimal] = None
     setup_time_minutes: Optional[Decimal] = None
@@ -372,6 +405,7 @@ class OperationTimeOverride(BaseModel):
 
 class ApplyTemplateRequest(BaseModel):
     """Request to apply a routing template to a product"""
+
     product_id: int
     template_id: int
     overrides: List[OperationTimeOverride] = Field(default_factory=list)
@@ -379,6 +413,7 @@ class ApplyTemplateRequest(BaseModel):
 
 class ApplyTemplateResponse(BaseModel):
     """Response after applying a template"""
+
     routing_id: int
     routing_code: str
     product_sku: str
@@ -393,15 +428,18 @@ class ApplyTemplateResponse(BaseModel):
 # Routing Operation Material Schemas (Manufacturing BOM)
 # ============================================================================
 
+
 class QuantityPer(str, Enum):
     """How to interpret quantity - per unit, batch, or order"""
-    UNIT = "unit"       # Multiply by order quantity
-    BATCH = "batch"     # Fixed per batch
-    ORDER = "order"     # Fixed per order
+
+    UNIT = "unit"  # Multiply by order quantity
+    BATCH = "batch"  # Fixed per batch
+    ORDER = "order"  # Fixed per order
 
 
 class RoutingOperationMaterialBase(BaseModel):
     """Base fields for routing operation material"""
+
     component_id: int
     quantity: Decimal = Field(..., gt=0)
     quantity_per: QuantityPer = QuantityPer.UNIT
@@ -411,7 +449,7 @@ class RoutingOperationMaterialBase(BaseModel):
     is_optional: bool = False
     notes: Optional[str] = None
 
-    @field_validator('unit')
+    @field_validator("unit")
     @classmethod
     def validate_unit(cls, v: str) -> str:
         """Validate and normalize the unit of measure."""
@@ -421,11 +459,13 @@ class RoutingOperationMaterialBase(BaseModel):
 
 class RoutingOperationMaterialCreate(RoutingOperationMaterialBase):
     """Create a new routing operation material"""
+
     pass
 
 
 class RoutingOperationMaterialUpdate(BaseModel):
     """Update an existing routing operation material"""
+
     component_id: Optional[int] = None
     quantity: Optional[Decimal] = Field(None, gt=0)
     quantity_per: Optional[QuantityPer] = None
@@ -435,7 +475,7 @@ class RoutingOperationMaterialUpdate(BaseModel):
     is_optional: Optional[bool] = None
     notes: Optional[str] = None
 
-    @field_validator('unit')
+    @field_validator("unit")
     @classmethod
     def validate_unit(cls, v: Optional[str]) -> Optional[str]:
         """Validate and normalize the unit of measure."""
@@ -444,6 +484,7 @@ class RoutingOperationMaterialUpdate(BaseModel):
 
 class RoutingOperationMaterialResponse(RoutingOperationMaterialBase):
     """Routing operation material response"""
+
     id: int
     routing_operation_id: int
     component_sku: Optional[str] = None
@@ -461,16 +502,19 @@ class RoutingOperationMaterialResponse(RoutingOperationMaterialBase):
 # Production Order Operation Material Schemas
 # ============================================================================
 
+
 class POOperationMaterialStatus(str, Enum):
     """Status of PO operation material"""
-    PENDING = "pending"       # Not yet allocated
-    ALLOCATED = "allocated"   # Inventory reserved
-    CONSUMED = "consumed"     # Used in production
-    RETURNED = "returned"     # Excess returned
+
+    PENDING = "pending"  # Not yet allocated
+    ALLOCATED = "allocated"  # Inventory reserved
+    CONSUMED = "consumed"  # Used in production
+    RETURNED = "returned"  # Excess returned
 
 
 class POOperationMaterialResponse(BaseModel):
     """Production order operation material response"""
+
     id: int
     production_order_operation_id: int
     component_id: int
@@ -495,12 +539,14 @@ class POOperationMaterialResponse(BaseModel):
 
 class POOperationMaterialConsume(BaseModel):
     """Request to consume a PO operation material"""
+
     quantity: Decimal = Field(..., gt=0)
     lot_number: Optional[str] = None
 
 
 class POOperationMaterialAllocate(BaseModel):
     """Request to allocate inventory to a PO operation material"""
+
     quantity: Decimal = Field(..., gt=0)
     lot_number: Optional[str] = None
 
@@ -509,8 +555,10 @@ class POOperationMaterialAllocate(BaseModel):
 # Extended Routing Operation Response with Materials
 # ============================================================================
 
+
 class RoutingOperationWithMaterialsResponse(RoutingOperationResponse):
     """Routing operation with its materials"""
+
     materials: List[RoutingOperationMaterialResponse] = Field(default_factory=list)
     material_cost: Decimal = Decimal("0")
     total_cost_with_materials: Decimal = Decimal("0")
@@ -520,8 +568,10 @@ class RoutingOperationWithMaterialsResponse(RoutingOperationResponse):
 # Manufacturing BOM View (unified view of routing + materials)
 # ============================================================================
 
+
 class ManufacturingBOMResponse(BaseModel):
     """Complete Manufacturing BOM for a product (routing + operation materials)"""
+
     routing_id: int
     routing_code: str
     routing_name: Optional[str] = None

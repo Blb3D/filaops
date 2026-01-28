@@ -28,17 +28,19 @@ ROLL SIZE CLARIFICATION:
 - A 500g roll is simply 0.5 KG on the PO line
 - purchase_factor stays at 1000 regardless of roll size
 """
+
 from decimal import Decimal
 from typing import NamedTuple, Optional, List
 
 
 class UOMConfig(NamedTuple):
     """Configuration for a product's unit of measure settings."""
-    unit: str                    # Storage/consumption unit (G for filament)
-    purchase_uom: str            # How vendors sell it (KG for filament)
-    purchase_factor: Decimal     # Conversion: purchase_uom -> unit (1000 for KG->G)
-    is_raw_material: bool        # Whether this is consumed in production
-    cost_reference_unit: str     # What unit costs are stored per (KG for filament)
+
+    unit: str  # Storage/consumption unit (G for filament)
+    purchase_uom: str  # How vendors sell it (KG for filament)
+    purchase_factor: Decimal  # Conversion: purchase_uom -> unit (1000 for KG->G)
+    is_raw_material: bool  # Whether this is consumed in production
+    cost_reference_unit: str  # What unit costs are stored per (KG for filament)
 
 
 # =============================================================================
@@ -50,38 +52,38 @@ class UOMConfig(NamedTuple):
 
 # Filament profile - default for 3D printing (most FilaOps users)
 FILAMENT_UOM = UOMConfig(
-    unit="G",                           # Store and consume in grams
-    purchase_uom="KG",                  # Buy in kilograms
-    purchase_factor=Decimal("1000"),    # 1 KG = 1000 G
-    is_raw_material=True,               # Consumed in production
-    cost_reference_unit="KG"            # Costs are $/KG
+    unit="G",  # Store and consume in grams
+    purchase_uom="KG",  # Buy in kilograms
+    purchase_factor=Decimal("1000"),  # 1 KG = 1000 G
+    is_raw_material=True,  # Consumed in production
+    cost_reference_unit="KG",  # Costs are $/KG
 )
 
 # Sheet stock profile - for CNC/laser (placeholder for future)
 SHEET_UOM = UOMConfig(
-    unit="EA",                          # Store in each (per sheet)
-    purchase_uom="EA",                  # Buy in each
-    purchase_factor=Decimal("1"),       # No conversion
-    is_raw_material=True,               # Consumed in production
-    cost_reference_unit="EA"            # Costs are $/EA
+    unit="EA",  # Store in each (per sheet)
+    purchase_uom="EA",  # Buy in each
+    purchase_factor=Decimal("1"),  # No conversion
+    is_raw_material=True,  # Consumed in production
+    cost_reference_unit="EA",  # Costs are $/EA
 )
 
 # Linear stock profile - for CNC (placeholder for future)
 LINEAR_UOM = UOMConfig(
-    unit="IN",                          # Store in inches
-    purchase_uom="FT",                  # Buy in feet
-    purchase_factor=Decimal("12"),      # 1 FT = 12 IN
-    is_raw_material=True,               # Consumed in production
-    cost_reference_unit="FT"            # Costs are $/FT
+    unit="IN",  # Store in inches
+    purchase_uom="FT",  # Buy in feet
+    purchase_factor=Decimal("12"),  # 1 FT = 12 IN
+    is_raw_material=True,  # Consumed in production
+    cost_reference_unit="FT",  # Costs are $/FT
 )
 
 # Resin profile - for SLA printing (placeholder for future)
 RESIN_UOM = UOMConfig(
-    unit="ML",                          # Store in milliliters
-    purchase_uom="L",                   # Buy in liters
-    purchase_factor=Decimal("1000"),    # 1 L = 1000 ML
-    is_raw_material=True,               # Consumed in production
-    cost_reference_unit="L"             # Costs are $/L
+    unit="ML",  # Store in milliliters
+    purchase_uom="L",  # Buy in liters
+    purchase_factor=Decimal("1000"),  # 1 L = 1000 ML
+    is_raw_material=True,  # Consumed in production
+    cost_reference_unit="L",  # Costs are $/L
 )
 
 # Default for item_type='material' - filament for 3D printing
@@ -90,11 +92,11 @@ DEFAULT_MATERIAL_UOM = FILAMENT_UOM
 
 # Default for non-material items
 DEFAULT_UOM = UOMConfig(
-    unit="EA",                          # Store in each
-    purchase_uom="EA",                  # Buy in each
-    purchase_factor=Decimal("1"),       # No conversion
-    is_raw_material=False,              # Not a raw material
-    cost_reference_unit="EA"            # Costs are $/EA
+    unit="EA",  # Store in each
+    purchase_uom="EA",  # Buy in each
+    purchase_factor=Decimal("1"),  # No conversion
+    is_raw_material=False,  # Not a raw material
+    cost_reference_unit="EA",  # Costs are $/EA
 )
 
 # Future: Material profile selector options
@@ -112,6 +114,7 @@ MATERIAL_PROFILES = {
 # MATERIAL DETECTION FUNCTIONS
 # =============================================================================
 
+
 def is_material_item_type(item_type: Optional[str]) -> bool:
     """
     Check if item_type indicates a material product.
@@ -127,8 +130,8 @@ def is_material_item_type(item_type: Optional[str]) -> bool:
     if not item_type:
         return False
     # Handle both enum and string values
-    item_type_str = item_type.value if hasattr(item_type, 'value') else str(item_type)
-    return item_type_str.lower() == 'material'
+    item_type_str = item_type.value if hasattr(item_type, "value") else str(item_type)
+    return item_type_str.lower() == "material"
 
 
 def is_material(
@@ -190,15 +193,15 @@ def get_uom_config(
     # Normalize item_type to lowercase string
     item_type_str = None
     if item_type:
-        item_type_str = item_type.value if hasattr(item_type, 'value') else str(item_type)
+        item_type_str = item_type.value if hasattr(item_type, "value") else str(item_type)
         item_type_str = item_type_str.lower()
 
     # Priority 1: Explicit item_type='material'
-    if item_type_str == 'material':
+    if item_type_str == "material":
         return DEFAULT_MATERIAL_UOM
 
     # Priority 2: Legacy - supply with material_type_id
-    if item_type_str == 'supply' and material_type_id is not None:
+    if item_type_str == "supply" and material_type_id is not None:
         return DEFAULT_MATERIAL_UOM
 
     # Priority 3: Category-based detection
@@ -208,7 +211,7 @@ def get_uom_config(
     # Priority 4: SKU prefix fallback
     if sku:
         sku_upper = sku.upper()
-        if sku_upper.startswith(('MAT-', 'FIL-')):
+        if sku_upper.startswith(("MAT-", "FIL-")):
             return DEFAULT_MATERIAL_UOM
 
     return DEFAULT_UOM
@@ -225,15 +228,16 @@ def get_uom_config_for_product(product) -> UOMConfig:
         UOMConfig with appropriate settings
     """
     return get_uom_config(
-        item_type=getattr(product, 'item_type', None),
-        material_type_id=getattr(product, 'material_type_id', None),
-        sku=getattr(product, 'sku', None),
+        item_type=getattr(product, "item_type", None),
+        material_type_id=getattr(product, "material_type_id", None),
+        sku=getattr(product, "sku", None),
     )
 
 
 # =============================================================================
 # COST CALCULATION HELPERS
 # =============================================================================
+
 
 def get_cost_per_storage_unit(
     cost: Decimal,
@@ -295,12 +299,12 @@ def get_inventory_value_for_product(
         Inventory value in dollars
     """
     cost = (
-        getattr(product, 'standard_cost', None) or
-        getattr(product, 'average_cost', None) or
-        getattr(product, 'last_cost', None) or
-        Decimal("0")
+        getattr(product, "standard_cost", None)
+        or getattr(product, "average_cost", None)
+        or getattr(product, "last_cost", None)
+        or Decimal("0")
     )
-    purchase_factor = getattr(product, 'purchase_factor', None) or Decimal("1")
+    purchase_factor = getattr(product, "purchase_factor", None) or Decimal("1")
 
     return get_inventory_value(quantity_in_storage_unit, cost, purchase_factor)
 
@@ -308,6 +312,7 @@ def get_inventory_value_for_product(
 # =============================================================================
 # VALIDATION FUNCTIONS
 # =============================================================================
+
 
 def validate_material_uom(
     unit: Optional[str],
@@ -349,8 +354,7 @@ def validate_material_uom(
     if unit and purchase_uom and purchase_factor:
         if unit.upper() == purchase_uom.upper() and purchase_factor != Decimal("1"):
             errors.append(
-                f"When unit and purchase_uom are both '{unit}', "
-                f"purchase_factor should be 1, not {purchase_factor}"
+                f"When unit and purchase_uom are both '{unit}', " f"purchase_factor should be 1, not {purchase_factor}"
             )
 
     return errors
@@ -384,19 +388,16 @@ def validate_uom_consistency(
     # If unit and purchase_uom are the same, factor should be 1 (if set)
     if unit and purchase_uom and purchase_factor:
         if unit.upper() == purchase_uom.upper() and purchase_factor != Decimal("1"):
-            errors.append(
-                f"When unit and purchase_uom are both '{unit}', "
-                f"purchase_factor should be 1"
-            )
+            errors.append(f"When unit and purchase_uom are both '{unit}', " f"purchase_factor should be 1")
 
     return errors
 
 
 def get_material_sku_prefixes() -> tuple:
     """Return valid SKU prefixes for materials."""
-    return ('MAT-', 'FIL-')
+    return ("MAT-", "FIL-")
 
 
 def get_default_material_sku_prefix() -> str:
     """Return the default SKU prefix for new materials."""
-    return 'MAT'
+    return "MAT"

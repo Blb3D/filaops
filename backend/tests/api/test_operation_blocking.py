@@ -3,11 +3,11 @@ Tests for operation-level blocking check endpoints.
 
 TDD: Write tests first, then implement to make them pass.
 """
+
 import pytest
 from decimal import Decimal
 
 from tests.factories import (
-    create_test_user,
     create_test_product,
     create_test_production_order,
     create_test_work_center,
@@ -31,17 +31,12 @@ class TestOperationCanStart:
 
         bom = create_test_bom(db, product=product)
         create_test_bom_line(
-            db, bom=bom, component=filament,
-            quantity=Decimal("0.5"), unit="KG",
-            consume_stage="production"
+            db, bom=bom, component=filament, quantity=Decimal("0.5"), unit="KG", consume_stage="production"
         )
 
         # Setup: Inventory with enough filament
         location = create_test_inventory_location(db, code="WH-01", name="Warehouse")
-        create_test_inventory(
-            db, product=filament, location=location,
-            on_hand=Decimal("10.0"), allocated=Decimal("0")
-        )
+        create_test_inventory(db, product=filament, location=location, on_hand=Decimal("10.0"), allocated=Decimal("0"))
 
         # Setup: Production order with PRINT operation
         wc = create_test_work_center(db, code="WC-PRINT-BLK1", name="Print Station")
@@ -49,15 +44,14 @@ class TestOperationCanStart:
         po.bom_id = bom.id
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         # Execute
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Verify
@@ -76,17 +70,12 @@ class TestOperationCanStart:
 
         bom = create_test_bom(db, product=product)
         create_test_bom_line(
-            db, bom=bom, component=filament,
-            quantity=Decimal("0.5"), unit="KG",
-            consume_stage="production"
+            db, bom=bom, component=filament, quantity=Decimal("0.5"), unit="KG", consume_stage="production"
         )
 
         # Setup: Inventory with NOT ENOUGH filament (need 5kg for 10 units, only have 2kg)
         location = create_test_inventory_location(db, code="WH-02", name="Warehouse")
-        create_test_inventory(
-            db, product=filament, location=location,
-            on_hand=Decimal("2.0"), allocated=Decimal("0")
-        )
+        create_test_inventory(db, product=filament, location=location, on_hand=Decimal("2.0"), allocated=Decimal("0"))
 
         # Setup: Production order with PRINT operation
         wc = create_test_work_center(db, code="WC-PRINT-BLK2", name="Print Station")
@@ -94,15 +83,14 @@ class TestOperationCanStart:
         po.bom_id = bom.id
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         # Execute
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Verify
@@ -124,22 +112,25 @@ class TestOperationCanStart:
 
         bom = create_test_bom(db, product=product)
         create_test_bom_line(
-            db, bom=bom, component=filament,
-            quantity=Decimal("0.5"), unit="KG",
-            consume_stage="production"  # Consumed at PRINT
+            db,
+            bom=bom,
+            component=filament,
+            quantity=Decimal("0.5"),
+            unit="KG",
+            consume_stage="production",  # Consumed at PRINT
         )
         create_test_bom_line(
-            db, bom=bom, component=boxes,
-            quantity=Decimal("1"), unit="EA",
-            consume_stage="shipping"  # Consumed at PACK
+            db,
+            bom=bom,
+            component=boxes,
+            quantity=Decimal("1"),
+            unit="EA",
+            consume_stage="shipping",  # Consumed at PACK
         )
 
         # Setup: Filament in stock, boxes OUT OF STOCK
         location = create_test_inventory_location(db, code="WH-03", name="Warehouse")
-        create_test_inventory(
-            db, product=filament, location=location,
-            on_hand=Decimal("10.0"), allocated=Decimal("0")
-        )
+        create_test_inventory(db, product=filament, location=location, on_hand=Decimal("10.0"), allocated=Decimal("0"))
         # NO inventory for boxes!
 
         # Setup: Production order with PRINT operation
@@ -148,15 +139,14 @@ class TestOperationCanStart:
         po.bom_id = bom.id
 
         op_print = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         # Execute - check PRINT operation
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op_print.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Verify - PRINT can start even though boxes are missing
@@ -176,22 +166,13 @@ class TestOperationCanStart:
 
         bom = create_test_bom(db, product=product)
         create_test_bom_line(
-            db, bom=bom, component=filament,
-            quantity=Decimal("0.5"), unit="KG",
-            consume_stage="production"
+            db, bom=bom, component=filament, quantity=Decimal("0.5"), unit="KG", consume_stage="production"
         )
-        create_test_bom_line(
-            db, bom=bom, component=boxes,
-            quantity=Decimal("1"), unit="EA",
-            consume_stage="shipping"
-        )
+        create_test_bom_line(db, bom=bom, component=boxes, quantity=Decimal("1"), unit="EA", consume_stage="shipping")
 
         # Setup: Filament in stock, boxes OUT OF STOCK
         location = create_test_inventory_location(db, code="WH-04", name="Warehouse")
-        create_test_inventory(
-            db, product=filament, location=location,
-            on_hand=Decimal("10.0"), allocated=Decimal("0")
-        )
+        create_test_inventory(db, product=filament, location=location, on_hand=Decimal("10.0"), allocated=Decimal("0"))
 
         # Setup: Production order with PACK operation (after PRINT is done)
         wc_print = create_test_work_center(db, code="WC-PRINT-BLK4", name="Print Station")
@@ -201,19 +182,17 @@ class TestOperationCanStart:
         po.bom_id = bom.id
 
         op_print = create_test_po_operation(
-            db, production_order=po, work_center=wc_print,
-            sequence=10, operation_code="PRINT", status="complete"
+            db, production_order=po, work_center=wc_print, sequence=10, operation_code="PRINT", status="complete"
         )
         op_pack = create_test_po_operation(
-            db, production_order=po, work_center=wc_pack,
-            sequence=20, operation_code="PACK", status="pending"
+            db, production_order=po, work_center=wc_pack, sequence=20, operation_code="PACK", status="pending"
         )
         db.commit()
 
         # Execute - check PACK operation
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op_pack.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Verify - PACK is blocked by missing boxes
@@ -234,14 +213,13 @@ class TestOperationCanStart:
         # NO BOM assigned
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="WORK", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="WORK", status="pending"
         )
         db.commit()
 
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -273,14 +251,13 @@ class TestOperationBlockingIssues:
         po.bom_id = bom.id
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/blocking-issues",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -310,24 +287,20 @@ class TestOperationBlockingIssues:
 
         # 10 on hand but 8 allocated = only 2 available
         location = create_test_inventory_location(db, code="WH-06", name="Warehouse")
-        create_test_inventory(
-            db, product=filament, location=location,
-            on_hand=Decimal("10"), allocated=Decimal("8")
-        )
+        create_test_inventory(db, product=filament, location=location, on_hand=Decimal("10"), allocated=Decimal("8"))
 
         wc = create_test_work_center(db, code="WC-BLK-06", name="Work Center")
         po = create_test_production_order(db, product=product, quantity=5, status="released")  # Need 5
         po.bom_id = bom.id
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/blocking-issues",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -348,14 +321,15 @@ class TestOperationBlockingIssues:
 
         bom = create_test_bom(db, product=product)
         create_test_bom_line(
-            db, bom=bom, component=filament,
-            quantity=Decimal("1"), consume_stage="production",
-            is_cost_only=False
+            db, bom=bom, component=filament, quantity=Decimal("1"), consume_stage="production", is_cost_only=False
         )
         create_test_bom_line(
-            db, bom=bom, component=overhead,
-            quantity=Decimal("1"), consume_stage="production",
-            is_cost_only=True  # Should be ignored
+            db,
+            bom=bom,
+            component=overhead,
+            quantity=Decimal("1"),
+            consume_stage="production",
+            is_cost_only=True,  # Should be ignored
         )
 
         location = create_test_inventory_location(db, code="WH-07", name="Warehouse")
@@ -367,14 +341,13 @@ class TestOperationBlockingIssues:
         po.bom_id = bom.id
 
         op = create_test_po_operation(
-            db, production_order=po, work_center=wc,
-            sequence=10, operation_code="PRINT", status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         # Should be able to start - overhead line is cost-only
@@ -388,8 +361,7 @@ class TestOperationNotFound:
     @pytest.mark.api
     def test_can_start_po_not_found(self, client, db, admin_token):
         response = client.get(
-            "/api/v1/production-orders/99999/operations/1/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            "/api/v1/production-orders/99999/operations/1/can-start", headers={"Authorization": f"Bearer {admin_token}"}
         )
         assert response.status_code == 404
 
@@ -401,6 +373,6 @@ class TestOperationNotFound:
 
         response = client.get(
             f"/api/v1/production-orders/{po.id}/operations/99999/can-start",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 404

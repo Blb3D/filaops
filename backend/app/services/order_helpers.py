@@ -8,6 +8,7 @@ This module provides helper functions to abstract away the difference between:
 Use these helpers instead of duplicating `if order.lines: ... else: order.product_id`
 throughout the codebase.
 """
+
 from typing import List, Tuple, Optional
 from decimal import Decimal
 from sqlalchemy.orm import Session
@@ -67,10 +68,7 @@ def get_order_total_quantity(sales_order: SalesOrder) -> Decimal:
     return sum(qty for _, qty in get_order_products(sales_order))
 
 
-def get_order_primary_product(
-    db: Session,
-    sales_order: SalesOrder
-) -> Optional[Product]:
+def get_order_primary_product(db: Session, sales_order: SalesOrder) -> Optional[Product]:
     """
     Get the primary (first) product for a sales order.
 

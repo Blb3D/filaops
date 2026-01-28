@@ -3,6 +3,7 @@ Sales Order Management Endpoints
 
 Handles converting quotes to sales orders and order lifecycle management
 """
+
 from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
@@ -71,10 +72,11 @@ router = APIRouter(prefix="/sales-orders", tags=["Sales Orders"])
 # HELPER: Copy Routing Operations to Production Order
 # ============================================================================
 
+
 def _copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: int) -> List[ProductionOrderOperation]:
     """
     Copy routing operations to production order operations.
-    
+
     This creates the individual operation records that track progress through
     the manufacturing process (Print, Finishing, QC, Pack, etc.).
     """
@@ -109,6 +111,7 @@ def _copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id:
 # HELPER: Create Production Orders for Sales Order
 # ============================================================================
 
+
 def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by: str) -> List[str]:
     """
     Create production orders for a sales order.
@@ -125,7 +128,7 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
         Generate next PO code with row-level locking to prevent race conditions.
         Uses SELECT FOR UPDATE to lock the last row so concurrent requests don't
         generate duplicate codes.
-        
+
         Note: When no rows exist, with_for_update() returns None and we start at 1.
         The unique constraint on ProductionOrder.code and IntegrityError retry logic
         provide additional protection against duplicates.
@@ -148,10 +151,10 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
             next_num = 1
         return f"PO-{year}-{next_num:04d}"
 
-    if order.order_type == "line_item": # pyright: ignore[reportGeneralTypeIssues]
-        lines = db.query(SalesOrderLine).filter(
-            SalesOrderLine.sales_order_id == order.id
-        ).order_by(SalesOrderLine.id).all()
+    if order.order_type == "line_item":  # pyright: ignore[reportGeneralTypeIssues]
+        lines = (
+            db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order.id).order_by(SalesOrderLine.id).all()
+        )
 
         for idx, line in enumerate(lines, start=1):
             product = db.query(Product).filter(Product.id == line.product_id).first()
@@ -159,18 +162,14 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                 continue
 
             # Only create WO for products with BOMs (make items)
-            if not product.has_bom: # pyright: ignore[reportGeneralTypeIssues]
+            if not product.has_bom:  # pyright: ignore[reportGeneralTypeIssues]
                 continue
 
-            bom = db.query(BOM).filter(
-                BOM.product_id == line.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == line.product_id, BOM.active.is_(True)).first()
 
-            routing = db.query(Routing).filter(
-                Routing.product_id == line.product_id,
-                Routing.is_active.is_(True)
-            ).first()
+            routing = (
+                db.query(Routing).filter(Routing.product_id == line.product_id, Routing.is_active.is_(True)).first()
+            )
 
             # Retry logic to handle race condition if locking fails
             max_retries = 3
@@ -196,11 +195,11 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                     )
                     db.add(production_order)
                     db.flush()  # Flush to detect unique constraint violations
-                    
+
                     # Copy routing operations to production order
                     if routing:
                         _copy_routing_to_operations(db, production_order, routing.id)
-                    
+
                     created_orders.append(po_code)
                     break  # Success, exit retry loop
                 except IntegrityError as e:
@@ -215,25 +214,21 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                         # Final attempt failed, raise error
                         logger.error(
                             f"Failed to generate unique PO code after {max_retries} attempts for SO {order.order_number}",
-                            exc_info=True
+                            exc_info=True,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}"
+                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}",
                         )
 
-    elif order.order_type == "quote_based" and order.product_id: # pyright: ignore[reportGeneralTypeIssues]
+    elif order.order_type == "quote_based" and order.product_id:  # pyright: ignore[reportGeneralTypeIssues]
         product = db.query(Product).filter(Product.id == order.product_id).first()
         if product and product.has_bom:
-            bom = db.query(BOM).filter(
-                BOM.product_id == order.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == order.product_id, BOM.active.is_(True)).first()
 
-            routing = db.query(Routing).filter(
-                Routing.product_id == order.product_id,
-                Routing.is_active.is_(True)
-            ).first()
+            routing = (
+                db.query(Routing).filter(Routing.product_id == order.product_id, Routing.is_active.is_(True)).first()
+            )
 
             # Retry logic to handle race condition if locking fails
             max_retries = 3
@@ -258,11 +253,11 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                     )
                     db.add(production_order)
                     db.flush()  # Flush to detect unique constraint violations
-                    
+
                     # Copy routing operations to production order
                     if routing:
                         _copy_routing_to_operations(db, production_order, routing.id)
-                    
+
                     created_orders.append(po_code)
                     break  # Success, exit retry loop
                 except IntegrityError as e:
@@ -277,11 +272,11 @@ def _create_production_orders_for_so(order: SalesOrder, db: Session, created_by:
                         # Final attempt failed, raise error
                         logger.error(
                             f"Failed to generate unique PO code after {max_retries} attempts for SO {order.order_number}",
-                            exc_info=True
+                            exc_info=True,
                         )
                         raise HTTPException(
                             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}"
+                            detail=f"Failed to generate unique PO code after {max_retries} attempts: {str(e)}",
                         )
 
     return created_orders
@@ -311,8 +306,7 @@ async def get_sales_order_status_transitions(
     if current_status:
         if current_status not in all_statuses:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status '{current_status}'. Must be one of: {', '.join(all_statuses)}"
+                status_code=400, detail=f"Invalid status '{current_status}'. Must be one of: {', '.join(all_statuses)}"
             )
         allowed = get_allowed_sales_order_transitions(current_status)
         return {
@@ -333,7 +327,9 @@ async def get_sales_order_status_transitions(
     return {
         "statuses": all_statuses,
         "transitions": transitions,
-        "terminal_statuses": [s.value for s in SalesOrderStatus if len(get_allowed_sales_order_transitions(s.value)) == 0],
+        "terminal_statuses": [
+            s.value for s in SalesOrderStatus if len(get_allowed_sales_order_transitions(s.value)) == 0
+        ],
     }
 
 
@@ -361,6 +357,7 @@ async def get_payment_statuses(
 # ============================================================================
 # ENDPOINT: Create Manual Sales Order
 # ============================================================================
+
 
 @router.post("/", response_model=SalesOrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_sales_order(
@@ -393,13 +390,12 @@ async def create_sales_order(
         customer = db.query(User).filter(User.id == request.customer_id).first()
         if not customer:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Customer ID {request.customer_id} not found"
+                status_code=status.HTTP_404_NOT_FOUND, detail=f"Customer ID {request.customer_id} not found"
             )
         if customer.status != "active":
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Customer '{customer.email}' is not active (status: {customer.status})"
+                detail=f"Customer '{customer.email}' is not active (status: {customer.status})",
             )
 
     # ========================================================================
@@ -412,16 +408,13 @@ async def create_sales_order(
     for line in request.lines:
         product = db.query(Product).filter(Product.id == line.product_id).first()
         if not product:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Product ID {line.product_id} not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Product ID {line.product_id} not found")
 
         # Check product is active
-        if not product.active: # pyright: ignore[reportGeneralTypeIssues]
+        if not product.active:  # pyright: ignore[reportGeneralTypeIssues]
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Product '{product.sku}' is discontinued and cannot be ordered"
+                detail=f"Product '{product.sku}' is discontinued and cannot be ordered",
             )
 
         # SECURITY: Always use product's catalog price, never trust frontend
@@ -429,18 +422,20 @@ async def create_sales_order(
         if unit_price <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Product '{product.sku}' has no selling price configured"
+                detail=f"Product '{product.sku}' has no selling price configured",
             )
 
         line_total = unit_price * line.quantity
 
-        line_products.append({
-            "product": product,
-            "quantity": line.quantity,
-            "unit_price": unit_price,
-            "line_total": line_total,
-            "notes": line.notes,
-        })
+        line_products.append(
+            {
+                "product": product,
+                "quantity": line.quantity,
+                "unit_price": unit_price,
+                "line_total": line_total,
+                "notes": line.notes,
+            }
+        )
 
         total_price += line_total
         total_quantity += line.quantity
@@ -526,7 +521,9 @@ async def create_sales_order(
         source_order_id=request.source_order_id,
         product_name=product_name,
         quantity=total_quantity,
-        material_type=first_product.item_category.name if first_product.item_category else "PLA",  # Use category name as fallback
+        material_type=first_product.item_category.name
+        if first_product.item_category
+        else "PLA",  # Use category name as fallback
         finish="standard",
         unit_price=total_price / total_quantity if total_quantity > 0 else Decimal("0"),
         total_price=total_price,
@@ -583,16 +580,14 @@ async def create_sales_order(
     try:
         from app.services.mrp_trigger_service import trigger_mrp_check
         from app.core.settings import get_settings
+
         settings = get_settings()
 
         if settings.AUTO_MRP_ON_ORDER_CREATE:
             trigger_mrp_check(db, sales_order.id)
     except Exception as e:
         # Log but don't break order creation - graceful degradation
-        logger.warning(
-            f"MRP trigger failed for sales order {sales_order.id}: {str(e)}",
-            exc_info=True
-        )
+        logger.warning(f"MRP trigger failed for sales order {sales_order.id}: {str(e)}", exc_info=True)
 
     return sales_order
 
@@ -600,6 +595,7 @@ async def create_sales_order(
 # ============================================================================
 # ENDPOINT: Convert Quote to Sales Order
 # ============================================================================
+
 
 @router.post("/convert/{quote_id}", response_model=SalesOrderResponse, status_code=status.HTTP_201_CREATED)
 async def convert_quote_to_sales_order(
@@ -633,44 +629,34 @@ async def convert_quote_to_sales_order(
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
 
     if not quote:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Quote not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quote not found")
 
     # Verify ownership
     if quote.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to convert this quote"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to convert this quote")
 
     # Check if quote is accepted
     if quote.status != "accepted":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot convert quote with status '{quote.status}'. Must be 'accepted'."
+            detail=f"Cannot convert quote with status '{quote.status}'. Must be 'accepted'.",
         )
 
     # Check if quote is expired
     if quote.is_expired:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quote has expired. Please request a new quote."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Quote has expired. Please request a new quote."
         )
 
     # Check if quote is already converted
     if quote.sales_order_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quote already converted to sales order"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Quote already converted to sales order")
 
     # Verify quote has product_id (created during acceptance)
     if not quote.product_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Quote does not have an associated product. This should have been created during acceptance."
+            detail="Quote does not have an associated product. This should have been created during acceptance.",
         )
 
     # Generate sales order number with row locking to prevent duplicates
@@ -706,8 +692,8 @@ async def convert_quote_to_sales_order(
         finish=quote.finish,
         unit_price=quote.unit_price,
         total_price=quote.total_price,
-        tax_amount=Decimal('0.00'),
-        shipping_cost=Decimal('0.00'),
+        tax_amount=Decimal("0.00"),
+        shipping_cost=Decimal("0.00"),
         grand_total=grand_total,
         status="pending",
         payment_status="pending",
@@ -736,16 +722,10 @@ async def convert_quote_to_sales_order(
     # Create Production Order
     # =========================================================================
     # Find the BOM for this product
-    bom = db.query(BOM).filter(
-        BOM.product_id == quote.product_id,
-        BOM.active.is_(True)
-    ).first()
+    bom = db.query(BOM).filter(BOM.product_id == quote.product_id, BOM.active.is_(True)).first()
 
     # Find the routing for this product
-    routing = db.query(Routing).filter(
-        Routing.product_id == quote.product_id,
-        Routing.is_active.is_(True)
-    ).first()
+    routing = db.query(Routing).filter(Routing.product_id == quote.product_id, Routing.is_active.is_(True)).first()
 
     # Generate production order code
     last_po = (
@@ -795,8 +775,8 @@ async def convert_quote_to_sales_order(
             "production_order_code": po_code,
             "sales_order_number": order_number,
             "product_id": quote.product_id,
-            "quote_id": quote.id
-        }
+            "quote_id": quote.id,
+        },
     )
 
     # Record order creation event
@@ -841,11 +821,10 @@ async def get_user_sales_orders(
     include_fulfillment: bool = Query(False, description="Include fulfillment status summary"),
     fulfillment_state: Optional[str] = Query(
         None,
-        description="Filter by fulfillment state(s), comma-separated (ready_to_ship,partially_ready,blocked,shipped,cancelled)"
+        description="Filter by fulfillment state(s), comma-separated (ready_to_ship,partially_ready,blocked,shipped,cancelled)",
     ),
     sort_by: str = Query(
-        "order_date",
-        description="Sort field: order_date, fulfillment_priority, fulfillment_percent, customer_name"
+        "order_date", description="Sort field: order_date, fulfillment_priority, fulfillment_percent, customer_name"
     ),
     sort_order: str = Query("desc", description="Sort order: asc or desc"),
     current_user: User = Depends(get_current_user),
@@ -874,18 +853,12 @@ async def get_user_sales_orders(
 
     # Validate sort_order
     if sort_order not in ("asc", "desc"):
-        raise HTTPException(
-            status_code=400,
-            detail="sort_order must be 'asc' or 'desc'"
-        )
+        raise HTTPException(status_code=400, detail="sort_order must be 'asc' or 'desc'")
 
     # Validate sort_by
     valid_sort_fields = {"order_date", "fulfillment_priority", "fulfillment_percent", "customer_name"}
     if sort_by not in valid_sort_fields:
-        raise HTTPException(
-            status_code=400,
-            detail=f"sort_by must be one of: {', '.join(valid_sort_fields)}"
-        )
+        raise HTTPException(status_code=400, detail=f"sort_by must be one of: {', '.join(valid_sort_fields)}")
 
     # Parse and validate fulfillment_state filter
     requested_states = None
@@ -895,14 +868,11 @@ async def get_user_sales_orders(
         if invalid_states:
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid fulfillment_state value(s): {', '.join(invalid_states)}. Valid: {', '.join(VALID_FULFILLMENT_STATES)}"
+                detail=f"Invalid fulfillment_state value(s): {', '.join(invalid_states)}. Valid: {', '.join(VALID_FULFILLMENT_STATES)}",
             )
 
     # OPTIMIZED: Use joinedload to eager load user relationship for better performance
-    query = db.query(SalesOrder).options(
-        joinedload(SalesOrder.user),
-        joinedload(SalesOrder.product)
-    )
+    query = db.query(SalesOrder).options(joinedload(SalesOrder.user), joinedload(SalesOrder.product))
 
     # Admin users can see all orders, regular users only see their own
     if current_user.account_type != "admin":
@@ -916,9 +886,9 @@ async def get_user_sales_orders(
 
     # Determine if we need fulfillment data for filtering or sorting
     needs_fulfillment = (
-        include_fulfillment or
-        fulfillment_state is not None or
-        sort_by in ("fulfillment_priority", "fulfillment_percent")
+        include_fulfillment
+        or fulfillment_state is not None
+        or sort_by in ("fulfillment_priority", "fulfillment_percent")
     )
 
     if needs_fulfillment:
@@ -937,7 +907,8 @@ async def get_user_sales_orders(
         # Filter by fulfillment_state if requested
         if requested_states:
             orders_with_fulfillment = [
-                o for o in orders_with_fulfillment
+                o
+                for o in orders_with_fulfillment
                 if o.get("fulfillment") and o["fulfillment"].state.value in requested_states
             ]
 
@@ -950,21 +921,17 @@ async def get_user_sales_orders(
                 key=lambda o: FULFILLMENT_PRIORITY.get(
                     o["fulfillment"].state.value if o.get("fulfillment") else "cancelled", 5
                 ),
-                reverse=reverse
+                reverse=reverse,
             )
         elif sort_by == "fulfillment_percent":
             orders_with_fulfillment.sort(
-                key=lambda o: o["fulfillment"].fulfillment_percent if o.get("fulfillment") else 0,
-                reverse=reverse
+                key=lambda o: o["fulfillment"].fulfillment_percent if o.get("fulfillment") else 0, reverse=reverse
             )
         elif sort_by == "customer_name":
-            orders_with_fulfillment.sort(
-                key=lambda o: (o.get("customer_name") or "").lower(),
-                reverse=reverse
-            )
+            orders_with_fulfillment.sort(key=lambda o: (o.get("customer_name") or "").lower(), reverse=reverse)
 
         # Paginate
-        paginated = orders_with_fulfillment[skip:skip + limit]
+        paginated = orders_with_fulfillment[skip : skip + limit]
 
         # Convert back to response models
         return [SalesOrderListResponse(**o) for o in paginated]
@@ -991,6 +958,7 @@ async def get_user_sales_orders(
 # ENDPOINT: Get Sales Order Details
 # ============================================================================
 
+
 @router.get("/{order_id}", response_model=SalesOrderResponse)
 async def get_sales_order_details(
     order_id: int,
@@ -1006,19 +974,13 @@ async def get_sales_order_details(
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Verify user owns this order OR is an admin
     # Use same check as list endpoint
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if order.user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this order"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order")
 
     # Use helper function to build response with proper line handling
     return build_sales_order_response(order, db)
@@ -1027,6 +989,7 @@ async def get_sales_order_details(
 # ============================================================================
 # ENDPOINT: Get Required Orders (MRP Cascade)
 # ============================================================================
+
 
 @router.get("/{order_id}/required-orders")
 async def get_required_orders_for_sales_order(
@@ -1053,25 +1016,27 @@ async def get_required_orders_for_sales_order(
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can view MRP requirements"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can view MRP requirements"
         )
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     work_orders_needed = []
     purchase_orders_needed = []
     top_level_products = []
 
-    def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, parent_sku: Optional[str] = None, visited_bom_ids: Optional[set] = None) -> None:
+    def explode_requirements(
+        product_id: int,
+        quantity: Decimal,
+        level: int = 0,
+        parent_sku: Optional[str] = None,
+        visited_bom_ids: Optional[set] = None,
+    ) -> None:
         """
         Recursively explode BOM to find all requirements
-        
+
         Args:
             product_id: Product to explode BOM for
             quantity: Quantity required
@@ -1084,10 +1049,7 @@ async def get_required_orders_for_sales_order(
             visited_bom_ids = set()
 
         # Find active BOM for this product
-        bom = db.query(BOM).filter(
-            BOM.product_id == product_id,
-            BOM.active.is_(True)
-        ).first()
+        bom = db.query(BOM).filter(BOM.product_id == product_id, BOM.active.is_(True)).first()
 
         if not bom:
             return
@@ -1115,9 +1077,11 @@ async def get_required_orders_for_sales_order(
             required_qty = base_qty * (Decimal("1") + scrap_factor) * quantity
 
             # Get available inventory
-            inv_result = db.query(
-                func.sum(Inventory.available_quantity)
-            ).filter(Inventory.product_id == line.component_id).scalar()
+            inv_result = (
+                db.query(func.sum(Inventory.available_quantity))
+                .filter(Inventory.product_id == line.component_id)
+                .scalar()
+            )
             available_qty = Decimal(str(inv_result or 0))
 
             shortage_qty = max(Decimal("0"), required_qty - available_qty)
@@ -1135,7 +1099,7 @@ async def get_required_orders_for_sales_order(
                 "order_qty": float(shortage_qty),
                 "bom_level": level,
                 "has_bom": component.has_bom or False,
-                "parent_sku": parent_sku
+                "parent_sku": parent_sku,
             }
 
             if component.has_bom:
@@ -1148,11 +1112,12 @@ async def get_required_orders_for_sales_order(
     # Process based on order type
     if order.order_type == "line_item":
         # OPTIMIZED: Get all lines with eager-loaded products in one query
-        lines = db.query(SalesOrderLine).options(
-            joinedload(SalesOrderLine.product)
-        ).filter(
-            SalesOrderLine.sales_order_id == order_id
-        ).all()
+        lines = (
+            db.query(SalesOrderLine)
+            .options(joinedload(SalesOrderLine.product))
+            .filter(SalesOrderLine.sales_order_id == order_id)
+            .all()
+        )
 
         for line in lines:
             # OPTIMIZED: Use eager-loaded product (no additional query)
@@ -1165,20 +1130,22 @@ async def get_required_orders_for_sales_order(
             # Check if this product needs a top-level WO
             if product.has_bom:
                 # Get available inventory for the finished good
-                inv_result = db.query(
-                    func.sum(Inventory.available_quantity)
-                ).filter(Inventory.product_id == product.id).scalar()
+                inv_result = (
+                    db.query(func.sum(Inventory.available_quantity)).filter(Inventory.product_id == product.id).scalar()
+                )
                 available_qty = Decimal(str(inv_result or 0))
                 shortage_qty = max(Decimal("0"), qty - available_qty)
 
                 if shortage_qty > 0:
-                    top_level_products.append({
-                        "product_id": product.id,
-                        "product_sku": product.sku,
-                        "product_name": product.name,
-                        "order_qty": float(shortage_qty),
-                        "has_bom": True
-                    })
+                    top_level_products.append(
+                        {
+                            "product_id": product.id,
+                            "product_sku": product.sku,
+                            "product_name": product.name,
+                            "order_qty": float(shortage_qty),
+                            "has_bom": True,
+                        }
+                    )
 
             # Each line item starts a fresh BOM explosion (no visited set carried over)
             explode_requirements(product.id, qty, level=0, parent_sku=product.sku)
@@ -1190,20 +1157,22 @@ async def get_required_orders_for_sales_order(
             qty = Decimal(str(order.quantity or 1))
 
             if product.has_bom:
-                inv_result = db.query(
-                    func.sum(Inventory.available_quantity)
-                ).filter(Inventory.product_id == product.id).scalar()
+                inv_result = (
+                    db.query(func.sum(Inventory.available_quantity)).filter(Inventory.product_id == product.id).scalar()
+                )
                 available_qty = Decimal(str(inv_result or 0))
                 shortage_qty = max(Decimal("0"), qty - available_qty)
 
                 if shortage_qty > 0:
-                    top_level_products.append({
-                        "product_id": product.id,
-                        "product_sku": product.sku,
-                        "product_name": product.name,
-                        "order_qty": float(shortage_qty),
-                        "has_bom": True
-                    })
+                    top_level_products.append(
+                        {
+                            "product_id": product.id,
+                            "product_sku": product.sku,
+                            "product_name": product.name,
+                            "order_qty": float(shortage_qty),
+                            "has_bom": True,
+                        }
+                    )
 
             explode_requirements(product.id, qty, level=0, parent_sku=product.sku)
 
@@ -1230,8 +1199,8 @@ async def get_required_orders_for_sales_order(
             "top_level_wos": len(top_level_products),
             "sub_assembly_wos": len(work_orders_needed),
             "purchase_orders": len(aggregated_pos),
-            "total_orders_needed": len(top_level_products) + len(work_orders_needed) + len(aggregated_pos)
-        }
+            "total_orders_needed": len(top_level_products) + len(work_orders_needed) + len(aggregated_pos),
+        },
     }
 
 
@@ -1242,9 +1211,7 @@ async def get_required_orders_for_sales_order(
 
 @router.get("/{order_id}/blocking-issues", response_model=SalesOrderBlockingIssues)
 async def get_blocking_issues(
-    order_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    order_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """
     Get blocking issues analysis for a sales order.
@@ -1269,10 +1236,7 @@ async def get_blocking_issues(
     result = get_sales_order_blocking_issues(db, order_id)
 
     if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Sales order {order_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Sales order {order_id} not found")
 
     return result
 
@@ -1280,6 +1244,7 @@ async def get_blocking_issues(
 # ============================================================================
 # ENDPOINT: Get Fulfillment Status (API-301)
 # ============================================================================
+
 
 @router.get("/{order_id}/fulfillment-status", response_model=FulfillmentStatus)
 async def get_order_fulfillment_status(
@@ -1307,8 +1272,10 @@ async def get_order_fulfillment_status(
 # ENDPOINT: Material Requirements (Phase 2)
 # ============================================================================
 
+
 class MaterialRequirementItem(BaseModel):
     """Single material requirement for a sales order"""
+
     product_id: int
     product_sku: str
     product_name: str
@@ -1324,6 +1291,7 @@ class MaterialRequirementItem(BaseModel):
 
 class MaterialRequirementsResponse(BaseModel):
     """Material requirements for a sales order"""
+
     sales_order_id: int
     order_number: str
     requirements: List[MaterialRequirementItem]
@@ -1356,27 +1324,17 @@ async def get_material_requirements(
     # Verify order exists and user has access
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if order.user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this order"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order")
 
     requirements = []
     seen_products = {}  # Track products to aggregate duplicates
 
     def add_requirement(
-        component: Product,
-        qty_required: Decimal,
-        unit: str,
-        operation_code: Optional[str],
-        material_source: str
+        component: Product, qty_required: Decimal, unit: str, operation_code: Optional[str], material_source: str
     ):
         """Add a material requirement, aggregating duplicates."""
         key = component.id
@@ -1393,20 +1351,17 @@ async def get_material_requirements(
                 "purchase_order_id": po.id,
                 "purchase_order_code": po.po_number,
                 "quantity": float(po_qty),
-                "expected_date": po.expected_date.isoformat() if po.expected_date else None
+                "expected_date": po.expected_date.isoformat() if po.expected_date else None,
             }
 
         # Check if component has an active BOM or Routing (is a sub-assembly that can be manufactured)
-        has_bom = db.query(BOM).filter(
-            BOM.product_id == component.id,
-            BOM.active.is_(True)
-        ).first() is not None
+        has_bom = db.query(BOM).filter(BOM.product_id == component.id, BOM.active.is_(True)).first() is not None
 
         # Also check for routing (new manufacturing system)
-        has_routing = db.query(Routing).filter(
-            Routing.product_id == component.id,
-            Routing.is_active.is_(True)
-        ).first() is not None
+        has_routing = (
+            db.query(Routing).filter(Routing.product_id == component.id, Routing.is_active.is_(True)).first()
+            is not None
+        )
 
         # Can manufacture if has either BOM or Routing
         has_bom = has_bom or has_routing
@@ -1429,7 +1384,7 @@ async def get_material_requirements(
                 "material_source": material_source,
                 "has_incoming_supply": has_incoming,
                 "incoming_supply_details": incoming_details,
-                "has_bom": has_bom
+                "has_bom": has_bom,
             }
 
     def process_product(product_id: int, quantity: Decimal):
@@ -1443,23 +1398,16 @@ async def get_material_requirements(
         routing = None
 
         try:
-            routing = db.query(Routing).filter(
-                Routing.product_id == product_id,
-                Routing.is_active.is_(True)
-            ).first()
+            routing = db.query(Routing).filter(Routing.product_id == product_id, Routing.is_active.is_(True)).first()
 
             if routing:
                 # Get all operation materials
-                routing_materials = db.query(
-                    RoutingOperationMaterial,
-                    RoutingOperation
-                ).join(
-                    RoutingOperation,
-                    RoutingOperationMaterial.routing_operation_id == RoutingOperation.id
-                ).filter(
-                    RoutingOperation.routing_id == routing.id,
-                    RoutingOperationMaterial.is_cost_only.is_(False)
-                ).all()
+                routing_materials = (
+                    db.query(RoutingOperationMaterial, RoutingOperation)
+                    .join(RoutingOperation, RoutingOperationMaterial.routing_operation_id == RoutingOperation.id)
+                    .filter(RoutingOperation.routing_id == routing.id, RoutingOperationMaterial.is_cost_only.is_(False))
+                    .all()
+                )
 
                 if routing_materials:
                     has_routing_materials = True
@@ -1476,19 +1424,17 @@ async def get_material_requirements(
                             qty_required=qty_required,
                             unit=mat.unit or component.unit,
                             operation_code=op.operation_code,
-                            material_source="routing"
+                            material_source="routing",
                         )
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning(f"Error processing routing materials for product {product_id}: {e}")
             # Fall back to BOM
 
         # FALLBACK: Use legacy BOM if no routing materials
         if not has_routing_materials:
-            bom = db.query(BOM).filter(
-                BOM.product_id == product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == product_id, BOM.active.is_(True)).first()
 
             if bom:
                 for line in bom.lines:
@@ -1508,14 +1454,12 @@ async def get_material_requirements(
                         qty_required=qty_required,
                         unit=line.unit or component.unit,
                         operation_code=line.consume_stage,  # 'production' or 'shipping'
-                        material_source="bom"
+                        material_source="bom",
                     )
 
     # Process based on order type
     if order.order_type == "line_item":
-        lines = db.query(SalesOrderLine).filter(
-            SalesOrderLine.sales_order_id == order_id
-        ).all()
+        lines = db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order_id).all()
 
         for line in lines:
             if line.product_id:
@@ -1544,8 +1488,8 @@ async def get_material_requirements(
             "materials_short": materials_short,
             "materials_with_incoming_supply": materials_with_incoming,
             "can_fulfill": materials_short == 0,
-            "has_shortages": materials_short > 0
-        }
+            "has_shortages": materials_short > 0,
+        },
     }
 
 
@@ -1578,7 +1522,7 @@ async def pre_flight_check(
             "quantity_available": float(r["quantity_available"]),
             "quantity_short": float(r["quantity_short"]),
             "has_incoming_supply": r["has_incoming_supply"],
-            "incoming_supply_details": r["incoming_supply_details"]
+            "incoming_supply_details": r["incoming_supply_details"],
         }
         for r in mat_req_result["requirements"]
         if r["quantity_short"] > 0
@@ -1591,11 +1535,13 @@ async def pre_flight_check(
         if shortage["has_incoming_supply"]:
             details = shortage["incoming_supply_details"]
             expected = details.get("expected_date", "unknown") if details else "unknown"
-            warnings.append({
-                "type": "incoming_supply",
-                "message": f"{shortage['product_sku']} has pending PO, expected {expected}",
-                "product_sku": shortage["product_sku"]
-            })
+            warnings.append(
+                {
+                    "type": "incoming_supply",
+                    "message": f"{shortage['product_sku']} has pending PO, expected {expected}",
+                    "product_sku": shortage["product_sku"],
+                }
+            )
 
     return {
         "sales_order_id": order_id,
@@ -1603,13 +1549,14 @@ async def pre_flight_check(
         "can_proceed": len(shortages) == 0,
         "shortages": shortages,
         "warnings": warnings,
-        "summary": mat_req_result["summary"]
+        "summary": mat_req_result["summary"],
     }
 
 
 # ============================================================================
 # ENDPOINT: Update Order Status (Admin)
 # ============================================================================
+
 
 @router.patch("/{order_id}/status", response_model=SalesOrderResponse)
 async def update_order_status(
@@ -1636,18 +1583,12 @@ async def update_order_status(
     # Admin-only endpoint
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can update order status"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can update order status")
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Update status
     old_status = order.status
@@ -1659,9 +1600,7 @@ async def update_order_status(
 
         # Auto-create production orders for confirmed orders
         # Check if production orders already exist
-        existing_pos = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order_id
-        ).all()
+        existing_pos = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()
 
         if not existing_pos:
             # Generate production orders for this SO
@@ -1669,21 +1608,19 @@ async def update_order_status(
             if created_orders:
                 # Update status to in_production since WOs are created
                 order.status = "in_production"
-                
+
                 # Trigger MRP check if enabled (behind feature flag, graceful degradation)
                 try:
                     from app.services.mrp_trigger_service import trigger_mrp_check
                     from app.core.settings import get_settings
+
                     settings = get_settings()
-                    
+
                     if settings.AUTO_MRP_ON_CONFIRMATION:
                         trigger_mrp_check(db, order.id)
                 except Exception as e:
                     # Log but don't break order confirmation - graceful degradation
-                    logger.warning(
-                        f"MRP trigger failed after order confirmation {order.id}: {str(e)}",
-                        exc_info=True
-                    )
+                    logger.warning(f"MRP trigger failed after order confirmation {order.id}: {str(e)}", exc_info=True)
 
     if update.status == "shipped":
         order.shipped_at = datetime.utcnow()
@@ -1723,6 +1660,7 @@ async def update_order_status(
 # ENDPOINT: Update Payment Information
 # ============================================================================
 
+
 @router.patch("/{order_id}/payment", response_model=SalesOrderResponse)
 async def update_payment_info(
     order_id: int,
@@ -1740,17 +1678,13 @@ async def update_payment_info(
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can update payment information"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can update payment information"
         )
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Track old status for event recording
     old_payment_status = order.payment_status
@@ -1769,8 +1703,20 @@ async def update_payment_info(
 
     # Record payment event
     if old_payment_status != update.payment_status:
-        event_type = "payment_received" if update.payment_status == "paid" else "payment_refunded" if update.payment_status == "refunded" else "status_change"
-        title = "Payment received" if update.payment_status == "paid" else "Payment refunded" if update.payment_status == "refunded" else f"Payment status changed to {update.payment_status}"
+        event_type = (
+            "payment_received"
+            if update.payment_status == "paid"
+            else "payment_refunded"
+            if update.payment_status == "refunded"
+            else "status_change"
+        )
+        title = (
+            "Payment received"
+            if update.payment_status == "paid"
+            else "Payment refunded"
+            if update.payment_status == "refunded"
+            else f"Payment status changed to {update.payment_status}"
+        )
 
         record_order_event(
             db=db,
@@ -1794,6 +1740,7 @@ async def update_payment_info(
 # ENDPOINT: Update Shipping Information
 # ============================================================================
 
+
 @router.patch("/{order_id}/shipping", response_model=SalesOrderResponse)
 async def update_shipping_info(
     order_id: int,
@@ -1811,17 +1758,13 @@ async def update_shipping_info(
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can update shipping information"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can update shipping information"
         )
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Track if we're marking as shipped (transition from not-shipped to shipped)
     is_shipping = order.shipped_at is None and update.shipped_at is not None
@@ -1844,7 +1787,8 @@ async def update_shipping_info(
             order_id=order_id,
             event_type="shipped",
             title="Order shipped",
-            description=f"Shipped via {update.carrier or 'carrier'}" + (f", tracking: {update.tracking_number}" if update.tracking_number else ""),
+            description=f"Shipped via {update.carrier or 'carrier'}"
+            + (f", tracking: {update.tracking_number}" if update.tracking_number else ""),
             user_id=current_user.id,
             metadata_key="tracking_number" if update.tracking_number else None,
             metadata_value=update.tracking_number,
@@ -1860,6 +1804,7 @@ async def update_shipping_info(
 # ENDPOINT: Update Shipping Address
 # ============================================================================
 
+
 @router.patch("/{order_id}/address", response_model=SalesOrderResponse)
 async def update_shipping_address(
     order_id: int,
@@ -1873,8 +1818,7 @@ async def update_shipping_address(
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can update shipping address"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can update shipping address"
         )
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
@@ -1924,6 +1868,7 @@ async def update_shipping_address(
 # ENDPOINT: Cancel Sales Order
 # ============================================================================
 
+
 @router.post("/{order_id}/cancel", response_model=SalesOrderResponse)
 async def cancel_sales_order(
     order_id: int,
@@ -1944,37 +1889,31 @@ async def cancel_sales_order(
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Verify ownership or admin
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if order.user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to cancel this order"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to cancel this order")
 
     # Check if order can be cancelled
     if not order.is_cancellable:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot cancel order with status '{order.status}'"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Cannot cancel order with status '{order.status}'"
         )
 
     # Check for linked production orders that aren't cancelled
-    linked_wos = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == order_id,
-        ProductionOrder.status != "cancelled"
-    ).all()
+    linked_wos = (
+        db.query(ProductionOrder)
+        .filter(ProductionOrder.sales_order_id == order_id, ProductionOrder.status != "cancelled")
+        .all()
+    )
 
     if linked_wos:
         wo_codes = [wo.code for wo in linked_wos]
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot cancel: {len(linked_wos)} work order(s) still active ({', '.join(wo_codes[:3])}{'...' if len(wo_codes) > 3 else ''}). Cancel work orders first."
+            detail=f"Cannot cancel: {len(linked_wos)} work order(s) still active ({', '.join(wo_codes[:3])}{'...' if len(wo_codes) > 3 else ''}). Cancel work orders first.",
         )
 
     # Cancel order
@@ -2005,6 +1944,7 @@ async def cancel_sales_order(
 # ENDPOINT: Delete Sales Order (Admin Only)
 # ============================================================================
 
+
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sales_order(
     order_id: int,
@@ -2025,31 +1965,23 @@ async def delete_sales_order(
     # Admin-only endpoint
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can delete sales orders"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can delete sales orders")
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     # Check if order can be deleted (only cancelled or pending orders)
     deletable_statuses = ["cancelled", "pending"]
     if order.status not in deletable_statuses:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot delete order with status '{order.status}'. Only cancelled or pending orders can be deleted."
+            detail=f"Cannot delete order with status '{order.status}'. Only cancelled or pending orders can be deleted.",
         )
 
     # Check for associated production orders
-    existing_pos = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == order_id
-    ).all()
+    existing_pos = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()
 
     if existing_pos:
         # Only block deletion if POs are not cancelled/draft
@@ -2057,7 +1989,7 @@ async def delete_sales_order(
         if active_pos:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot delete order with active production orders. Cancel or delete the production orders first: {', '.join([po.code for po in active_pos])}"
+                detail=f"Cannot delete order with active production orders. Cancel or delete the production orders first: {', '.join([po.code for po in active_pos])}",
             )
 
     # Delete the order (cascade will handle lines and payments)
@@ -2071,8 +2003,10 @@ async def delete_sales_order(
 # ENDPOINT: Create Shipping Label / Ship Order
 # ============================================================================
 
+
 class ShipOrderRequest(BaseModel):
     """Request to ship an order"""
+
     carrier: str = "USPS"
     service: Optional[str] = "Priority"
     tracking_number: Optional[str] = None  # If already have tracking
@@ -2097,10 +2031,7 @@ async def ship_order(
     # Admin-only endpoint
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can ship orders"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can ship orders")
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
     if not order:
@@ -2109,19 +2040,19 @@ async def ship_order(
     # Validate shipping address exists
     if not order.shipping_address_line1 and not order.shipping_city:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Order has no shipping address. Please add one first."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Order has no shipping address. Please add one first."
         )
 
     # Generate mock tracking number if not provided
     # Format: {CARRIER}-{YEAR}{MONTH}{DAY}-{ORDER_ID}{RANDOM}
     import random
     import string
+
     if request.tracking_number:
         tracking_number = request.tracking_number
     else:
         date_part = datetime.utcnow().strftime("%Y%m%d")
-        random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        random_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
         carrier_prefix = request.carrier[:3].upper() if request.carrier else "SHP"
         tracking_number = f"{carrier_prefix}{date_part}{order_id:04d}{random_part}"
 
@@ -2173,16 +2104,14 @@ async def ship_order(
     try:
         from app.services.mrp_trigger_service import trigger_mrp_recalculation
         from app.core.settings import get_settings
+
         settings = get_settings()
-        
+
         if settings.AUTO_MRP_ON_SHIPMENT:
             trigger_mrp_recalculation(db, order.id, reason="shipment")
     except Exception as e:
         # Log but don't break shipping - graceful degradation
-        logger.warning(
-            f"MRP recalculation trigger failed after shipping order {order.id}: {str(e)}",
-            exc_info=True
-        )
+        logger.warning(f"MRP recalculation trigger failed after shipping order {order.id}: {str(e)}", exc_info=True)
 
     return {
         "message": "Order shipped successfully",
@@ -2197,6 +2126,7 @@ async def ship_order(
 # ============================================================================
 # ENDPOINT: Generate Production Orders from Sales Order
 # ============================================================================
+
 
 @router.post("/{order_id}/generate-production-orders")
 async def generate_production_orders(
@@ -2223,42 +2153,37 @@ async def generate_production_orders(
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if not is_admin:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only administrators can generate production orders"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only administrators can generate production orders"
         )
 
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
 
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     if order.status == "cancelled":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot generate production orders for cancelled sales order"
+            detail="Cannot generate production orders for cancelled sales order",
         )
 
     # Check if production orders already exist for the specific line item products
     # (not just any PO linked to the sales order - those could be sub-assemblies)
     if order.order_type == "line_item":
         line_product_ids = [line.product_id for line in order.lines if line.product_id]
-        existing_pos = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order_id,
-            ProductionOrder.product_id.in_(line_product_ids)
-        ).all()
+        existing_pos = (
+            db.query(ProductionOrder)
+            .filter(ProductionOrder.sales_order_id == order_id, ProductionOrder.product_id.in_(line_product_ids))
+            .all()
+        )
     else:
-        existing_pos = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order_id
-        ).all()
+        existing_pos = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()
 
     if existing_pos:
         return {
             "message": "Production orders already exist",
             "existing_orders": [po.code for po in existing_pos],
-            "created_orders": []
+            "created_orders": [],
         }
 
     created_orders = []
@@ -2281,34 +2206,27 @@ async def generate_production_orders(
 
     if order.order_type == "line_item":
         # Get all lines for this order
-        lines = db.query(SalesOrderLine).filter(
-            SalesOrderLine.sales_order_id == order_id
-        ).order_by(SalesOrderLine.id).all()
+        lines = (
+            db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order_id).order_by(SalesOrderLine.id).all()
+        )
 
         if not lines:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Sales order has no line items"
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Sales order has no line items")
 
         for idx, line in enumerate(lines, start=1):
             product = db.query(Product).filter(Product.id == line.product_id).first()
             if not product:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Product ID {line.product_id} not found for line {idx}"
+                    detail=f"Product ID {line.product_id} not found for line {idx}",
                 )
 
             # Find BOM for product (first active one)
-            bom = db.query(BOM).filter(
-                BOM.product_id == line.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == line.product_id, BOM.active.is_(True)).first()
 
-            routing = db.query(Routing).filter(
-                Routing.product_id == line.product_id,
-                Routing.is_active.is_(True)
-            ).first()
+            routing = (
+                db.query(Routing).filter(Routing.product_id == line.product_id, Routing.is_active.is_(True)).first()
+            )
 
             po_code = get_next_po_code()
 
@@ -2355,15 +2273,11 @@ async def generate_production_orders(
             if quote and quote.product_id:
                 product_id = quote.product_id
 
-                bom = db.query(BOM).filter(
-                    BOM.product_id == product_id,
-                    BOM.active.is_(True)
-                ).first()
+                bom = db.query(BOM).filter(BOM.product_id == product_id, BOM.active.is_(True)).first()
 
-                routing = db.query(Routing).filter(
-                    Routing.product_id == product_id,
-                    Routing.is_active.is_(True)
-                ).first()
+                routing = (
+                    db.query(Routing).filter(Routing.product_id == product_id, Routing.is_active.is_(True)).first()
+                )
 
                 po_code = get_next_po_code()
 
@@ -2401,12 +2315,11 @@ async def generate_production_orders(
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Quote-based order has no product. Please accept the quote first."
+                    detail="Quote-based order has no product. Please accept the quote first.",
                 )
         else:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Quote-based order has no associated quote"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Quote-based order has no associated quote"
             )
 
     # Record event for production order creation
@@ -2431,7 +2344,7 @@ async def generate_production_orders(
     return {
         "message": f"Created {len(created_orders)} production order(s)",
         "created_orders": created_orders,
-        "existing_orders": []
+        "existing_orders": [],
     }
 
 
@@ -2439,28 +2352,31 @@ async def generate_production_orders(
 # Helper: Build response with lines
 # ============================================================================
 
+
 def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResponse:
     """Build sales order response with line items"""
     lines = []
     if order.order_type == "line_item":
-        order_lines = db.query(SalesOrderLine).filter(
-            SalesOrderLine.sales_order_id == order.id
-        ).order_by(SalesOrderLine.id).all()  # Order by ID since line_number doesn't exist
+        order_lines = (
+            db.query(SalesOrderLine).filter(SalesOrderLine.sales_order_id == order.id).order_by(SalesOrderLine.id).all()
+        )  # Order by ID since line_number doesn't exist
 
         for line in order_lines:
             product = db.query(Product).filter(Product.id == line.product_id).first()
             # Use actual database columns: total (not total_price)
             line_total = line.total if line.total else (line.unit_price * line.quantity)
-            lines.append(SalesOrderLineResponse(
-                id=line.id,
-                product_id=line.product_id,
-                product_sku=product.sku if product else "",
-                product_name=product.name if product else "",
-                quantity=line.quantity if line.quantity else Decimal("0"),
-                unit_price=line.unit_price,
-                total=line_total,
-                notes=line.notes,
-            ))
+            lines.append(
+                SalesOrderLineResponse(
+                    id=line.id,
+                    product_id=line.product_id,
+                    product_sku=product.sku if product else "",
+                    product_name=product.name if product else "",
+                    quantity=line.quantity if line.quantity else Decimal("0"),
+                    unit_price=line.unit_price,
+                    total=line_total,
+                    notes=line.notes,
+                )
+            )
 
     # Build response from order dict, manually constructing to avoid SQLAlchemy relationship validation
     # The issue is that model_validate(order) tries to validate order.lines which are SQLAlchemy
@@ -2518,7 +2434,7 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
         "confirmed_at": getattr(order, "confirmed_at", None),
         "lines": lines,  # Use the properly formatted lines we built above
     }
-    
+
     response = SalesOrderResponse.model_validate(order_data)
     return response
 
@@ -2526,6 +2442,7 @@ def build_sales_order_response(order: SalesOrder, db: Session) -> SalesOrderResp
 # ============================================================================
 # ENDPOINT: Order Events (Activity Timeline)
 # ============================================================================
+
 
 @router.get("/{order_id}/events", response_model=OrderEventListResponse)
 async def get_order_events(
@@ -2544,29 +2461,17 @@ async def get_order_events(
     # Verify order exists and user has access
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if order.user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to view this order's events"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view this order's events")
 
     # Query events
     query = db.query(OrderEvent).filter(OrderEvent.sales_order_id == order_id)
     total = query.count()
 
-    events = (
-        query
-        .order_by(desc(OrderEvent.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    events = query.order_by(desc(OrderEvent.created_at)).offset(offset).limit(limit).all()
 
     # Build response with user names
     items = []
@@ -2577,20 +2482,22 @@ async def get_order_events(
             if user:
                 user_name = user.full_name or user.email
 
-        items.append(OrderEventResponse(
-            id=event.id,
-            sales_order_id=event.sales_order_id,
-            user_id=event.user_id,
-            user_name=user_name,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            old_value=event.old_value,
-            new_value=event.new_value,
-            metadata_key=event.metadata_key,
-            metadata_value=event.metadata_value,
-            created_at=event.created_at,
-        ))
+        items.append(
+            OrderEventResponse(
+                id=event.id,
+                sales_order_id=event.sales_order_id,
+                user_id=event.user_id,
+                user_name=user_name,
+                event_type=event.event_type,
+                title=event.title,
+                description=event.description,
+                old_value=event.old_value,
+                new_value=event.new_value,
+                metadata_key=event.metadata_key,
+                metadata_value=event.metadata_value,
+                created_at=event.created_at,
+            )
+        )
 
     return OrderEventListResponse(items=items, total=total)
 
@@ -2611,17 +2518,11 @@ async def add_order_event(
     # Verify order exists and user has access
     order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
     if not order:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Sales order not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sales order not found")
 
     is_admin = getattr(current_user, "account_type", None) == "admin" or getattr(current_user, "is_admin", False)
     if order.user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to add events to this order"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add events to this order")
 
     # Create event
     event = OrderEvent(
@@ -2695,6 +2596,7 @@ def record_order_event(
 # Shipping Events Timeline
 # ============================================================================
 
+
 @router.get("/{order_id}/shipping-events", response_model=ShippingEventListResponse)
 async def list_shipping_events(
     order_id: int,
@@ -2714,9 +2616,11 @@ async def list_shipping_events(
         raise HTTPException(status_code=404, detail="Sales order not found")
 
     # Query events with pagination
-    query = db.query(ShippingEvent).filter(
-        ShippingEvent.sales_order_id == order_id
-    ).order_by(desc(ShippingEvent.created_at))
+    query = (
+        db.query(ShippingEvent)
+        .filter(ShippingEvent.sales_order_id == order_id)
+        .order_by(desc(ShippingEvent.created_at))
+    )
 
     total = query.count()
     events = query.offset(offset).limit(limit).all()
@@ -2728,26 +2632,28 @@ async def list_shipping_events(
         if event.user_id and event.user:
             user_name = f"{event.user.first_name or ''} {event.user.last_name or ''}".strip() or event.user.email
 
-        items.append(ShippingEventResponse(
-            id=event.id,
-            sales_order_id=event.sales_order_id,
-            user_id=event.user_id,
-            user_name=user_name,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            tracking_number=event.tracking_number,
-            carrier=event.carrier,
-            location_city=event.location_city,
-            location_state=event.location_state,
-            location_zip=event.location_zip,
-            event_date=event.event_date,
-            event_timestamp=event.event_timestamp,
-            metadata_key=event.metadata_key,
-            metadata_value=event.metadata_value,
-            source=event.source,
-            created_at=event.created_at,
-        ))
+        items.append(
+            ShippingEventResponse(
+                id=event.id,
+                sales_order_id=event.sales_order_id,
+                user_id=event.user_id,
+                user_name=user_name,
+                event_type=event.event_type,
+                title=event.title,
+                description=event.description,
+                tracking_number=event.tracking_number,
+                carrier=event.carrier,
+                location_city=event.location_city,
+                location_state=event.location_state,
+                location_zip=event.location_zip,
+                event_date=event.event_date,
+                event_timestamp=event.event_timestamp,
+                metadata_key=event.metadata_key,
+                metadata_value=event.metadata_value,
+                source=event.source,
+                created_at=event.created_at,
+            )
+        )
 
     return ShippingEventListResponse(items=items, total=total)
 

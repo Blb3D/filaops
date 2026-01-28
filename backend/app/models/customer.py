@@ -11,6 +11,7 @@ Customers can:
 - Have orders, quotes, and other records linked to them
 - Exist as CRM records without portal access (walk-ins, phone orders)
 """
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -24,6 +25,7 @@ class Customer(Base):
     This is separate from User - a Customer can have multiple Users
     (portal logins) associated with it via users.customer_id FK.
     """
+
     __tablename__ = "customers"
 
     # Primary Key
@@ -33,15 +35,15 @@ class Customer(Base):
     customer_number = Column(String(50), unique=True, nullable=True, index=True)  # CUST-0001
     company_name = Column(String(200), nullable=True, index=True)
     first_name = Column(String(100), nullable=True)  # Contact/individual first name
-    last_name = Column(String(100), nullable=True)   # Contact/individual last name
+    last_name = Column(String(100), nullable=True)  # Contact/individual last name
     email = Column(String(255), nullable=True, index=True)  # Primary contact email
     phone = Column(String(20), nullable=True)
 
     # Account Status
-    status = Column(String(20), nullable=False, default='active', index=True)  # active, inactive, suspended
+    status = Column(String(20), nullable=False, default="active", index=True)  # active, inactive, suspended
 
     # Price Level FK (for B2B pricing)
-    price_level_id = Column(Integer, ForeignKey('price_levels.id'), nullable=True)
+    price_level_id = Column(Integer, ForeignKey("price_levels.id"), nullable=True)
 
     # Billing Address
     billing_address_line1 = Column(String(255), nullable=True)
@@ -49,7 +51,7 @@ class Customer(Base):
     billing_city = Column(String(100), nullable=True)
     billing_state = Column(String(50), nullable=True)
     billing_zip = Column(String(20), nullable=True)
-    billing_country = Column(String(100), nullable=True, default='USA')
+    billing_country = Column(String(100), nullable=True, default="USA")
 
     # Shipping Address (default for orders)
     shipping_address_line1 = Column(String(255), nullable=True)
@@ -57,7 +59,7 @@ class Customer(Base):
     shipping_city = Column(String(100), nullable=True)
     shipping_state = Column(String(50), nullable=True)
     shipping_zip = Column(String(20), nullable=True)
-    shipping_country = Column(String(100), nullable=True, default='USA')
+    shipping_country = Column(String(100), nullable=True, default="USA")
 
     # Metadata
     notes = Column(Text, nullable=True)
@@ -70,13 +72,9 @@ class Customer(Base):
     price_level = relationship("PriceLevel", back_populates="customers")
     users = relationship("User", back_populates="customer")  # Portal users for this customer (legacy single-customer)
     customer_catalogs = relationship("CustomerCatalog", back_populates="customer", cascade="all, delete-orphan")
-    
+
     # Multi-user access (B2B portal)
-    user_access = relationship(
-        "UserCustomerAccess",
-        back_populates="customer",
-        cascade="all, delete-orphan"
-    )
+    user_access = relationship("UserCustomerAccess", back_populates="customer", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Customer(id={self.id}, number='{self.customer_number}', company='{self.company_name}')>"
@@ -96,7 +94,7 @@ class Customer(Base):
     @property
     def is_active(self) -> bool:
         """Check if customer account is active"""
-        return self.status == 'active'
+        return self.status == "active"
 
     @property
     def full_shipping_address(self) -> str:
@@ -105,7 +103,7 @@ class Customer(Base):
             self.shipping_address_line1,
             self.shipping_address_line2,
             f"{self.shipping_city}, {self.shipping_state} {self.shipping_zip}".strip(", "),
-            self.shipping_country
+            self.shipping_country,
         ]
         return "\n".join(p for p in parts if p)
 
@@ -116,6 +114,6 @@ class Customer(Base):
             self.billing_address_line1,
             self.billing_address_line2,
             f"{self.billing_city}, {self.billing_state} {self.billing_zip}".strip(", "),
-            self.billing_country
+            self.billing_country,
         ]
         return "\n".join(p for p in parts if p)

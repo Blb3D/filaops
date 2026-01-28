@@ -7,6 +7,7 @@ Provides structures for:
 - Incoming supply details (purchase orders)
 - Shortage information
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
@@ -15,6 +16,7 @@ from pydantic import BaseModel, Field
 
 class LinkedSalesOrder(BaseModel):
     """Sales order linked to a production order allocation."""
+
     id: int
     code: str
     customer: Optional[str] = None
@@ -25,6 +27,7 @@ class LinkedSalesOrder(BaseModel):
 
 class AllocationDetail(BaseModel):
     """Single allocation consuming inventory (typically a production order)."""
+
     type: str = Field(description="'production_order' or future types")
     reference_code: str
     reference_id: int
@@ -39,6 +42,7 @@ class AllocationDetail(BaseModel):
 
 class IncomingDetail(BaseModel):
     """Single incoming supply (typically a purchase order line)."""
+
     type: str = Field(description="'purchase_order' or future types")
     reference_code: str
     reference_id: int
@@ -53,12 +57,10 @@ class IncomingDetail(BaseModel):
 
 class ShortageInfo(BaseModel):
     """Shortage details if available < 0."""
+
     is_short: bool
     quantity: Decimal = Field(description="Positive number representing shortage amount")
-    blocking_orders: List[str] = Field(
-        default_factory=list,
-        description="Order codes blocked by shortage"
-    )
+    blocking_orders: List[str] = Field(default_factory=list, description="Order codes blocked by shortage")
 
     class Config:
         from_attributes = True
@@ -66,6 +68,7 @@ class ShortageInfo(BaseModel):
 
 class QuantitySummary(BaseModel):
     """Quantity breakdown for an item."""
+
     on_hand: Decimal
     allocated: Decimal
     available: Decimal = Field(description="on_hand - allocated")
@@ -78,6 +81,7 @@ class QuantitySummary(BaseModel):
 
 class ItemDemandSummary(BaseModel):
     """Complete demand summary for an item."""
+
     item_id: int
     sku: str
     name: str

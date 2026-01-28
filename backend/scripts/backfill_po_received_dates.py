@@ -11,7 +11,9 @@ The script will:
    - order_date if no expected_date
    - updated_at date as last resort
 """
+
 import sys
+
 sys.path.insert(0, "c:/repos/filaops/backend")
 
 from datetime import date
@@ -23,12 +25,14 @@ def backfill_received_dates():
     db = SessionLocal()
     try:
         # Find POs needing backfill
-        result = db.execute(text("""
+        result = db.execute(
+            text("""
             SELECT id, po_number, status, order_date, expected_date, updated_at
             FROM purchase_orders
             WHERE status IN ('received', 'closed')
               AND received_date IS NULL
-        """))
+        """)
+        )
 
         pos_to_update = result.fetchall()
 
@@ -49,7 +53,7 @@ def backfill_received_dates():
                 backfill_date = order_date
                 source = "order_date"
             elif updated_at:
-                backfill_date = updated_at.date() if hasattr(updated_at, 'date') else date.today()
+                backfill_date = updated_at.date() if hasattr(updated_at, "date") else date.today()
                 source = "updated_at"
             else:
                 backfill_date = date.today()
@@ -60,7 +64,7 @@ def backfill_received_dates():
             # Update the PO
             db.execute(
                 text("UPDATE purchase_orders SET received_date = :received_date WHERE id = :id"),
-                {"received_date": backfill_date, "id": po_id}
+                {"received_date": backfill_date, "id": po_id},
             )
 
         db.commit()

@@ -12,7 +12,7 @@ Scenarios:
     - full-demand-chain: Complete SO->WO->PO chain for traceability
     - so-with-blocking-issues: Sales order with fulfillment problems
 """
-from datetime import date, timedelta
+
 from decimal import Decimal
 from typing import Dict, Any
 from sqlalchemy.orm import Session
@@ -42,18 +42,11 @@ def seed_empty(db: Session) -> Dict[str, Any]:
         password="TestPass123!",
         account_type="admin",
         first_name="Admin",
-        last_name="User"
+        last_name="User",
     )
     db.commit()
 
-    return {
-        "scenario": "empty",
-        "user": {
-            "id": user.id,
-            "email": user.email,
-            "account_type": user.account_type
-        }
-    }
+    return {"scenario": "empty", "user": {"id": user.id, "email": user.email, "account_type": user.account_type}}
 
 
 def seed_basic(db: Session) -> Dict[str, Any]:
@@ -73,7 +66,7 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         password="TestPass123!",
         account_type="admin",
         first_name="Admin",
-        last_name="User"
+        last_name="User",
     )
     customer = create_test_user(
         db,
@@ -82,7 +75,7 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         account_type="customer",
         first_name="Test",
         last_name="Customer",
-        company_name="Acme Corporation"
+        company_name="Acme Corporation",
     )
 
     # Vendors
@@ -98,7 +91,7 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         unit="G",
         purchase_uom="KG",
         purchase_factor=Decimal("1000"),  # 1 KG = 1000 G
-        standard_cost=Decimal("25.00")    # $/KG
+        standard_cost=Decimal("25.00"),  # $/KG
     )
     pla_white = create_test_material(
         db,
@@ -107,14 +100,10 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         unit="G",
         purchase_uom="KG",
         purchase_factor=Decimal("1000"),  # 1 KG = 1000 G
-        standard_cost=Decimal("25.00")    # $/KG
+        standard_cost=Decimal("25.00"),  # $/KG
     )
     hardware_kit = create_test_material(
-        db,
-        sku="HW-M3-KIT",
-        name="M3 Hardware Kit",
-        unit="EA",
-        standard_cost=Decimal("5.00")
+        db, sku="HW-M3-KIT", name="M3 Hardware Kit", unit="EA", standard_cost=Decimal("5.00")
     )
 
     # Finished products
@@ -125,7 +114,7 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         item_type="finished_good",
         procurement_type="make",
         selling_price=Decimal("49.99"),
-        standard_cost=Decimal("15.00")
+        standard_cost=Decimal("15.00"),
     )
     gadget = create_test_product(
         db,
@@ -134,23 +123,31 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         item_type="finished_good",
         procurement_type="make",
         selling_price=Decimal("89.99"),
-        standard_cost=Decimal("30.00")
+        standard_cost=Decimal("30.00"),
     )
 
     # BOMs (filament quantities in grams)
-    widget_bom = create_test_bom(db, widget, lines=[
-        {"component": pla_black, "quantity": Decimal("150")},  # 150g per widget
-        {"component": hardware_kit, "quantity": Decimal("1")},
-    ])
-    gadget_bom = create_test_bom(db, gadget, lines=[
-        {"component": pla_black, "quantity": Decimal("250")},  # 250g per gadget
-        {"component": pla_white, "quantity": Decimal("100")},  # 100g per gadget
-        {"component": hardware_kit, "quantity": Decimal("2")},
-    ])
+    widget_bom = create_test_bom(
+        db,
+        widget,
+        lines=[
+            {"component": pla_black, "quantity": Decimal("150")},  # 150g per widget
+            {"component": hardware_kit, "quantity": Decimal("1")},
+        ],
+    )
+    gadget_bom = create_test_bom(
+        db,
+        gadget,
+        lines=[
+            {"component": pla_black, "quantity": Decimal("250")},  # 250g per gadget
+            {"component": pla_white, "quantity": Decimal("100")},  # 100g per gadget
+            {"component": hardware_kit, "quantity": Decimal("2")},
+        ],
+    )
 
     # Initial inventory (filament in grams)
     create_test_inventory(db, pla_black, Decimal("10000"))  # 10 kg = 10000g
-    create_test_inventory(db, pla_white, Decimal("5000"))   # 5 kg = 5000g
+    create_test_inventory(db, pla_white, Decimal("5000"))  # 5 kg = 5000g
     create_test_inventory(db, hardware_kit, Decimal("100"))  # 100 kits
 
     db.commit()
@@ -159,21 +156,21 @@ def seed_basic(db: Session) -> Dict[str, Any]:
         "scenario": "basic",
         "users": {
             "admin": {"id": admin.id, "email": admin.email},
-            "customer": {"id": customer.id, "email": customer.email}
+            "customer": {"id": customer.id, "email": customer.email},
         },
         "vendors": [
             {"id": amazon.id, "code": amazon.code, "name": amazon.name},
-            {"id": filament_vendor.id, "code": filament_vendor.code, "name": filament_vendor.name}
+            {"id": filament_vendor.id, "code": filament_vendor.code, "name": filament_vendor.name},
         ],
         "materials": [
             {"id": pla_black.id, "sku": pla_black.sku},
             {"id": pla_white.id, "sku": pla_white.sku},
-            {"id": hardware_kit.id, "sku": hardware_kit.sku}
+            {"id": hardware_kit.id, "sku": hardware_kit.sku},
         ],
         "products": [
             {"id": widget.id, "sku": widget.sku, "bom_id": widget_bom.id},
-            {"id": gadget.id, "sku": gadget.sku, "bom_id": gadget_bom.id}
-        ]
+            {"id": gadget.id, "sku": gadget.sku, "bom_id": gadget_bom.id},
+        ],
     }
 
 
@@ -199,22 +196,11 @@ def seed_low_stock_with_allocations(db: Session) -> Dict[str, Any]:
 
     # Create sales order for 50 gadgets
     so = create_test_sales_order(
-        db,
-        user=customer,
-        product=gadget,
-        quantity=50,
-        status="confirmed",
-        payment_status="paid"
+        db, user=customer, product=gadget, quantity=50, status="confirmed", payment_status="paid"
     )
 
     # Create production order linked to SO
-    wo1 = create_test_production_order(
-        db,
-        product=gadget,
-        quantity=50,
-        sales_order=so,
-        status="released"
-    )
+    wo1 = create_test_production_order(db, product=gadget, quantity=50, sales_order=so, status="released")
 
     # This creates demand for:
     # - 12500g PLA black (50 × 250g)
@@ -233,7 +219,7 @@ def seed_low_stock_with_allocations(db: Session) -> Dict[str, Any]:
         status="ordered",
         lines=[
             {"product": pla_black, "quantity": 5, "unit_cost": Decimal("25.00")}  # 5 KG @ $25/KG
-        ]
+        ],
     )
 
     db.commit()
@@ -246,10 +232,10 @@ def seed_low_stock_with_allocations(db: Session) -> Dict[str, Any]:
         "purchase_order": {"id": po.id, "po_number": po.po_number},
         "shortage": {
             "product_sku": pla_black.sku,
-            "on_hand": 10000,   # grams
-            "needed": 12500,    # grams
-            "shortage_qty": 2500  # grams
-        }
+            "on_hand": 10000,  # grams
+            "needed": 12500,  # grams
+            "shortage_qty": 2500,  # grams
+        },
     }
 
 
@@ -269,54 +255,20 @@ def seed_production_in_progress(db: Session) -> Dict[str, Any]:
     gadget = db.query(Product).filter_by(sku="GADGET-PRO").first()
 
     # MTO order - in progress (40% complete)
-    so1 = create_test_sales_order(
-        db,
-        user=customer,
-        product=widget,
-        quantity=25,
-        status="in_production"
-    )
+    so1 = create_test_sales_order(db, user=customer, product=widget, quantity=25, status="in_production")
     wo1 = create_test_production_order(
-        db,
-        product=widget,
-        quantity=25,
-        sales_order=so1,
-        status="in_progress",
-        quantity_completed=10
+        db, product=widget, quantity=25, sales_order=so1, status="in_progress", quantity_completed=10
     )
 
     # MTO order - released (ready to start)
-    so2 = create_test_sales_order(
-        db,
-        user=customer,
-        product=gadget,
-        quantity=15,
-        status="confirmed"
-    )
-    wo2 = create_test_production_order(
-        db,
-        product=gadget,
-        quantity=15,
-        sales_order=so2,
-        status="released"
-    )
+    so2 = create_test_sales_order(db, user=customer, product=gadget, quantity=15, status="confirmed")
+    wo2 = create_test_production_order(db, product=gadget, quantity=15, sales_order=so2, status="released")
 
     # MTS order - draft
-    wo3 = create_test_production_order(
-        db,
-        product=widget,
-        quantity=50,
-        status="draft"
-    )
+    wo3 = create_test_production_order(db, product=widget, quantity=50, status="draft")
 
     # MTS order - complete
-    wo4 = create_test_production_order(
-        db,
-        product=widget,
-        quantity=20,
-        status="closed",
-        quantity_completed=20
-    )
+    wo4 = create_test_production_order(db, product=widget, quantity=20, status="closed", quantity_completed=20)
 
     db.commit()
 
@@ -327,8 +279,8 @@ def seed_production_in_progress(db: Session) -> Dict[str, Any]:
             {"id": wo1.id, "code": wo1.code, "status": "in_progress", "so": so1.order_number, "percent": 40},
             {"id": wo2.id, "code": wo2.code, "status": "released", "so": so2.order_number, "percent": 0},
             {"id": wo3.id, "code": wo3.code, "status": "draft", "so": None, "percent": 0},
-            {"id": wo4.id, "code": wo4.code, "status": "closed", "so": None, "percent": 100}
-        ]
+            {"id": wo4.id, "code": wo4.code, "status": "closed", "so": None, "percent": 100},
+        ],
     }
 
 
@@ -353,7 +305,7 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         password="TestPass123!",
         account_type="admin",
         first_name="Admin",
-        last_name="User"
+        last_name="User",
     )
 
     # Customer
@@ -364,15 +316,11 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         account_type="customer",
         first_name="John",
         last_name="Smith",
-        company_name="Acme Corporation"
+        company_name="Acme Corporation",
     )
 
     # Vendor
-    vendor = create_test_vendor(
-        db,
-        name="Filament Depot",
-        lead_time_days=3
-    )
+    vendor = create_test_vendor(db, name="Filament Depot", lead_time_days=3)
 
     # Raw materials (filament: purchased in KG, stored/consumed in G)
     # Costs are stored per purchase_uom ($/KG) to match vendor pricing
@@ -383,21 +331,13 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         unit="G",
         purchase_uom="KG",
         purchase_factor=Decimal("1000"),  # 1 KG = 1000 G
-        standard_cost=Decimal("25.00")    # $/KG
+        standard_cost=Decimal("25.00"),  # $/KG
     )
     hardware = create_test_material(
-        db,
-        sku="HW-INSERT-M3",
-        name="M3 Heat Set Inserts",
-        unit="EA",
-        standard_cost=Decimal("0.15")
+        db, sku="HW-INSERT-M3", name="M3 Heat Set Inserts", unit="EA", standard_cost=Decimal("0.15")
     )
     packaging = create_test_material(
-        db,
-        sku="PKG-BOX-SM",
-        name="Small Shipping Box",
-        unit="EA",
-        standard_cost=Decimal("0.50")
+        db, sku="PKG-BOX-SM", name="Small Shipping Box", unit="EA", standard_cost=Decimal("0.50")
     )
 
     # Finished product
@@ -408,41 +348,35 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         item_type="finished_good",
         procurement_type="make",
         selling_price=Decimal("89.99"),
-        standard_cost=Decimal("35.00")
+        standard_cost=Decimal("35.00"),
     )
 
     # BOM (filament quantities in grams)
-    bom = create_test_bom(db, product, lines=[
-        {"component": pla, "quantity": Decimal("250")},         # 250g per unit
-        {"component": hardware, "quantity": Decimal("4")},      # 4 inserts per unit
-        {"component": packaging, "quantity": Decimal("1")},     # 1 box per unit
-    ])
+    bom = create_test_bom(
+        db,
+        product,
+        lines=[
+            {"component": pla, "quantity": Decimal("250")},  # 250g per unit
+            {"component": hardware, "quantity": Decimal("4")},  # 4 inserts per unit
+            {"component": packaging, "quantity": Decimal("1")},  # 1 box per unit
+        ],
+    )
 
     # Inventory (intentionally short, filament in grams)
-    create_test_inventory(db, pla, Decimal("10000"))     # Have 10kg = 10000g
+    create_test_inventory(db, pla, Decimal("10000"))  # Have 10kg = 10000g
     create_test_inventory(db, hardware, Decimal("150"))  # Have 150 inserts
-    create_test_inventory(db, packaging, Decimal("100")) # Have 100 boxes
+    create_test_inventory(db, packaging, Decimal("100"))  # Have 100 boxes
 
     # Sales order for 50 units
     # Needs: 12500g PLA, 200 inserts, 50 boxes
     # Short on: PLA (2500g), inserts (50)
     so = create_test_sales_order(
-        db,
-        user=customer,
-        product=product,
-        quantity=50,
-        status="confirmed",
-        payment_status="paid"
+        db, user=customer, product=product, quantity=50, status="confirmed", payment_status="paid"
     )
 
     # Production order linked to SO
     wo = create_test_production_order(
-        db,
-        product=product,
-        quantity=50,
-        sales_order=so,
-        status="released",
-        bom_id=bom.id
+        db, product=product, quantity=50, sales_order=so, status="released", bom_id=bom.id
     )
 
     # Purchase order for shortages
@@ -454,7 +388,7 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         lines=[
             {"product": pla, "quantity": 5, "unit_cost": Decimal("25.00")},  # 5 KG @ $25/KG
             {"product": hardware, "quantity": 100, "unit_cost": Decimal("0.15")},
-        ]
+        ],
     )
 
     db.commit()
@@ -463,18 +397,18 @@ def seed_full_demand_chain(db: Session) -> Dict[str, Any]:
         "scenario": "full-demand-chain",
         "users": {
             "admin": {"id": admin.id, "email": admin.email},
-            "customer": {"id": customer.id, "email": customer.email, "company": customer.company_name}
+            "customer": {"id": customer.id, "email": customer.email, "company": customer.company_name},
         },
         "vendor": {"id": vendor.id, "code": vendor.code, "name": vendor.name},
         "materials": {
             "pla": {"id": pla.id, "sku": pla.sku, "on_hand": 10000, "needed": 12500},  # grams
             "hardware": {"id": hardware.id, "sku": hardware.sku, "on_hand": 150, "needed": 200},
-            "packaging": {"id": packaging.id, "sku": packaging.sku, "on_hand": 100, "needed": 50}
+            "packaging": {"id": packaging.id, "sku": packaging.sku, "on_hand": 100, "needed": 50},
         },
         "product": {"id": product.id, "sku": product.sku, "bom_id": bom.id},
         "sales_order": {"id": so.id, "order_number": so.order_number},
         "production_order": {"id": wo.id, "code": wo.code},
-        "purchase_order": {"id": po.id, "po_number": po.po_number}
+        "purchase_order": {"id": po.id, "po_number": po.po_number},
     }
 
 
@@ -506,11 +440,12 @@ def seed_so_with_blocking_issues(db: Session) -> Dict[str, Any]:
             {"product": widget, "quantity": 25, "unit_price": widget.selling_price},
             {"product": gadget, "quantity": 15, "unit_price": gadget.selling_price},
             {"product": gadget, "quantity": 10, "unit_price": gadget.selling_price},
-        ]
+        ],
     )
 
     # Get the SO lines
     from app.models import SalesOrderLine
+
     lines = db.query(SalesOrderLine).filter_by(sales_order_id=so.id).all()
 
     # Line 1: Complete production
@@ -521,7 +456,7 @@ def seed_so_with_blocking_issues(db: Session) -> Dict[str, Any]:
         sales_order=so,
         sales_order_line=lines[0] if len(lines) > 0 else None,
         status="closed",
-        quantity_completed=25
+        quantity_completed=25,
     )
 
     # Line 2: In progress (47% complete)
@@ -532,7 +467,7 @@ def seed_so_with_blocking_issues(db: Session) -> Dict[str, Any]:
         sales_order=so,
         sales_order_line=lines[1] if len(lines) > 1 else None,
         status="in_progress",
-        quantity_completed=7
+        quantity_completed=7,
     )
 
     # Line 3: Released but blocked by material
@@ -542,7 +477,7 @@ def seed_so_with_blocking_issues(db: Session) -> Dict[str, Any]:
         quantity=10,
         sales_order=so,
         sales_order_line=lines[2] if len(lines) > 2 else None,
-        status="released"
+        status="released",
     )
 
     db.commit()
@@ -556,9 +491,9 @@ def seed_so_with_blocking_issues(db: Session) -> Dict[str, Any]:
             "lines": [
                 {"line": 1, "status": "ready", "wo": wo1.code},
                 {"line": 2, "status": "in_progress", "wo": wo2.code, "percent": 47},
-                {"line": 3, "status": "blocked", "wo": wo3.code, "reason": "material_shortage"}
-            ]
-        }
+                {"line": 3, "status": "blocked", "wo": wo3.code, "reason": "material_shortage"},
+            ],
+        },
     }
 
 

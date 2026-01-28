@@ -26,9 +26,11 @@ except Exception:
 
 class _NoopLimiter:
     """Why: allow @limiter.limit(...) decorators to be present with zero effect when slowapi isn't installed."""
+
     def limit(self, *_args, **_kwargs):
         def decorator(fn):
             return fn
+
         return decorator
 
 

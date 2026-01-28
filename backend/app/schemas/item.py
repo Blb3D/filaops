@@ -7,6 +7,7 @@ Supports unified item management for:
 - Supplies (consumables like filament, packaging)
 - Services (non-physical items like machine time)
 """
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -18,17 +19,20 @@ from enum import Enum
 # Enums
 # ============================================================================
 
+
 class ItemType(str, Enum):
     """Types of items in the system"""
+
     FINISHED_GOOD = "finished_good"  # Sellable products
-    COMPONENT = "component"          # Parts used in assembly
-    SUPPLY = "supply"                # Consumables and supplies
-    SERVICE = "service"              # Non-physical services
-    MATERIAL = "material"            # Raw materials (filament, sheet stock, etc.) - auto-configures UOM
+    COMPONENT = "component"  # Parts used in assembly
+    SUPPLY = "supply"  # Consumables and supplies
+    SERVICE = "service"  # Non-physical services
+    MATERIAL = "material"  # Raw materials (filament, sheet stock, etc.) - auto-configures UOM
 
 
 class CostMethod(str, Enum):
     """Inventory costing methods"""
+
     FIFO = "fifo"
     AVERAGE = "average"
     STANDARD = "standard"
@@ -36,23 +40,27 @@ class CostMethod(str, Enum):
 
 class ProcurementType(str, Enum):
     """How the item is obtained"""
-    MAKE = "make"       # Manufactured in-house (has BOM/routing)
-    BUY = "buy"         # Purchased from suppliers
+
+    MAKE = "make"  # Manufactured in-house (has BOM/routing)
+    BUY = "buy"  # Purchased from suppliers
     MAKE_OR_BUY = "make_or_buy"  # Can be either (flexible sourcing)
 
 
 class StockingPolicy(str, Enum):
     """How inventory is managed for this item"""
-    STOCKED = "stocked"       # Keep minimum on hand, reorder at reorder_point
-    ON_DEMAND = "on_demand"   # Only order when MRP shows actual demand
+
+    STOCKED = "stocked"  # Keep minimum on hand, reorder at reorder_point
+    ON_DEMAND = "on_demand"  # Only order when MRP shows actual demand
 
 
 # ============================================================================
 # Item Category Schemas
 # ============================================================================
 
+
 class ItemCategoryBase(BaseModel):
     """Base category fields"""
+
     code: str = Field(..., min_length=1, max_length=50, description="Unique category code")
     name: str = Field(..., min_length=1, max_length=100, description="Category name")
     parent_id: Optional[int] = Field(None, description="Parent category ID for hierarchy")
@@ -63,11 +71,13 @@ class ItemCategoryBase(BaseModel):
 
 class ItemCategoryCreate(ItemCategoryBase):
     """Create a new category"""
+
     pass
 
 
 class ItemCategoryUpdate(BaseModel):
     """Update an existing category"""
+
     code: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     parent_id: Optional[int] = None
@@ -78,6 +88,7 @@ class ItemCategoryUpdate(BaseModel):
 
 class ItemCategoryResponse(ItemCategoryBase):
     """Category response with hierarchy info"""
+
     id: int
     parent_name: Optional[str] = None
     full_path: Optional[str] = None
@@ -90,6 +101,7 @@ class ItemCategoryResponse(ItemCategoryBase):
 
 class ItemCategoryTreeNode(BaseModel):
     """Category with children for tree view"""
+
     id: int
     code: str
     name: str
@@ -109,18 +121,22 @@ ItemCategoryTreeNode.model_rebuild()
 # Item (Product) Schemas
 # ============================================================================
 
+
 class ItemBase(BaseModel):
     """Base item fields"""
+
     sku: Optional[str] = Field(None, max_length=50, description="Unique SKU (auto-generated if not provided)")
     name: str = Field(..., min_length=1, max_length=255, description="Item name")
     description: Optional[str] = None
-    
+
     # Unit of Measure - Two fields for proper cost handling
     # - unit: Storage/inventory unit (G for filament, EA for hardware)
     # - purchase_uom: Purchasing unit (KG for filament, EA for hardware)
     # Costs (standard_cost, etc.) are per PURCHASE unit
     unit: Optional[str] = Field("EA", max_length=20, description="Storage/inventory unit (G, EA, etc.)")
-    purchase_uom: Optional[str] = Field("EA", max_length=20, description="Purchase unit - costs are per this unit (KG, EA, etc.)")
+    purchase_uom: Optional[str] = Field(
+        "EA", max_length=20, description="Purchase unit - costs are per this unit (KG, EA, etc.)"
+    )
 
     # Classification
     item_type: ItemType = Field(ItemType.FINISHED_GOOD, description="Type of item")
@@ -161,6 +177,7 @@ class ItemBase(BaseModel):
 
 class ItemCreate(ItemBase):
     """Create a new item"""
+
     pass
 
 
@@ -169,6 +186,7 @@ class MaterialItemCreate(BaseModel):
     Shortcut for creating material items (filament).
     Automatically sets item_type=supply, procurement_type=buy, unit=kg.
     """
+
     material_type_code: str = Field(..., description="Material type code (e.g., PLA_BASIC)")
     color_code: str = Field(..., description="Color code (e.g., BLK)")
     cost_per_kg: Optional[Decimal] = Field(None, ge=0, description="Cost per kg (defaults to material base price)")
@@ -179,6 +197,7 @@ class MaterialItemCreate(BaseModel):
 
 class ItemUpdate(BaseModel):
     """Update an existing item"""
+
     sku: Optional[str] = Field(None, min_length=1, max_length=50)
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
@@ -224,6 +243,7 @@ class ItemUpdate(BaseModel):
 
 class ItemListResponse(BaseModel):
     """Item list summary"""
+
     id: int
     sku: str
     name: str
@@ -256,11 +276,12 @@ class ItemListResponse(BaseModel):
 
 class ItemResponse(ItemBase):
     """Full item details"""
+
     id: int
     average_cost: Optional[Decimal] = None
     last_cost: Optional[Decimal] = None
     active: bool
-    
+
     # Cost display helpers
     cost_per_storage_unit: Optional[Decimal] = None  # Calculated: standard_cost converted to $/storage_unit
 
@@ -296,8 +317,10 @@ class ItemResponse(ItemBase):
 # Bulk Operations
 # ============================================================================
 
+
 class ItemCSVImportRequest(BaseModel):
     """Settings for CSV import"""
+
     update_existing: bool = Field(False, description="Update items if SKU exists")
     default_item_type: ItemType = Field(ItemType.FINISHED_GOOD)
     default_category_id: Optional[int] = None
@@ -305,6 +328,7 @@ class ItemCSVImportRequest(BaseModel):
 
 class ItemCSVImportResult(BaseModel):
     """Result of CSV import"""
+
     total_rows: int
     created: int
     updated: int
@@ -315,6 +339,7 @@ class ItemCSVImportResult(BaseModel):
 
 class ItemBulkUpdateRequest(BaseModel):
     """Bulk update multiple items"""
+
     item_ids: List[int]
     category_id: Optional[int] = Field(None, description="Category ID (use 0 to clear category)")
     item_type: Optional[str] = Field(None, description="Item type: finished_good, component, supply, service")

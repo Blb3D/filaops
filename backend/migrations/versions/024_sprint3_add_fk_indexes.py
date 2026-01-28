@@ -17,14 +17,14 @@ NOTE: Uses defensive programming - skips if constraint/index already exists.
 This is safe to run multiple times without errors.
 
 """
+
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
-revision = '024_sprint3_add_fk_indexes'
-down_revision = '023_sprint3_cleanup_product'
+revision = "024_sprint3_add_fk_indexes"
+down_revision = "023_sprint3_cleanup_product"
 branch_labels = None
 depends_on = None
 
@@ -35,7 +35,7 @@ def _fk_exists(table_name, fk_name):
         bind = op.get_bind()
         inspector = inspect(bind)
         fks = inspector.get_foreign_keys(table_name)
-        return any(fk.get('name') == fk_name for fk in fks)
+        return any(fk.get("name") == fk_name for fk in fks)
     except Exception:
         return False
 
@@ -46,7 +46,7 @@ def _index_exists(table_name, index_name):
         bind = op.get_bind()
         inspector = inspect(bind)
         indexes = inspector.get_indexes(table_name)
-        return any(idx.get('name') == index_name for idx in indexes)
+        return any(idx.get("name") == index_name for idx in indexes)
     except Exception:
         return False
 
@@ -95,7 +95,7 @@ def _drop_fk_if_exists(fk_name, table_name):
     """Drop foreign key only if it exists."""
     if _fk_exists(table_name, fk_name):
         try:
-            op.drop_constraint(fk_name, table_name, type_='foreignkey')
+            op.drop_constraint(fk_name, table_name, type_="foreignkey")
         except Exception as e:
             print(f"  Skipping drop FK {fk_name}: {e}")
 
@@ -107,34 +107,18 @@ def upgrade():
 
     # Product.preferred_vendor_id -> vendors.id
     _create_fk_if_not_exists(
-        'fk_products_preferred_vendor',
-        'products', 'vendors',
-        ['preferred_vendor_id'], ['id'],
-        ondelete='SET NULL'
+        "fk_products_preferred_vendor", "products", "vendors", ["preferred_vendor_id"], ["id"], ondelete="SET NULL"
     )
 
     # Product.customer_id -> users.id (for customer-specific products)
-    _create_fk_if_not_exists(
-        'fk_products_customer',
-        'products', 'users',
-        ['customer_id'], ['id'],
-        ondelete='SET NULL'
-    )
+    _create_fk_if_not_exists("fk_products_customer", "products", "users", ["customer_id"], ["id"], ondelete="SET NULL")
 
     # Quote.approved_by -> users.id
-    _create_fk_if_not_exists(
-        'fk_quotes_approved_by',
-        'quotes', 'users',
-        ['approved_by'], ['id'],
-        ondelete='SET NULL'
-    )
+    _create_fk_if_not_exists("fk_quotes_approved_by", "quotes", "users", ["approved_by"], ["id"], ondelete="SET NULL")
 
     # Quote.sales_order_id -> sales_orders.id
     _create_fk_if_not_exists(
-        'fk_quotes_sales_order',
-        'quotes', 'sales_orders',
-        ['sales_order_id'], ['id'],
-        ondelete='SET NULL'
+        "fk_quotes_sales_order", "quotes", "sales_orders", ["sales_order_id"], ["id"], ondelete="SET NULL"
     )
 
     # ===========================================
@@ -142,111 +126,127 @@ def upgrade():
     # ===========================================
 
     # Products table
-    _create_index_if_not_exists('ix_products_preferred_vendor_id', 'products', ['preferred_vendor_id'])
-    _create_index_if_not_exists('ix_products_customer_id', 'products', ['customer_id'])
+    _create_index_if_not_exists("ix_products_preferred_vendor_id", "products", ["preferred_vendor_id"])
+    _create_index_if_not_exists("ix_products_customer_id", "products", ["customer_id"])
 
     # Production Orders table
-    _create_index_if_not_exists('ix_production_orders_product_id', 'production_orders', ['product_id'])
-    _create_index_if_not_exists('ix_production_orders_bom_id', 'production_orders', ['bom_id'])
-    _create_index_if_not_exists('ix_production_orders_routing_id', 'production_orders', ['routing_id'])
-    _create_index_if_not_exists('ix_production_orders_sales_order_id', 'production_orders', ['sales_order_id'])
-    _create_index_if_not_exists('ix_production_orders_sales_order_line_id', 'production_orders', ['sales_order_line_id'])
-    _create_index_if_not_exists('ix_production_orders_remake_of_id', 'production_orders', ['remake_of_id'])
+    _create_index_if_not_exists("ix_production_orders_product_id", "production_orders", ["product_id"])
+    _create_index_if_not_exists("ix_production_orders_bom_id", "production_orders", ["bom_id"])
+    _create_index_if_not_exists("ix_production_orders_routing_id", "production_orders", ["routing_id"])
+    _create_index_if_not_exists("ix_production_orders_sales_order_id", "production_orders", ["sales_order_id"])
+    _create_index_if_not_exists(
+        "ix_production_orders_sales_order_line_id", "production_orders", ["sales_order_line_id"]
+    )
+    _create_index_if_not_exists("ix_production_orders_remake_of_id", "production_orders", ["remake_of_id"])
 
     # Production Order Operations table
-    _create_index_if_not_exists('ix_production_order_operations_routing_operation_id', 'production_order_operations', ['routing_operation_id'])
-    _create_index_if_not_exists('ix_production_order_operations_work_center_id', 'production_order_operations', ['work_center_id'])
-    _create_index_if_not_exists('ix_production_order_operations_resource_id', 'production_order_operations', ['resource_id'])
+    _create_index_if_not_exists(
+        "ix_production_order_operations_routing_operation_id", "production_order_operations", ["routing_operation_id"]
+    )
+    _create_index_if_not_exists(
+        "ix_production_order_operations_work_center_id", "production_order_operations", ["work_center_id"]
+    )
+    _create_index_if_not_exists(
+        "ix_production_order_operations_resource_id", "production_order_operations", ["resource_id"]
+    )
 
     # Production Order Materials table
-    _create_index_if_not_exists('ix_production_order_materials_bom_line_id', 'production_order_materials', ['bom_line_id'])
-    _create_index_if_not_exists('ix_production_order_materials_original_product_id', 'production_order_materials', ['original_product_id'])
-    _create_index_if_not_exists('ix_production_order_materials_substitute_product_id', 'production_order_materials', ['substitute_product_id'])
+    _create_index_if_not_exists(
+        "ix_production_order_materials_bom_line_id", "production_order_materials", ["bom_line_id"]
+    )
+    _create_index_if_not_exists(
+        "ix_production_order_materials_original_product_id", "production_order_materials", ["original_product_id"]
+    )
+    _create_index_if_not_exists(
+        "ix_production_order_materials_substitute_product_id", "production_order_materials", ["substitute_product_id"]
+    )
 
     # Inventory table
-    _create_index_if_not_exists('ix_inventory_location_id', 'inventory', ['location_id'])
+    _create_index_if_not_exists("ix_inventory_location_id", "inventory", ["location_id"])
 
     # Inventory Transactions table
-    _create_index_if_not_exists('ix_inventory_transactions_location_id', 'inventory_transactions', ['location_id'])
+    _create_index_if_not_exists("ix_inventory_transactions_location_id", "inventory_transactions", ["location_id"])
 
     # Purchase Order Lines table
-    _create_index_if_not_exists('ix_purchase_order_lines_product_id', 'purchase_order_lines', ['product_id'])
+    _create_index_if_not_exists("ix_purchase_order_lines_product_id", "purchase_order_lines", ["product_id"])
 
     # BOM Lines table
-    _create_index_if_not_exists('ix_bom_lines_component_id', 'bom_lines', ['component_id'])
+    _create_index_if_not_exists("ix_bom_lines_component_id", "bom_lines", ["component_id"])
 
     # Resources table (manufacturing)
-    _create_index_if_not_exists('ix_resources_work_center_id', 'resources', ['work_center_id'])
+    _create_index_if_not_exists("ix_resources_work_center_id", "resources", ["work_center_id"])
 
     # Routings table
-    _create_index_if_not_exists('ix_routings_product_id', 'routings', ['product_id'])
+    _create_index_if_not_exists("ix_routings_product_id", "routings", ["product_id"])
 
     # Routing Operations table
-    _create_index_if_not_exists('ix_routing_operations_work_center_id', 'routing_operations', ['work_center_id'])
-    _create_index_if_not_exists('ix_routing_operations_predecessor_id', 'routing_operations', ['predecessor_operation_id'])
+    _create_index_if_not_exists("ix_routing_operations_work_center_id", "routing_operations", ["work_center_id"])
+    _create_index_if_not_exists(
+        "ix_routing_operations_predecessor_id", "routing_operations", ["predecessor_operation_id"]
+    )
 
     # Machines table
-    _create_index_if_not_exists('ix_machines_work_center_id', 'machines', ['work_center_id'])
+    _create_index_if_not_exists("ix_machines_work_center_id", "machines", ["work_center_id"])
 
     # Print Jobs table
-    _create_index_if_not_exists('ix_print_jobs_printer_id', 'print_jobs', ['printer_id'])
+    _create_index_if_not_exists("ix_print_jobs_printer_id", "print_jobs", ["printer_id"])
 
     # Material Spools table
-    _create_index_if_not_exists('ix_material_spools_location_id', 'material_spools', ['location_id'])
+    _create_index_if_not_exists("ix_material_spools_location_id", "material_spools", ["location_id"])
 
     # Quotes table
-    _create_index_if_not_exists('ix_quotes_approved_by', 'quotes', ['approved_by'])
-    _create_index_if_not_exists('ix_quotes_sales_order_id', 'quotes', ['sales_order_id'])
+    _create_index_if_not_exists("ix_quotes_approved_by", "quotes", ["approved_by"])
+    _create_index_if_not_exists("ix_quotes_sales_order_id", "quotes", ["sales_order_id"])
 
     # Planned Orders table (MRP)
-    _create_index_if_not_exists('ix_planned_orders_product_id', 'planned_orders', ['product_id'])
-    _create_index_if_not_exists('ix_planned_orders_converted_to_po_id', 'planned_orders', ['converted_to_po_id'])
-    _create_index_if_not_exists('ix_planned_orders_converted_to_mo_id', 'planned_orders', ['converted_to_mo_id'])
+    _create_index_if_not_exists("ix_planned_orders_product_id", "planned_orders", ["product_id"])
+    _create_index_if_not_exists("ix_planned_orders_converted_to_po_id", "planned_orders", ["converted_to_po_id"])
+    _create_index_if_not_exists("ix_planned_orders_converted_to_mo_id", "planned_orders", ["converted_to_mo_id"])
 
 
 def downgrade():
     # Drop indexes (reverse order) - use defensive approach
-    _drop_index_if_exists('ix_planned_orders_converted_to_mo_id', 'planned_orders')
-    _drop_index_if_exists('ix_planned_orders_converted_to_po_id', 'planned_orders')
-    _drop_index_if_exists('ix_planned_orders_product_id', 'planned_orders')
+    _drop_index_if_exists("ix_planned_orders_converted_to_mo_id", "planned_orders")
+    _drop_index_if_exists("ix_planned_orders_converted_to_po_id", "planned_orders")
+    _drop_index_if_exists("ix_planned_orders_product_id", "planned_orders")
 
-    _drop_index_if_exists('ix_quotes_sales_order_id', 'quotes')
-    _drop_index_if_exists('ix_quotes_approved_by', 'quotes')
+    _drop_index_if_exists("ix_quotes_sales_order_id", "quotes")
+    _drop_index_if_exists("ix_quotes_approved_by", "quotes")
 
-    _drop_index_if_exists('ix_material_spools_location_id', 'material_spools')
-    _drop_index_if_exists('ix_print_jobs_printer_id', 'print_jobs')
-    _drop_index_if_exists('ix_machines_work_center_id', 'machines')
+    _drop_index_if_exists("ix_material_spools_location_id", "material_spools")
+    _drop_index_if_exists("ix_print_jobs_printer_id", "print_jobs")
+    _drop_index_if_exists("ix_machines_work_center_id", "machines")
 
-    _drop_index_if_exists('ix_routing_operations_predecessor_id', 'routing_operations')
-    _drop_index_if_exists('ix_routing_operations_work_center_id', 'routing_operations')
-    _drop_index_if_exists('ix_routings_product_id', 'routings')
-    _drop_index_if_exists('ix_resources_work_center_id', 'resources')
+    _drop_index_if_exists("ix_routing_operations_predecessor_id", "routing_operations")
+    _drop_index_if_exists("ix_routing_operations_work_center_id", "routing_operations")
+    _drop_index_if_exists("ix_routings_product_id", "routings")
+    _drop_index_if_exists("ix_resources_work_center_id", "resources")
 
-    _drop_index_if_exists('ix_bom_lines_component_id', 'bom_lines')
-    _drop_index_if_exists('ix_purchase_order_lines_product_id', 'purchase_order_lines')
-    _drop_index_if_exists('ix_inventory_transactions_location_id', 'inventory_transactions')
-    _drop_index_if_exists('ix_inventory_location_id', 'inventory')
+    _drop_index_if_exists("ix_bom_lines_component_id", "bom_lines")
+    _drop_index_if_exists("ix_purchase_order_lines_product_id", "purchase_order_lines")
+    _drop_index_if_exists("ix_inventory_transactions_location_id", "inventory_transactions")
+    _drop_index_if_exists("ix_inventory_location_id", "inventory")
 
-    _drop_index_if_exists('ix_production_order_materials_substitute_product_id', 'production_order_materials')
-    _drop_index_if_exists('ix_production_order_materials_original_product_id', 'production_order_materials')
-    _drop_index_if_exists('ix_production_order_materials_bom_line_id', 'production_order_materials')
+    _drop_index_if_exists("ix_production_order_materials_substitute_product_id", "production_order_materials")
+    _drop_index_if_exists("ix_production_order_materials_original_product_id", "production_order_materials")
+    _drop_index_if_exists("ix_production_order_materials_bom_line_id", "production_order_materials")
 
-    _drop_index_if_exists('ix_production_order_operations_resource_id', 'production_order_operations')
-    _drop_index_if_exists('ix_production_order_operations_work_center_id', 'production_order_operations')
-    _drop_index_if_exists('ix_production_order_operations_routing_operation_id', 'production_order_operations')
+    _drop_index_if_exists("ix_production_order_operations_resource_id", "production_order_operations")
+    _drop_index_if_exists("ix_production_order_operations_work_center_id", "production_order_operations")
+    _drop_index_if_exists("ix_production_order_operations_routing_operation_id", "production_order_operations")
 
-    _drop_index_if_exists('ix_production_orders_remake_of_id', 'production_orders')
-    _drop_index_if_exists('ix_production_orders_sales_order_line_id', 'production_orders')
-    _drop_index_if_exists('ix_production_orders_sales_order_id', 'production_orders')
-    _drop_index_if_exists('ix_production_orders_routing_id', 'production_orders')
-    _drop_index_if_exists('ix_production_orders_bom_id', 'production_orders')
-    _drop_index_if_exists('ix_production_orders_product_id', 'production_orders')
+    _drop_index_if_exists("ix_production_orders_remake_of_id", "production_orders")
+    _drop_index_if_exists("ix_production_orders_sales_order_line_id", "production_orders")
+    _drop_index_if_exists("ix_production_orders_sales_order_id", "production_orders")
+    _drop_index_if_exists("ix_production_orders_routing_id", "production_orders")
+    _drop_index_if_exists("ix_production_orders_bom_id", "production_orders")
+    _drop_index_if_exists("ix_production_orders_product_id", "production_orders")
 
-    _drop_index_if_exists('ix_products_customer_id', 'products')
-    _drop_index_if_exists('ix_products_preferred_vendor_id', 'products')
+    _drop_index_if_exists("ix_products_customer_id", "products")
+    _drop_index_if_exists("ix_products_preferred_vendor_id", "products")
 
     # Drop FK constraints
-    _drop_fk_if_exists('fk_quotes_sales_order', 'quotes')
-    _drop_fk_if_exists('fk_quotes_approved_by', 'quotes')
-    _drop_fk_if_exists('fk_products_customer', 'products')
-    _drop_fk_if_exists('fk_products_preferred_vendor', 'products')
+    _drop_fk_if_exists("fk_quotes_sales_order", "quotes")
+    _drop_fk_if_exists("fk_quotes_approved_by", "quotes")
+    _drop_fk_if_exists("fk_products_customer", "products")
+    _drop_fk_if_exists("fk_products_preferred_vendor", "products")

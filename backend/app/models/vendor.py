@@ -1,6 +1,7 @@
 """
 Vendor model for purchasing module
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Numeric
 from datetime import datetime
 
@@ -9,6 +10,7 @@ from app.db.base import Base
 
 class Vendor(Base):
     """Vendor/Supplier model"""
+
     __tablename__ = "vendors"
 
     id = Column(Integer, primary_key=True, index=True)

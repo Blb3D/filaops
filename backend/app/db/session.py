@@ -1,6 +1,7 @@
 """
 Database session management
 """
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -26,6 +27,7 @@ engine = create_engine(
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
 
 def get_db():
     """

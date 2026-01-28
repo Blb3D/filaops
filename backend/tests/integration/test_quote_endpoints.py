@@ -7,6 +7,7 @@ NOTE: These tests are for a customer portal quoting feature that has not been im
 The current quotes API is an admin-only manual quote management system.
 Skipping until the customer portal upload feature is built.
 """
+
 import pytest
 
 # Skip all tests in this module - customer portal quoting feature not yet implemented
@@ -69,6 +70,7 @@ def db_session():
 @pytest.fixture
 def client(db_session):
     """Create a test client with database override"""
+
     def override_get_db():
         try:
             yield db_session
@@ -91,7 +93,7 @@ def authenticated_user(client):
             "password": "SecurePass123!",
             "first_name": "Test",
             "last_name": "User",
-        }
+        },
     )
     access_token = response.json()["access_token"]
     user_id = response.json()["id"]
@@ -107,13 +109,13 @@ def mock_file_storage():
         """Generate unique file metadata for each call"""
         unique_id = str(uuid.uuid4())[:8]
         return {
-            'original_filename': 'test_model.3mf',
-            'stored_filename': f'test_model_{unique_id}.3mf',
-            'file_path': f'/uploads/test_model_{unique_id}.3mf',
-            'file_size_bytes': 1024000,  # 1MB
-            'file_format': '.3mf',
-            'mime_type': 'application/octet-stream',
-            'file_hash': f'{unique_id}def456',
+            "original_filename": "test_model.3mf",
+            "stored_filename": f"test_model_{unique_id}.3mf",
+            "file_path": f"/uploads/test_model_{unique_id}.3mf",
+            "file_size_bytes": 1024000,  # 1MB
+            "file_format": ".3mf",
+            "mime_type": "application/octet-stream",
+            "file_hash": f"{unique_id}def456",
         }
 
     with patch("app.api.v1.endpoints.quotes.file_storage") as mock:
@@ -126,18 +128,20 @@ def mock_file_storage():
 def mock_bambu_client():
     """Mock Bambu Suite client"""
     with patch("app.api.v1.endpoints.quotes.bambu_client") as mock:
-        mock.generate_quote = AsyncMock(return_value={
-            'success': True,
-            'material_grams': Decimal('125.5'),
-            'print_time_hours': Decimal('6.25'),
-            'material_cost': Decimal('3.14'),
-            'labor_cost': Decimal('9.38'),
-            'unit_price': Decimal('25.04'),
-            'total_price': Decimal('25.04'),
-            'dimensions_x': Decimal('100.0'),
-            'dimensions_y': Decimal('100.0'),
-            'dimensions_z': Decimal('50.0'),
-        })
+        mock.generate_quote = AsyncMock(
+            return_value={
+                "success": True,
+                "material_grams": Decimal("125.5"),
+                "print_time_hours": Decimal("6.25"),
+                "material_cost": Decimal("3.14"),
+                "labor_cost": Decimal("9.38"),
+                "unit_price": Decimal("25.04"),
+                "total_price": Decimal("25.04"),
+                "dimensions_x": Decimal("100.0"),
+                "dimensions_y": Decimal("100.0"),
+                "dimensions_z": Decimal("50.0"),
+            }
+        )
         yield mock
 
 
@@ -159,7 +163,7 @@ class TestQuoteUpload:
                 "material_type": "PLA",
                 "finish": "standard",
                 "rush_level": "standard",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -188,7 +192,7 @@ class TestQuoteUpload:
                 "material_type": "PETG",
                 "finish": "smooth",
                 "rush_level": "rush",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -209,14 +213,17 @@ class TestQuoteUpload:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 401
 
     def test_upload_invalid_file_format(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
         """Test that invalid file formats are rejected"""
-        mock_file_storage.validate_file.return_value = (False, "Invalid file format. Only .3mf and .stl files are allowed")
+        mock_file_storage.validate_file.return_value = (
+            False,
+            "Invalid file format. Only .3mf and .stl files are allowed",
+        )
 
         file_content = b"fake pdf content"
         file = io.BytesIO(file_content)
@@ -228,7 +235,7 @@ class TestQuoteUpload:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 400
@@ -248,7 +255,7 @@ class TestQuoteUpload:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 400
@@ -269,13 +276,15 @@ class TestQuoteUpload:
                 data={
                     "quantity": 1,
                     "material_type": material,
-                }
+                },
             )
 
             assert response.status_code == 201
             assert response.json()["material_type"] == material
 
-    def test_upload_generates_sequential_quote_numbers(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
+    def test_upload_generates_sequential_quote_numbers(
+        self, client, authenticated_user, mock_file_storage, mock_bambu_client
+    ):
         """Test that quote numbers are generated sequentially"""
         quote_numbers = []
 
@@ -290,7 +299,7 @@ class TestQuoteUpload:
                 data={
                     "quantity": 1,
                     "material_type": "PLA",
-                }
+                },
             )
 
             assert response.status_code == 201
@@ -309,16 +318,16 @@ class TestQuotePricing:
     def test_pricing_under_50_auto_approved(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
         """Test that quotes under $50 are auto-approved"""
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('50.0'),
-            'print_time_hours': Decimal('2.5'),
-            'material_cost': Decimal('1.25'),
-            'labor_cost': Decimal('3.75'),
-            'unit_price': Decimal('10.00'),
-            'total_price': Decimal('10.00'),
-            'dimensions_x': Decimal('50.0'),
-            'dimensions_y': Decimal('50.0'),
-            'dimensions_z': Decimal('25.0'),
+            "success": True,
+            "material_grams": Decimal("50.0"),
+            "print_time_hours": Decimal("2.5"),
+            "material_cost": Decimal("1.25"),
+            "labor_cost": Decimal("3.75"),
+            "unit_price": Decimal("10.00"),
+            "total_price": Decimal("10.00"),
+            "dimensions_x": Decimal("50.0"),
+            "dimensions_y": Decimal("50.0"),
+            "dimensions_z": Decimal("25.0"),
         }
 
         file_content = b"fake file content"
@@ -331,7 +340,7 @@ class TestQuotePricing:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -345,16 +354,16 @@ class TestQuotePricing:
     def test_pricing_over_50_requires_review(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
         """Test that quotes over $50 require manual review"""
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('250.0'),
-            'print_time_hours': Decimal('12.5'),
-            'material_cost': Decimal('6.25'),
-            'labor_cost': Decimal('18.75'),
-            'unit_price': Decimal('55.00'),
-            'total_price': Decimal('55.00'),
-            'dimensions_x': Decimal('150.0'),
-            'dimensions_y': Decimal('150.0'),
-            'dimensions_z': Decimal('75.0'),
+            "success": True,
+            "material_grams": Decimal("250.0"),
+            "print_time_hours": Decimal("12.5"),
+            "material_cost": Decimal("6.25"),
+            "labor_cost": Decimal("18.75"),
+            "unit_price": Decimal("55.00"),
+            "total_price": Decimal("55.00"),
+            "dimensions_x": Decimal("150.0"),
+            "dimensions_y": Decimal("150.0"),
+            "dimensions_z": Decimal("75.0"),
         }
 
         file_content = b"fake file content"
@@ -367,7 +376,7 @@ class TestQuotePricing:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -378,20 +387,22 @@ class TestQuotePricing:
         assert data["auto_approve_eligible"] is False
         assert "exceeds $50 threshold" in data["requires_review_reason"]
 
-    def test_rush_pricing_more_expensive_than_standard(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
+    def test_rush_pricing_more_expensive_than_standard(
+        self, client, authenticated_user, mock_file_storage, mock_bambu_client
+    ):
         """Test that rush orders cost more than standard orders"""
         # Create standard order
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('100.0'),
-            'print_time_hours': Decimal('5.0'),
-            'material_cost': Decimal('2.50'),
-            'labor_cost': Decimal('7.50'),
-            'unit_price': Decimal('20.00'),
-            'total_price': Decimal('20.00'),
-            'dimensions_x': Decimal('100.0'),
-            'dimensions_y': Decimal('100.0'),
-            'dimensions_z': Decimal('50.0'),
+            "success": True,
+            "material_grams": Decimal("100.0"),
+            "print_time_hours": Decimal("5.0"),
+            "material_cost": Decimal("2.50"),
+            "labor_cost": Decimal("7.50"),
+            "unit_price": Decimal("20.00"),
+            "total_price": Decimal("20.00"),
+            "dimensions_x": Decimal("100.0"),
+            "dimensions_y": Decimal("100.0"),
+            "dimensions_z": Decimal("50.0"),
         }
 
         file_content = b"fake file content"
@@ -405,21 +416,21 @@ class TestQuotePricing:
                 "quantity": 1,
                 "material_type": "PLA",
                 "rush_level": "standard",
-            }
+            },
         )
 
         # Create rush order with higher pricing
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('100.0'),
-            'print_time_hours': Decimal('5.0'),
-            'material_cost': Decimal('2.50'),
-            'labor_cost': Decimal('7.50'),
-            'unit_price': Decimal('25.00'),  # +25% for rush
-            'total_price': Decimal('25.00'),
-            'dimensions_x': Decimal('100.0'),
-            'dimensions_y': Decimal('100.0'),
-            'dimensions_z': Decimal('50.0'),
+            "success": True,
+            "material_grams": Decimal("100.0"),
+            "print_time_hours": Decimal("5.0"),
+            "material_cost": Decimal("2.50"),
+            "labor_cost": Decimal("7.50"),
+            "unit_price": Decimal("25.00"),  # +25% for rush
+            "total_price": Decimal("25.00"),
+            "dimensions_x": Decimal("100.0"),
+            "dimensions_y": Decimal("100.0"),
+            "dimensions_z": Decimal("50.0"),
         }
 
         file_content = b"fake file content"
@@ -433,7 +444,7 @@ class TestQuotePricing:
                 "quantity": 1,
                 "material_type": "PLA",
                 "rush_level": "rush",
-            }
+            },
         )
 
         standard_price = float(standard_response.json()["total_price"])
@@ -443,20 +454,20 @@ class TestQuotePricing:
 
     def test_quantity_multiplies_price(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
         """Test that quantity correctly multiplies the total price"""
-        unit_price = Decimal('15.00')
+        unit_price = Decimal("15.00")
         quantity = 10
 
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('75.0'),
-            'print_time_hours': Decimal('3.75'),
-            'material_cost': Decimal('1.88'),
-            'labor_cost': Decimal('5.63'),
-            'unit_price': unit_price,
-            'total_price': unit_price * quantity,
-            'dimensions_x': Decimal('75.0'),
-            'dimensions_y': Decimal('75.0'),
-            'dimensions_z': Decimal('37.5'),
+            "success": True,
+            "material_grams": Decimal("75.0"),
+            "print_time_hours": Decimal("3.75"),
+            "material_cost": Decimal("1.88"),
+            "labor_cost": Decimal("5.63"),
+            "unit_price": unit_price,
+            "total_price": unit_price * quantity,
+            "dimensions_x": Decimal("75.0"),
+            "dimensions_y": Decimal("75.0"),
+            "dimensions_z": Decimal("37.5"),
         }
 
         file_content = b"fake file content"
@@ -469,7 +480,7 @@ class TestQuotePricing:
             data={
                 "quantity": quantity,
                 "material_type": "PLA",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -495,7 +506,7 @@ class TestQuoteWorkflow:
                 data={
                     "quantity": 1,
                     "material_type": "PLA",
-                }
+                },
             )
 
         # Get quotes list
@@ -523,7 +534,7 @@ class TestQuoteWorkflow:
                 "product_name": "Test Product",
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -553,7 +564,7 @@ class TestQuoteWorkflow:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -566,7 +577,7 @@ class TestQuoteWorkflow:
                 "password": "SecurePass123!",
                 "first_name": "Second",
                 "last_name": "User",
-            }
+            },
         )
         second_token = second_user.json()["access_token"]
 
@@ -582,16 +593,16 @@ class TestQuoteWorkflow:
         """Test accepting an approved quote"""
         # Create auto-approved quote (under $50)
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('50.0'),
-            'print_time_hours': Decimal('2.5'),
-            'material_cost': Decimal('1.25'),
-            'labor_cost': Decimal('3.75'),
-            'unit_price': Decimal('10.00'),
-            'total_price': Decimal('10.00'),
-            'dimensions_x': Decimal('50.0'),
-            'dimensions_y': Decimal('50.0'),
-            'dimensions_z': Decimal('25.0'),
+            "success": True,
+            "material_grams": Decimal("50.0"),
+            "print_time_hours": Decimal("2.5"),
+            "material_cost": Decimal("1.25"),
+            "labor_cost": Decimal("3.75"),
+            "unit_price": Decimal("10.00"),
+            "total_price": Decimal("10.00"),
+            "dimensions_x": Decimal("50.0"),
+            "dimensions_y": Decimal("50.0"),
+            "dimensions_z": Decimal("25.0"),
         }
 
         file_content = b"fake file content"
@@ -605,14 +616,14 @@ class TestQuoteWorkflow:
                 "quantity": 1,
                 "material_type": "PLA",
                 "color": "BLK",  # Color is required for BOM creation
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
         assert create_response.json()["status"] == "approved"
 
         # Accept the quote - mock BOM creation since it requires material_types table
-        with patch('app.api.v1.endpoints.quotes.auto_create_product_and_bom') as mock_bom:
+        with patch("app.api.v1.endpoints.quotes.auto_create_product_and_bom") as mock_bom:
             # Mock returns (product, bom) tuple
             mock_product = MagicMock()
             mock_product.id = 1
@@ -624,7 +635,7 @@ class TestQuoteWorkflow:
             response = client.post(
                 f"/api/v1/quotes/{quote_id}/accept",
                 headers={"Authorization": f"Bearer {authenticated_user['token']}"},
-                json={"customer_notes": "Looks good!"}
+                json={"customer_notes": "Looks good!"},
             )
 
         assert response.status_code == 200, f"Accept failed (status={response.status_code}): {response.text}"
@@ -636,16 +647,16 @@ class TestQuoteWorkflow:
         """Test that pending quotes cannot be accepted"""
         # Create quote requiring review (over $50)
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('250.0'),
-            'print_time_hours': Decimal('12.5'),
-            'material_cost': Decimal('6.25'),
-            'labor_cost': Decimal('18.75'),
-            'unit_price': Decimal('55.00'),
-            'total_price': Decimal('55.00'),
-            'dimensions_x': Decimal('150.0'),
-            'dimensions_y': Decimal('150.0'),
-            'dimensions_z': Decimal('75.0'),
+            "success": True,
+            "material_grams": Decimal("250.0"),
+            "print_time_hours": Decimal("12.5"),
+            "material_cost": Decimal("6.25"),
+            "labor_cost": Decimal("18.75"),
+            "unit_price": Decimal("55.00"),
+            "total_price": Decimal("55.00"),
+            "dimensions_x": Decimal("150.0"),
+            "dimensions_y": Decimal("150.0"),
+            "dimensions_z": Decimal("75.0"),
         }
 
         file_content = b"fake file content"
@@ -658,7 +669,7 @@ class TestQuoteWorkflow:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -668,7 +679,7 @@ class TestQuoteWorkflow:
         response = client.post(
             f"/api/v1/quotes/{quote_id}/accept",
             headers={"Authorization": f"Bearer {authenticated_user['token']}"},
-            json={}
+            json={},
         )
 
         assert response.status_code == 400
@@ -678,16 +689,16 @@ class TestQuoteWorkflow:
         """Test manually approving a quote (admin action)"""
         # Create quote requiring review
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('250.0'),
-            'print_time_hours': Decimal('12.5'),
-            'material_cost': Decimal('6.25'),
-            'labor_cost': Decimal('18.75'),
-            'unit_price': Decimal('55.00'),
-            'total_price': Decimal('55.00'),
-            'dimensions_x': Decimal('150.0'),
-            'dimensions_y': Decimal('150.0'),
-            'dimensions_z': Decimal('75.0'),
+            "success": True,
+            "material_grams": Decimal("250.0"),
+            "print_time_hours": Decimal("12.5"),
+            "material_cost": Decimal("6.25"),
+            "labor_cost": Decimal("18.75"),
+            "unit_price": Decimal("55.00"),
+            "total_price": Decimal("55.00"),
+            "dimensions_x": Decimal("150.0"),
+            "dimensions_y": Decimal("150.0"),
+            "dimensions_z": Decimal("75.0"),
         }
 
         file_content = b"fake file content"
@@ -700,7 +711,7 @@ class TestQuoteWorkflow:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -709,10 +720,7 @@ class TestQuoteWorkflow:
         response = client.patch(
             f"/api/v1/quotes/{quote_id}/status",
             headers={"Authorization": f"Bearer {authenticated_user['token']}"},
-            json={
-                "status": "approved",
-                "admin_notes": "Manually reviewed and approved"
-            }
+            json={"status": "approved", "admin_notes": "Manually reviewed and approved"},
         )
 
         assert response.status_code == 200
@@ -734,7 +742,7 @@ class TestQuoteWorkflow:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -743,10 +751,7 @@ class TestQuoteWorkflow:
         response = client.patch(
             f"/api/v1/quotes/{quote_id}/status",
             headers={"Authorization": f"Bearer {authenticated_user['token']}"},
-            json={
-                "status": "rejected",
-                "rejection_reason": "File contains errors"
-            }
+            json={"status": "rejected", "rejection_reason": "File contains errors"},
         )
 
         assert response.status_code == 200
@@ -760,16 +765,16 @@ class TestQuoteWorkflow:
 
         # Create auto-approved quote
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('50.0'),
-            'print_time_hours': Decimal('2.5'),
-            'material_cost': Decimal('1.25'),
-            'labor_cost': Decimal('3.75'),
-            'unit_price': Decimal('10.00'),
-            'total_price': Decimal('10.00'),
-            'dimensions_x': Decimal('50.0'),
-            'dimensions_y': Decimal('50.0'),
-            'dimensions_z': Decimal('25.0'),
+            "success": True,
+            "material_grams": Decimal("50.0"),
+            "print_time_hours": Decimal("2.5"),
+            "material_cost": Decimal("1.25"),
+            "labor_cost": Decimal("3.75"),
+            "unit_price": Decimal("10.00"),
+            "total_price": Decimal("10.00"),
+            "dimensions_x": Decimal("50.0"),
+            "dimensions_y": Decimal("50.0"),
+            "dimensions_z": Decimal("25.0"),
         }
 
         file_content = b"fake file content"
@@ -782,7 +787,7 @@ class TestQuoteWorkflow:
             data={
                 "quantity": 1,
                 "material_type": "PLA",
-            }
+            },
         )
 
         quote_id = create_response.json()["id"]
@@ -796,7 +801,7 @@ class TestQuoteWorkflow:
         response = client.post(
             f"/api/v1/quotes/{quote_id}/accept",
             headers={"Authorization": f"Bearer {authenticated_user['token']}"},
-            json={}
+            json={},
         )
 
         assert response.status_code == 400
@@ -806,19 +811,21 @@ class TestQuoteWorkflow:
 class TestAutoApprovalLogic:
     """Test auto-approval rules"""
 
-    def test_abs_large_dimensions_requires_review(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
+    def test_abs_large_dimensions_requires_review(
+        self, client, authenticated_user, mock_file_storage, mock_bambu_client
+    ):
         """Test that ABS parts with large dimensions require review"""
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('200.0'),
-            'print_time_hours': Decimal('10.0'),
-            'material_cost': Decimal('5.00'),
-            'labor_cost': Decimal('15.00'),
-            'unit_price': Decimal('40.00'),  # Under $50
-            'total_price': Decimal('40.00'),
-            'dimensions_x': Decimal('210.0'),  # Over 200mm
-            'dimensions_y': Decimal('210.0'),  # Over 200mm
-            'dimensions_z': Decimal('110.0'),  # Over 100mm
+            "success": True,
+            "material_grams": Decimal("200.0"),
+            "print_time_hours": Decimal("10.0"),
+            "material_cost": Decimal("5.00"),
+            "labor_cost": Decimal("15.00"),
+            "unit_price": Decimal("40.00"),  # Under $50
+            "total_price": Decimal("40.00"),
+            "dimensions_x": Decimal("210.0"),  # Over 200mm
+            "dimensions_y": Decimal("210.0"),  # Over 200mm
+            "dimensions_z": Decimal("110.0"),  # Over 100mm
         }
 
         file_content = b"fake file content"
@@ -831,7 +838,7 @@ class TestAutoApprovalLogic:
             data={
                 "quantity": 1,
                 "material_type": "ABS",
-            }
+            },
         )
 
         assert response.status_code == 201
@@ -843,16 +850,16 @@ class TestAutoApprovalLogic:
     def test_small_abs_part_auto_approved(self, client, authenticated_user, mock_file_storage, mock_bambu_client):
         """Test that small ABS parts are auto-approved"""
         mock_bambu_client.generate_quote.return_value = {
-            'success': True,
-            'material_grams': Decimal('50.0'),
-            'print_time_hours': Decimal('2.5'),
-            'material_cost': Decimal('1.40'),
-            'labor_cost': Decimal('3.75'),
-            'unit_price': Decimal('10.30'),
-            'total_price': Decimal('10.30'),
-            'dimensions_x': Decimal('100.0'),  # Under 200mm
-            'dimensions_y': Decimal('100.0'),  # Under 200mm
-            'dimensions_z': Decimal('50.0'),   # Under 100mm
+            "success": True,
+            "material_grams": Decimal("50.0"),
+            "print_time_hours": Decimal("2.5"),
+            "material_cost": Decimal("1.40"),
+            "labor_cost": Decimal("3.75"),
+            "unit_price": Decimal("10.30"),
+            "total_price": Decimal("10.30"),
+            "dimensions_x": Decimal("100.0"),  # Under 200mm
+            "dimensions_y": Decimal("100.0"),  # Under 200mm
+            "dimensions_z": Decimal("50.0"),  # Under 100mm
         }
 
         file_content = b"fake file content"
@@ -865,7 +872,7 @@ class TestAutoApprovalLogic:
             data={
                 "quantity": 1,
                 "material_type": "ABS",
-            }
+            },
         )
 
         assert response.status_code == 201

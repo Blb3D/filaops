@@ -3,6 +3,7 @@ Material Spool API Endpoints
 
 Handles CRUD operations for filament spools and spool usage tracking.
 """
+
 # pyright: reportArgumentType=false
 # pyright: reportAssignmentType=false
 # SQLAlchemy Column types resolve to actual values at runtime
@@ -42,7 +43,7 @@ async def list_spools(
     List all material spools with optional filters.
     """
     query = db.query(MaterialSpool).join(Product)
-    
+
     if product_id:
         query = query.filter(MaterialSpool.product_id == product_id)
     if status:
@@ -55,12 +56,12 @@ async def list_spools(
         # Simplified: current < initial * 0.1
         query = query.filter(
             MaterialSpool.status == "active",
-            MaterialSpool.current_weight_kg < (MaterialSpool.initial_weight_kg * Decimal("0.1"))
+            MaterialSpool.current_weight_kg < (MaterialSpool.initial_weight_kg * Decimal("0.1")),
         )
-    
+
     total = query.count()
     spools = query.order_by(desc(MaterialSpool.created_at)).offset(offset).limit(limit).all()
-    
+
     return {
         "items": [
             {
@@ -71,7 +72,9 @@ async def list_spools(
                 "product_name": spool.product.name if spool.product else None,
                 "initial_weight_kg": float(spool.initial_weight_kg or 0),
                 "current_weight_kg": float(spool.current_weight_kg or 0),
-                "weight_remaining_percent": float(spool.weight_remaining_percent) if hasattr(spool, 'weight_remaining_percent') else 0,
+                "weight_remaining_percent": float(spool.weight_remaining_percent)
+                if hasattr(spool, "weight_remaining_percent")
+                else 0,
                 "status": str(spool.status) if spool.status else "active",
                 "received_date": spool.received_date.isoformat() if spool.received_date else None,  # type: ignore[union-attr]
                 "expiry_date": spool.expiry_date.isoformat() if spool.expiry_date else None,  # type: ignore[union-attr]
@@ -79,8 +82,8 @@ async def list_spools(
                 "location_name": spool.location.name if spool.location else None,
                 "supplier_lot_number": spool.supplier_lot_number,
                 "notes": spool.notes,
-                "is_low": bool(spool.is_low) if hasattr(spool, 'is_low') else False,
-                "is_empty": bool(spool.is_empty) if hasattr(spool, 'is_empty') else False,
+                "is_low": bool(spool.is_low) if hasattr(spool, "is_low") else False,
+                "is_empty": bool(spool.is_empty) if hasattr(spool, "is_empty") else False,
                 "created_at": spool.created_at.isoformat() if spool.created_at else None,  # type: ignore[union-attr]
                 "updated_at": spool.updated_at.isoformat() if spool.updated_at else None,  # type: ignore[union-attr]
             }
@@ -104,12 +107,15 @@ async def get_spool(
     spool = db.query(MaterialSpool).filter(MaterialSpool.id == spool_id).first()
     if not spool:
         raise HTTPException(status_code=404, detail="Spool not found")
-    
+
     # Get usage history
-    usage_history = db.query(ProductionOrderSpool).filter(
-        ProductionOrderSpool.spool_id == spool_id
-    ).order_by(desc(ProductionOrderSpool.created_at)).all()
-    
+    usage_history = (
+        db.query(ProductionOrderSpool)
+        .filter(ProductionOrderSpool.spool_id == spool_id)
+        .order_by(desc(ProductionOrderSpool.created_at))
+        .all()
+    )
+
     return {
         "id": spool.id,
         "spool_number": spool.spool_number,
@@ -118,7 +124,9 @@ async def get_spool(
         "product_name": spool.product.name if spool.product else None,
         "initial_weight_kg": float(spool.initial_weight_kg or 0),
         "current_weight_kg": float(spool.current_weight_kg or 0),
-        "weight_remaining_percent": float(spool.weight_remaining_percent) if hasattr(spool, 'weight_remaining_percent') else 0,
+        "weight_remaining_percent": float(spool.weight_remaining_percent)
+        if hasattr(spool, "weight_remaining_percent")
+        else 0,
         "status": str(spool.status) if spool.status else "active",  # type: ignore[arg-type]
         "received_date": spool.received_date.isoformat() if spool.received_date else None,  # type: ignore[union-attr]
         "expiry_date": spool.expiry_date.isoformat() if spool.expiry_date else None,  # type: ignore[union-attr]
@@ -126,8 +134,8 @@ async def get_spool(
         "location_name": spool.location.name if spool.location else None,
         "supplier_lot_number": spool.supplier_lot_number,
         "notes": spool.notes,
-        "is_low": bool(spool.is_low) if hasattr(spool, 'is_low') else False,
-        "is_empty": bool(spool.is_empty) if hasattr(spool, 'is_empty') else False,
+        "is_low": bool(spool.is_low) if hasattr(spool, "is_low") else False,
+        "is_empty": bool(spool.is_empty) if hasattr(spool, "is_empty") else False,
         "created_at": spool.created_at.isoformat() if spool.created_at else None,  # type: ignore[union-attr]
         "updated_at": spool.updated_at.isoformat() if spool.updated_at else None,  # type: ignore[union-attr]
         "usage_history": [
@@ -162,16 +170,16 @@ async def create_spool(
     existing = db.query(MaterialSpool).filter(MaterialSpool.spool_number == spool_number).first()
     if existing:
         raise HTTPException(status_code=400, detail=f"Spool number {spool_number} already exists")
-    
+
     # Verify product exists
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    
+
     # Use initial weight as current if not specified
     if current_weight_kg is None:
         current_weight_kg = initial_weight_kg
-    
+
     spool = MaterialSpool(
         spool_number=spool_number,
         product_id=product_id,
@@ -184,13 +192,15 @@ async def create_spool(
         notes=notes,
         created_by=current_user.email if current_user else None,
     )
-    
+
     db.add(spool)
     db.commit()
     db.refresh(spool)
-    
-    logger.info(f"Created spool {spool_number} for product {product_id} by {current_user.email if current_user else 'system'}")
-    
+
+    logger.info(
+        f"Created spool {spool_number} for product {product_id} by {current_user.email if current_user else 'system'}"
+    )
+
     return {
         "id": spool.id,
         "spool_number": spool.spool_number,
@@ -211,34 +221,34 @@ async def update_spool(
 ):
     """
     Update spool information (weight, status, location, notes).
-    
+
     When updating weight, this creates an inventory adjustment transaction
     and updates the product's inventory level to maintain accuracy.
     """
     spool = db.query(MaterialSpool).filter(MaterialSpool.id == spool_id).first()
     if not spool:
         raise HTTPException(status_code=404, detail="Spool not found")
-    
+
     transaction_created = None
-    
+
     # Handle weight adjustment with inventory transaction
     if current_weight_g is not None:
         if not reason:
             raise HTTPException(
                 status_code=400,
-                detail="Reason required when adjusting spool weight (e.g., 'Physical inventory count', 'Correction', 'Damaged material')"
+                detail="Reason required when adjusting spool weight (e.g., 'Physical inventory count', 'Correction', 'Damaged material')",
             )
-        
+
         old_weight_g = Decimal(spool.current_weight_kg or 0)  # Actually in grams
         new_weight_g = Decimal(str(current_weight_g))
         adjustment_g = new_weight_g - old_weight_g
-        
+
         if adjustment_g != 0:
             # Get product for cost calculation and material check
             product = db.query(Product).filter(Product.id == spool.product_id).first()
             if not product:
                 raise HTTPException(status_code=404, detail="Product not found for spool")
-            
+
             # For materials: Store transaction in GRAMS (star schema - transactions are source of truth)
             is_mat = is_material(product)
             transaction_quantity = float(adjustment_g) if is_mat else float(adjustment_g / Decimal("1000"))
@@ -246,6 +256,7 @@ async def update_spool(
             # Cost calculation: Use cost per inventory unit for correct total_cost calculation
             # For materials: $/gram. For others: $/unit
             from app.services.inventory_service import get_effective_cost_per_inventory_unit
+
             cost_per_unit = None
             total_cost = None
             if product:
@@ -270,9 +281,9 @@ async def update_spool(
             )
             db.add(transaction)
             db.flush()
-            
+
             transaction_created = transaction.id
-            
+
             # Update inventory record for this product/location
             # For materials: Store in GRAMS
             logger.info(
@@ -280,13 +291,14 @@ async def update_spool(
                 f"product_id={spool.product_id}, location_id={spool.location_id}, "
                 f"adjustment={float(adjustment_g):+.1f}g (material: {is_mat})"
             )
-            
+
             if spool.location_id:
-                inventory = db.query(Inventory).filter(
-                    Inventory.product_id == spool.product_id,
-                    Inventory.location_id == spool.location_id
-                ).first()
-                
+                inventory = (
+                    db.query(Inventory)
+                    .filter(Inventory.product_id == spool.product_id, Inventory.location_id == spool.location_id)
+                    .first()
+                )
+
                 if inventory:
                     old_qty = Decimal(inventory.on_hand_quantity or 0)
                     # For materials: Store in grams. For others: Store in product unit
@@ -294,7 +306,7 @@ async def update_spool(
                     inventory.on_hand_quantity = float(new_qty)  # type: ignore[assignment]
                     inventory.updated_at = datetime.utcnow()  # type: ignore[assignment]
                     db.flush()  # Ensure inventory update is in session
-                    
+
                     unit_label = "g" if is_mat else "KG"
                     logger.info(
                         f"Inventory adjusted for {product.sku} at location {spool.location_id}: "
@@ -327,36 +339,37 @@ async def update_spool(
                     f"Spool {spool.spool_number} has no location. Transaction created but inventory not updated. "
                     f"Please assign a location to the spool to enable inventory tracking."
                 )
-        
+
         # Update spool weight
         spool.current_weight_kg = new_weight_g  # type: ignore[assignment]
-        
+
         # Auto-mark as empty if weight is very low (< 50g)
         if new_weight_g < Decimal("50"):
             spool.status = "empty"  # type: ignore[assignment]
             logger.info(f"Spool {spool.spool_number} automatically marked as empty (weight: {float(new_weight_g)}g)")
-    
+
     # Handle other updates
     if status:
         spool.status = status  # type: ignore[assignment]
-    
+
     if location_id is not None:
         spool.location_id = location_id  # type: ignore[assignment]
-    
+
     if notes is not None:
         spool.notes = notes  # type: ignore[assignment]
-    
+
     spool.updated_at = datetime.utcnow()  # type: ignore[assignment]
-    
+
     db.commit()
     db.refresh(spool)
-    
+
     # Verify inventory was updated (for debugging)
     if transaction_created and spool.location_id:
-        verify_inv = db.query(Inventory).filter(
-            Inventory.product_id == spool.product_id,
-            Inventory.location_id == spool.location_id
-        ).first()
+        verify_inv = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == spool.product_id, Inventory.location_id == spool.location_id)
+            .first()
+        )
         if verify_inv:
             logger.info(
                 f"Verified inventory update: product_id={spool.product_id}, location_id={spool.location_id}, "
@@ -366,9 +379,9 @@ async def update_spool(
             logger.warning(
                 f"Inventory record not found after commit for product_id={spool.product_id}, location_id={spool.location_id}"
             )
-    
+
     logger.info(f"Updated spool {spool.spool_number} by {current_user.email if current_user else 'system'}")
-    
+
     return {
         "id": spool.id,
         "spool_number": spool.spool_number,
@@ -390,16 +403,13 @@ async def get_available_spools(
     Get available spools for a product, optionally filtered by minimum weight.
     Useful for production spool selection.
     """
-    query = db.query(MaterialSpool).filter(
-        MaterialSpool.product_id == product_id,
-        MaterialSpool.status == "active"
-    )
-    
+    query = db.query(MaterialSpool).filter(MaterialSpool.product_id == product_id, MaterialSpool.status == "active")
+
     if min_weight_kg:
         query = query.filter(MaterialSpool.current_weight_kg >= Decimal(str(min_weight_kg)))
-    
+
     spools = query.order_by(desc(MaterialSpool.current_weight_kg)).all()
-    
+
     return {
         "product_id": product_id,
         "spools": [
@@ -407,7 +417,9 @@ async def get_available_spools(
                 "id": spool.id,
                 "spool_number": spool.spool_number,
                 "current_weight_kg": float(spool.current_weight_kg or 0),
-                "weight_remaining_percent": float(spool.weight_remaining_percent) if hasattr(spool, 'weight_remaining_percent') else 0,
+                "weight_remaining_percent": float(spool.weight_remaining_percent)
+                if hasattr(spool, "weight_remaining_percent")
+                else 0,
                 "location_name": spool.location.name if spool.location else None,
                 "supplier_lot_number": spool.supplier_lot_number,
             }
@@ -429,27 +441,29 @@ async def get_spool_traceability_for_order(
     order = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Production order not found")
-    
+
     # Get spools used for this order
-    spool_usage = db.query(ProductionOrderSpool).filter(
-        ProductionOrderSpool.production_order_id == production_order_id
-    ).all()
-    
+    spool_usage = (
+        db.query(ProductionOrderSpool).filter(ProductionOrderSpool.production_order_id == production_order_id).all()
+    )
+
     traceability_data = []
     for usage in spool_usage:
         spool = db.query(MaterialSpool).filter(MaterialSpool.id == usage.spool_id).first()
         if spool:
-            traceability_data.append({
-                "spool_id": spool.id,
-                "spool_number": spool.spool_number,
-                "product_id": spool.product_id,
-                "product_sku": spool.product.sku if spool.product else None,
-                "product_name": spool.product.name if spool.product else None,
-                "weight_consumed_kg": float(usage.weight_consumed_kg or 0),
-                "supplier_lot_number": spool.supplier_lot_number,
-                "consumed_at": usage.created_at.isoformat() if usage.created_at else None,  # type: ignore[union-attr]
-            })
-    
+            traceability_data.append(
+                {
+                    "spool_id": spool.id,
+                    "spool_number": spool.spool_number,
+                    "product_id": spool.product_id,
+                    "product_sku": spool.product.sku if spool.product else None,
+                    "product_name": spool.product.name if spool.product else None,
+                    "weight_consumed_kg": float(usage.weight_consumed_kg or 0),
+                    "supplier_lot_number": spool.supplier_lot_number,
+                    "consumed_at": usage.created_at.isoformat() if usage.created_at else None,  # type: ignore[union-attr]
+                }
+            )
+
     return {
         "production_order_id": production_order_id,
         "production_order_code": order.code,
@@ -470,34 +484,39 @@ async def get_spool_traceability(
     spool = db.query(MaterialSpool).filter(MaterialSpool.id == spool_id).first()
     if not spool:
         raise HTTPException(status_code=404, detail="Spool not found")
-    
+
     # Get all production orders that used this spool
-    usage_records = db.query(ProductionOrderSpool).filter(
-        ProductionOrderSpool.spool_id == spool_id
-    ).order_by(desc(ProductionOrderSpool.created_at)).all()
-    
+    usage_records = (
+        db.query(ProductionOrderSpool)
+        .filter(ProductionOrderSpool.spool_id == spool_id)
+        .order_by(desc(ProductionOrderSpool.created_at))
+        .all()
+    )
+
     traceability = []
     total_weight_consumed = Decimal("0")
-    
+
     for usage in usage_records:
         po = db.query(ProductionOrder).filter(ProductionOrder.id == usage.production_order_id).first()
         if po:
             product = db.query(Product).filter(Product.id == po.product_id).first()
             total_weight_consumed += usage.weight_consumed_kg or Decimal("0")
-            
-            traceability.append({
-                "production_order_id": po.id,
-                "production_order_code": po.code,
-                "product_id": po.product_id,
-                "product_sku": product.sku if product else None,
-                "product_name": product.name if product else None,
-                "quantity_produced": float(po.quantity_completed or 0),
-                "weight_consumed_kg": float(usage.weight_consumed_kg or 0),
-                "consumed_at": usage.created_at.isoformat() if usage.created_at else None,  # type: ignore[union-attr]
-                "sales_order_id": po.sales_order_id,
-                "sales_order_code": po.sales_order.order_number if po.sales_order else None,
-            })
-    
+
+            traceability.append(
+                {
+                    "production_order_id": po.id,
+                    "production_order_code": po.code,
+                    "product_id": po.product_id,
+                    "product_sku": product.sku if product else None,
+                    "product_name": product.name if product else None,
+                    "quantity_produced": float(po.quantity_completed or 0),
+                    "weight_consumed_kg": float(usage.weight_consumed_kg or 0),
+                    "consumed_at": usage.created_at.isoformat() if usage.created_at else None,  # type: ignore[union-attr]
+                    "sales_order_id": po.sales_order_id,
+                    "sales_order_code": po.sales_order.order_number if po.sales_order else None,
+                }
+            )
+
     return {
         "spool_id": spool.id,
         "spool_number": spool.spool_number,
@@ -516,6 +535,7 @@ async def get_spool_traceability(
 # ============================================================================
 # Spool Consumption Recording
 # ============================================================================
+
 
 @router.post("/{spool_id}/consume")
 async def consume_spool_for_production(
@@ -544,10 +564,7 @@ async def consume_spool_for_production(
         raise HTTPException(status_code=404, detail="Spool not found")
 
     if spool.status != "active":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot consume from spool with status '{spool.status}'"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot consume from spool with status '{spool.status}'")
 
     # Validate production order exists and is in-progress
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
@@ -556,15 +573,18 @@ async def consume_spool_for_production(
 
     if po.status not in ("released", "in_progress"):
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot consume material for production order with status '{po.status}'"
+            status_code=400, detail=f"Cannot consume material for production order with status '{po.status}'"
         )
 
     # Check if consumption already recorded - update if so
-    existing = db.query(ProductionOrderSpool).filter(
-        ProductionOrderSpool.production_order_id == production_order_id,
-        ProductionOrderSpool.spool_id == spool_id,
-    ).first()
+    existing = (
+        db.query(ProductionOrderSpool)
+        .filter(
+            ProductionOrderSpool.production_order_id == production_order_id,
+            ProductionOrderSpool.spool_id == spool_id,
+        )
+        .first()
+    )
 
     weight_consumed_kg = Decimal(str(weight_consumed_g))  # Field is in grams despite name
 

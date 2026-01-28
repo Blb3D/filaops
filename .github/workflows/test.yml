@@ -2,7 +2,7 @@ name: FilaOps CI/CD - Tests
 
 on:
   push:
-    branches: [ main, develop, feat/* ]
+    branches: [ main, develop, feat/*, feature/* ]
   pull_request:
     branches: [ main, develop ]
 

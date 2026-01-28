@@ -7,6 +7,7 @@ Supports tiered traceability for B2B compliance:
 - SERIAL: Individual part tracking
 - FULL: LOT + SERIAL + Certificate of Conformance
 """
+
 from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, List
@@ -21,9 +22,7 @@ from app.models.product import Product
 from app.models.production_order import ProductionOrder
 from app.models.sales_order import SalesOrder
 from app.models.vendor import Vendor
-from app.models.traceability import (
-    SerialNumber, MaterialLot, ProductionLotConsumption, CustomerTraceabilityProfile
-)
+from app.models.traceability import SerialNumber, MaterialLot, ProductionLotConsumption, CustomerTraceabilityProfile
 from app.schemas.traceability import (
     # Customer Profiles
     CustomerTraceabilityProfileCreate,
@@ -56,6 +55,7 @@ router = APIRouter(prefix="/traceability", tags=["Traceability"])
 # Customer Traceability Profiles
 # =============================================================================
 
+
 @router.get("/profiles", response_model=List[CustomerTraceabilityProfileResponse])
 async def list_traceability_profiles(
     traceability_level: Optional[str] = None,
@@ -78,9 +78,7 @@ async def get_traceability_profile(
     current_user: User = Depends(get_current_user),
 ):
     """Get traceability profile for a specific customer."""
-    profile = db.query(CustomerTraceabilityProfile).filter(
-        CustomerTraceabilityProfile.user_id == user_id
-    ).first()
+    profile = db.query(CustomerTraceabilityProfile).filter(CustomerTraceabilityProfile.user_id == user_id).first()
 
     if not profile:
         raise HTTPException(status_code=404, detail="Traceability profile not found")
@@ -101,19 +99,16 @@ async def create_traceability_profile(
         raise HTTPException(status_code=404, detail="User not found")
 
     # Check profile doesn't already exist
-    existing = db.query(CustomerTraceabilityProfile).filter(
-        CustomerTraceabilityProfile.user_id == request.user_id
-    ).first()
+    existing = (
+        db.query(CustomerTraceabilityProfile).filter(CustomerTraceabilityProfile.user_id == request.user_id).first()
+    )
     if existing:
         raise HTTPException(status_code=400, detail="Profile already exists for this user")
 
     # Validate traceability level
-    valid_levels = ['none', 'lot', 'serial', 'full']
+    valid_levels = ["none", "lot", "serial", "full"]
     if request.traceability_level not in valid_levels:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid traceability level. Must be one of: {valid_levels}"
-        )
+        raise HTTPException(status_code=400, detail=f"Invalid traceability level. Must be one of: {valid_levels}")
 
     profile = CustomerTraceabilityProfile(**request.model_dump())
     db.add(profile)
@@ -135,9 +130,7 @@ async def update_traceability_profile(
     current_user: User = Depends(get_current_user),
 ):
     """Update a customer's traceability profile."""
-    profile = db.query(CustomerTraceabilityProfile).filter(
-        CustomerTraceabilityProfile.user_id == user_id
-    ).first()
+    profile = db.query(CustomerTraceabilityProfile).filter(CustomerTraceabilityProfile.user_id == user_id).first()
 
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
@@ -145,13 +138,10 @@ async def update_traceability_profile(
     update_data = request.model_dump(exclude_unset=True)
 
     # Validate traceability level if provided
-    if 'traceability_level' in update_data:
-        valid_levels = ['none', 'lot', 'serial', 'full']
-        if update_data['traceability_level'] not in valid_levels:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid traceability level. Must be one of: {valid_levels}"
-            )
+    if "traceability_level" in update_data:
+        valid_levels = ["none", "lot", "serial", "full"]
+        if update_data["traceability_level"] not in valid_levels:
+            raise HTTPException(status_code=400, detail=f"Invalid traceability level. Must be one of: {valid_levels}")
 
     for field, value in update_data.items():
         setattr(profile, field, value)
@@ -161,10 +151,10 @@ async def update_traceability_profile(
     db.refresh(profile)
 
     # Update user's quick-access field (using ORM to prevent SQL injection)
-    if 'traceability_level' in update_data:
+    if "traceability_level" in update_data:
         user = db.query(User).filter(User.id == user_id).first()
         if user:
-            user.traceability_level = update_data['traceability_level']
+            user.traceability_level = update_data["traceability_level"]
             db.commit()
 
     return profile
@@ -173,6 +163,7 @@ async def update_traceability_profile(
 # =============================================================================
 # Material Lots
 # =============================================================================
+
 
 @router.get("/lots", response_model=MaterialLotListResponse)
 async def list_material_lots(
@@ -204,9 +195,7 @@ async def list_material_lots(
 
     total = query.count()
 
-    lots = query.order_by(desc(MaterialLot.received_date)).offset(
-        (page - 1) * page_size
-    ).limit(page_size).all()
+    lots = query.order_by(desc(MaterialLot.received_date)).offset((page - 1) * page_size).limit(page_size).all()
 
     # Calculate quantity_remaining for response
     items = []
@@ -302,8 +291,8 @@ async def create_material_lot(
         raise HTTPException(status_code=400, detail="Lot number already exists")
 
     lot_data = request.model_dump()
-    if not lot_data.get('received_date'):
-        lot_data['received_date'] = date.today()
+    if not lot_data.get("received_date"):
+        lot_data["received_date"] = date.today()
 
     lot = MaterialLot(**lot_data)
     db.add(lot)
@@ -395,9 +384,12 @@ async def generate_lot_number(
     prefix = f"{material_code}-{year}-"
 
     # Find highest existing sequence for this prefix
-    last_lot = db.query(MaterialLot).filter(
-        MaterialLot.lot_number.like(f"{prefix}%")
-    ).order_by(desc(MaterialLot.lot_number)).first()
+    last_lot = (
+        db.query(MaterialLot)
+        .filter(MaterialLot.lot_number.like(f"{prefix}%"))
+        .order_by(desc(MaterialLot.lot_number))
+        .first()
+    )
 
     if last_lot:
         try:
@@ -414,6 +406,7 @@ async def generate_lot_number(
 # =============================================================================
 # Serial Numbers
 # =============================================================================
+
 
 @router.get("/serials", response_model=SerialNumberListResponse)
 async def list_serial_numbers(
@@ -443,9 +436,7 @@ async def list_serial_numbers(
 
     total = query.count()
 
-    serials = query.order_by(desc(SerialNumber.manufactured_at)).offset(
-        (page - 1) * page_size
-    ).limit(page_size).all()
+    serials = query.order_by(desc(SerialNumber.manufactured_at)).offset((page - 1) * page_size).limit(page_size).all()
 
     return SerialNumberListResponse(
         items=serials,
@@ -475,9 +466,7 @@ async def lookup_serial_number(
     current_user: User = Depends(get_current_user),
 ):
     """Look up a serial number by the serial string."""
-    serial = db.query(SerialNumber).filter(
-        SerialNumber.serial_number == serial_number
-    ).first()
+    serial = db.query(SerialNumber).filter(SerialNumber.serial_number == serial_number).first()
     if not serial:
         raise HTTPException(status_code=404, detail="Serial number not found")
     return serial
@@ -506,9 +495,12 @@ async def create_serial_numbers(
     prefix = f"BLB-{date_str}-"
 
     # Find highest existing sequence for today
-    last_serial = db.query(SerialNumber).filter(
-        SerialNumber.serial_number.like(f"{prefix}%")
-    ).order_by(desc(SerialNumber.serial_number)).first()
+    last_serial = (
+        db.query(SerialNumber)
+        .filter(SerialNumber.serial_number.like(f"{prefix}%"))
+        .order_by(desc(SerialNumber.serial_number))
+        .first()
+    )
 
     if last_serial:
         try:
@@ -525,7 +517,7 @@ async def create_serial_numbers(
             serial_number=f"{prefix}{seq:04d}",
             product_id=request.product_id,
             production_order_id=request.production_order_id,
-            status='manufactured',
+            status="manufactured",
             qc_passed=request.qc_passed,
             qc_notes=request.qc_notes,
             manufactured_at=today,
@@ -555,13 +547,13 @@ async def update_serial_number(
     update_data = request.model_dump(exclude_unset=True)
 
     # Handle status-based timestamp updates
-    if 'status' in update_data:
-        new_status = update_data['status']
-        if new_status == 'sold' and not serial.sold_at:
+    if "status" in update_data:
+        new_status = update_data["status"]
+        if new_status == "sold" and not serial.sold_at:
             serial.sold_at = datetime.utcnow()
-        elif new_status == 'shipped' and not serial.shipped_at:
+        elif new_status == "shipped" and not serial.shipped_at:
             serial.shipped_at = datetime.utcnow()
-        elif new_status == 'returned' and not serial.returned_at:
+        elif new_status == "returned" and not serial.returned_at:
             serial.returned_at = datetime.utcnow()
 
     for field, value in update_data.items():
@@ -575,6 +567,7 @@ async def update_serial_number(
 # =============================================================================
 # Lot Consumption Recording
 # =============================================================================
+
 
 @router.post("/consumptions", response_model=ProductionLotConsumptionResponse)
 async def record_lot_consumption(
@@ -595,8 +588,7 @@ async def record_lot_consumption(
 
     if lot.quantity_remaining < request.quantity_consumed:
         raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient quantity in lot. Available: {lot.quantity_remaining}"
+            status_code=400, detail=f"Insufficient quantity in lot. Available: {lot.quantity_remaining}"
         )
 
     # Record consumption
@@ -608,7 +600,7 @@ async def record_lot_consumption(
 
     # Check if lot is depleted
     if lot.quantity_remaining <= 0:
-        lot.status = 'depleted'
+        lot.status = "depleted"
 
     lot.updated_at = datetime.utcnow()
 
@@ -624,9 +616,11 @@ async def get_production_lot_consumptions(
     current_user: User = Depends(get_current_user),
 ):
     """Get all lot consumptions for a production order."""
-    consumptions = db.query(ProductionLotConsumption).filter(
-        ProductionLotConsumption.production_order_id == production_order_id
-    ).all()
+    consumptions = (
+        db.query(ProductionLotConsumption)
+        .filter(ProductionLotConsumption.production_order_id == production_order_id)
+        .all()
+    )
 
     return consumptions
 
@@ -634,6 +628,7 @@ async def get_production_lot_consumptions(
 # =============================================================================
 # Recall Queries
 # =============================================================================
+
 
 @router.get("/recall/forward/{lot_number}", response_model=RecallForwardQueryResponse)
 async def recall_forward_query(
@@ -655,29 +650,27 @@ async def recall_forward_query(
     material_name = product.name if product else "Unknown"
 
     # Find all affected serial numbers through consumption records
-    affected = db.query(
-        SerialNumber.serial_number,
-        Product.name.label('product_name'),
-        ProductionOrder.code.label('production_order_code'),
-        SerialNumber.manufactured_at,
-        SerialNumber.status,
-        User.email.label('customer_email'),
-        SalesOrder.order_number.label('sales_order_number'),
-        SerialNumber.shipped_at,
-    ).join(
-        ProductionLotConsumption,
-        ProductionLotConsumption.production_order_id == SerialNumber.production_order_id
-    ).join(
-        Product, Product.id == SerialNumber.product_id
-    ).join(
-        ProductionOrder, ProductionOrder.id == SerialNumber.production_order_id
-    ).outerjoin(
-        SalesOrder, SalesOrder.id == SerialNumber.sales_order_id
-    ).outerjoin(
-        User, User.id == SalesOrder.user_id
-    ).filter(
-        ProductionLotConsumption.material_lot_id == lot.id
-    ).all()
+    affected = (
+        db.query(
+            SerialNumber.serial_number,
+            Product.name.label("product_name"),
+            ProductionOrder.code.label("production_order_code"),
+            SerialNumber.manufactured_at,
+            SerialNumber.status,
+            User.email.label("customer_email"),
+            SalesOrder.order_number.label("sales_order_number"),
+            SerialNumber.shipped_at,
+        )
+        .join(
+            ProductionLotConsumption, ProductionLotConsumption.production_order_id == SerialNumber.production_order_id
+        )
+        .join(Product, Product.id == SerialNumber.product_id)
+        .join(ProductionOrder, ProductionOrder.id == SerialNumber.production_order_id)
+        .outerjoin(SalesOrder, SalesOrder.id == SerialNumber.sales_order_id)
+        .outerjoin(User, User.id == SalesOrder.user_id)
+        .filter(ProductionLotConsumption.material_lot_id == lot.id)
+        .all()
+    )
 
     affected_products = [
         RecallAffectedProduct(
@@ -714,9 +707,7 @@ async def recall_backward_query(
 
     Returns all material lots used to produce this unit.
     """
-    serial = db.query(SerialNumber).filter(
-        SerialNumber.serial_number == serial_number
-    ).first()
+    serial = db.query(SerialNumber).filter(SerialNumber.serial_number == serial_number).first()
     if not serial:
         raise HTTPException(status_code=404, detail="Serial number not found")
 
@@ -725,22 +716,20 @@ async def recall_backward_query(
     product_name = product.name if product else "Unknown"
 
     # Find all material lots used in this production order
-    lots_used = db.query(
-        MaterialLot.lot_number,
-        Product.name.label('material_name'),
-        Vendor.name.label('vendor_name'),
-        MaterialLot.vendor_lot_number,
-        ProductionLotConsumption.quantity_consumed,
-    ).join(
-        ProductionLotConsumption,
-        ProductionLotConsumption.material_lot_id == MaterialLot.id
-    ).join(
-        Product, Product.id == MaterialLot.product_id
-    ).outerjoin(
-        Vendor, Vendor.id == MaterialLot.vendor_id
-    ).filter(
-        ProductionLotConsumption.production_order_id == serial.production_order_id
-    ).all()
+    lots_used = (
+        db.query(
+            MaterialLot.lot_number,
+            Product.name.label("material_name"),
+            Vendor.name.label("vendor_name"),
+            MaterialLot.vendor_lot_number,
+            ProductionLotConsumption.quantity_consumed,
+        )
+        .join(ProductionLotConsumption, ProductionLotConsumption.material_lot_id == MaterialLot.id)
+        .join(Product, Product.id == MaterialLot.product_id)
+        .outerjoin(Vendor, Vendor.id == MaterialLot.vendor_id)
+        .filter(ProductionLotConsumption.production_order_id == serial.production_order_id)
+        .all()
+    )
 
     material_lots = [
         MaterialLotUsed(

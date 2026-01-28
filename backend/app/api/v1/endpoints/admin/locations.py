@@ -1,6 +1,7 @@
 """
 Inventory Locations Management API
 """
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -142,10 +143,11 @@ async def update_location(
 
     # Check for duplicate code if changing
     if location.code and location.code != existing.code:
-        duplicate = db.query(InventoryLocation).filter(
-            InventoryLocation.code == location.code,
-            InventoryLocation.id != location_id
-        ).first()
+        duplicate = (
+            db.query(InventoryLocation)
+            .filter(InventoryLocation.code == location.code, InventoryLocation.id != location_id)
+            .first()
+        )
         if duplicate:
             raise HTTPException(status_code=400, detail=f"Location code '{location.code}' already exists")
 

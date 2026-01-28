@@ -7,6 +7,7 @@ Catalogs allow admins to:
 - Assign customers to one or more catalogs
 - Portal shows products from customer's assigned catalogs + public catalogs
 """
+
 from decimal import Decimal
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Numeric
 from sqlalchemy.orm import relationship
@@ -23,6 +24,7 @@ class Catalog(Base):
     - KOA-CUSTOM: Custom products only for KOA Kampgrounds
     - WHOLESALE: Products available to wholesale partners
     """
+
     __tablename__ = "catalogs"
 
     # Primary Key
@@ -59,14 +61,15 @@ class CatalogProduct(Base):
 
     Allows optional price override per catalog (e.g., special KOA pricing).
     """
+
     __tablename__ = "catalog_products"
 
     # Primary Key
     id = Column(Integer, primary_key=True, index=True)
 
     # Foreign Keys
-    catalog_id = Column(Integer, ForeignKey('catalogs.id', ondelete='CASCADE'), nullable=False, index=True)
-    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False, index=True)
+    catalog_id = Column(Integer, ForeignKey("catalogs.id", ondelete="CASCADE"), nullable=False, index=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Optional catalog-specific price override
     price_override = Column(Numeric(12, 4), nullable=True)
@@ -86,7 +89,7 @@ class CatalogProduct(Base):
         """Get the effective price (override or product's selling price)."""
         if self.price_override is not None:
             return Decimal(str(self.price_override))
-        return Decimal(str(self.product.selling_price)) if self.product else Decimal('0')
+        return Decimal(str(self.product.selling_price)) if self.product else Decimal("0")
 
 
 class CustomerCatalog(Base):
@@ -95,14 +98,15 @@ class CustomerCatalog(Base):
 
     Determines which catalogs (and thus products) a customer can see in the portal.
     """
+
     __tablename__ = "customer_catalogs"
 
     # Primary Key
     id = Column(Integer, primary_key=True, index=True)
 
     # Foreign Keys
-    customer_id = Column(Integer, ForeignKey('customers.id', ondelete='CASCADE'), nullable=False, index=True)
-    catalog_id = Column(Integer, ForeignKey('catalogs.id', ondelete='CASCADE'), nullable=False, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True)
+    catalog_id = Column(Integer, ForeignKey("catalogs.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=False), server_default=func.now(), nullable=False)

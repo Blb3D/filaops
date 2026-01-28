@@ -1,17 +1,14 @@
 """
 Service layer for operation status transitions.
 """
+
 import logging
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 
-from app.models.production_order import (
-    ProductionOrder,
-    ProductionOrderOperation,
-    ProductionOrderOperationMaterial
-)
+from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
 from app.models.work_center import Machine
 from app.services.operation_blocking import check_operation_blocking
 from app.services.resource_scheduling import check_resource_available_now
@@ -24,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class OperationError(Exception):
     """Custom exception for operation errors."""
+
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
@@ -34,9 +32,7 @@ class OperationError(Exception):
 
 
 def get_operation_with_validation(
-    db: Session,
-    po_id: int,
-    op_id: int
+    db: Session, po_id: int, op_id: int
 ) -> Tuple[ProductionOrder, ProductionOrderOperation]:
     """
     Get operation and validate it belongs to the specified PO.
@@ -62,9 +58,7 @@ def get_operation_with_validation(
 
 
 def get_previous_operation(
-    db: Session,
-    po: ProductionOrder,
-    current_op: ProductionOrderOperation
+    db: Session, po: ProductionOrder, current_op: ProductionOrderOperation
 ) -> Optional[ProductionOrderOperation]:
     """Get the previous operation in sequence."""
     ops = sorted(po.operations, key=lambda x: x.sequence)
@@ -76,10 +70,7 @@ def get_previous_operation(
     return None
 
 
-def get_operation_max_quantity(
-    po: ProductionOrder,
-    op: ProductionOrderOperation
-) -> Decimal:
+def get_operation_max_quantity(po: ProductionOrder, op: ProductionOrderOperation) -> Decimal:
     """
     Get maximum quantity allowed for this operation.
 
@@ -107,9 +98,9 @@ def get_operation_max_quantity(
     # Walk backwards to find last completed operation
     for i in range(op_index - 1, -1, -1):
         prev = ops[i]
-        if prev.status == 'complete':
+        if prev.status == "complete":
             return prev.quantity_completed
-        elif prev.status == 'skipped':
+        elif prev.status == "skipped":
             continue  # Keep looking back
         else:
             # Previous op not done yet - shouldn't happen if sequence enforced
@@ -120,9 +111,7 @@ def get_operation_max_quantity(
 
 
 def get_next_operation(
-    db: Session,
-    po: ProductionOrder,
-    current_op: ProductionOrderOperation
+    db: Session, po: ProductionOrder, current_op: ProductionOrderOperation
 ) -> Optional[ProductionOrderOperation]:
     """Get the next operation in sequence."""
     ops = sorted(po.operations, key=lambda x: x.sequence)
@@ -149,20 +138,20 @@ def derive_po_status(po: ProductionOrder) -> str:
 
     statuses = [op.status for op in po.operations]
 
-    if all(s == 'pending' for s in statuses):
-        return 'released'
-    elif all(s in ('complete', 'skipped') for s in statuses):
+    if all(s == "pending" for s in statuses):
+        return "released"
+    elif all(s in ("complete", "skipped") for s in statuses):
         # All operations done - check if we met the quantity requirement
         qty_ordered = po.quantity_ordered or Decimal("0")
         qty_completed = po.quantity_completed or Decimal("0")
 
         if qty_completed >= qty_ordered:
-            return 'complete'
+            return "complete"
         else:
             # Under-production: not enough good pieces to fulfill order
-            return 'short'
+            return "short"
     else:
-        return 'in_progress'
+        return "in_progress"
 
 
 def update_po_status(db: Session, po: ProductionOrder, created_by: Optional[str] = None) -> None:
@@ -180,9 +169,9 @@ def update_po_status(db: Session, po: ProductionOrder, created_by: Optional[str]
         po.status = new_status
         po.updated_at = datetime.utcnow()
 
-        if new_status == 'in_progress' and not po.actual_start:
+        if new_status == "in_progress" and not po.actual_start:
             po.actual_start = datetime.utcnow()
-        elif new_status == 'complete' and not po.actual_end:
+        elif new_status == "complete" and not po.actual_end:
             po.actual_end = datetime.utcnow()
             po.completed_at = datetime.utcnow()
 
@@ -202,25 +191,18 @@ def update_po_status(db: Session, po: ProductionOrder, created_by: Optional[str]
                     f"{qty_completed} units of product {po.product_id}"
                 )
             except Exception as e:
-                logger.error(
-                    f"Failed to process inventory for {po.code}: {e}"
-                )
+                logger.error(f"Failed to process inventory for {po.code}: {e}")
                 # Don't fail the operation completion - log and continue
 
             # === AUTO-SYNC: Update parent sales order status ===
             try:
                 sync_on_production_complete(db, po)
             except Exception as e:
-                logger.error(
-                    f"Failed to sync sales order for {po.code}: {e}"
-                )
+                logger.error(f"Failed to sync sales order for {po.code}: {e}")
 
 
 def consume_operation_materials(
-    db: Session,
-    op: ProductionOrderOperation,
-    quantity_completed: Decimal,
-    quantity_scrapped: Decimal
+    db: Session, op: ProductionOrderOperation, quantity_completed: Decimal, quantity_scrapped: Decimal
 ) -> List[dict]:
     """
     Consume materials for a completed operation.
@@ -248,9 +230,11 @@ def consume_operation_materials(
     consumed_materials = []
 
     # Get materials for this operation
-    materials = db.query(ProductionOrderOperationMaterial).filter(
-        ProductionOrderOperationMaterial.production_order_operation_id == op.id
-    ).all()
+    materials = (
+        db.query(ProductionOrderOperationMaterial)
+        .filter(ProductionOrderOperationMaterial.production_order_operation_id == op.id)
+        .all()
+    )
 
     # Get the production order for reference info
     po = op.production_order
@@ -265,14 +249,16 @@ def consume_operation_materials(
         )
 
         if txn:
-            consumed_materials.append({
-                "material_id": mat.id,
-                "component_id": mat.component_id,
-                "quantity_consumed": float(mat.quantity_consumed),
-                "unit": mat.unit,
-                "transaction_id": txn.id,
-                "cost_per_unit": float(txn.cost_per_unit) if txn.cost_per_unit else 0,
-            })
+            consumed_materials.append(
+                {
+                    "material_id": mat.id,
+                    "component_id": mat.component_id,
+                    "quantity_consumed": float(mat.quantity_consumed),
+                    "unit": mat.unit,
+                    "transaction_id": txn.id,
+                    "cost_per_unit": float(txn.cost_per_unit) if txn.cost_per_unit else 0,
+                }
+            )
 
             logger.info(
                 f"Created transaction {txn.id} for material {mat.id}: "
@@ -288,7 +274,7 @@ def start_operation(
     op_id: int,
     resource_id: Optional[int] = None,
     operator_name: Optional[str] = None,
-    notes: Optional[str] = None
+    notes: Optional[str] = None,
 ) -> ProductionOrderOperation:
     """
     Start an operation.
@@ -307,29 +293,25 @@ def start_operation(
     po, op = get_operation_with_validation(db, po_id, op_id)
 
     # Check operation status
-    if op.status == 'running':
+    if op.status == "running":
         raise OperationError("Operation is already running", 400)
-    if op.status in ('complete', 'skipped'):
+    if op.status in ("complete", "skipped"):
         raise OperationError(f"Operation is already {op.status}", 400)
-    if op.status not in ('pending', 'queued'):
+    if op.status not in ("pending", "queued"):
         raise OperationError(f"Cannot start operation in status '{op.status}'", 400)
 
     # Check previous operation is complete
     prev_op = get_previous_operation(db, po, op)
-    if prev_op and prev_op.status not in ('complete', 'skipped'):
+    if prev_op and prev_op.status not in ("complete", "skipped"):
         raise OperationError(
-            f"Previous operation (sequence {prev_op.sequence}) must be complete before starting this one",
-            400
+            f"Previous operation (sequence {prev_op.sequence}) must be complete before starting this one", 400
         )
 
     # Check material availability for this operation (API-402)
     blocking_result = check_operation_blocking(db, po_id, op_id)
     if not blocking_result["can_start"]:
         short_materials = [m["product_sku"] for m in blocking_result["blocking_issues"]]
-        raise OperationError(
-            f"Operation blocked by material shortages: {', '.join(short_materials)}",
-            400
-        )
+        raise OperationError(f"Operation blocked by material shortages: {', '.join(short_materials)}", 400)
 
     # Validate resource if provided
     if resource_id:
@@ -340,14 +322,11 @@ def start_operation(
         # Check for double-booking (API-403)
         is_available, blocking_op = check_resource_available_now(db, resource_id)
         if not is_available:
-            raise OperationError(
-                f"Resource is busy with another running operation (operation {blocking_op.id})",
-                409
-            )
+            raise OperationError(f"Resource is busy with another running operation (operation {blocking_op.id})", 409)
         op.resource_id = resource_id
 
     # Update operation
-    op.status = 'running'
+    op.status = "running"
     op.actual_start = datetime.utcnow()
     op.operator_name = operator_name
     if notes:
@@ -412,7 +391,7 @@ def complete_operation(
     po, op = get_operation_with_validation(db, po_id, op_id)
 
     # Check operation status
-    if op.status != 'running':
+    if op.status != "running":
         raise OperationError("Operation is not running, cannot complete", 400)
 
     # Validate quantity doesn't exceed max allowed
@@ -423,18 +402,15 @@ def complete_operation(
         raise OperationError(
             f"Total quantity ({total_qty}) exceeds maximum allowed ({max_qty}). "
             f"Good + Bad cannot exceed input from previous operation.",
-            400
+            400,
         )
 
     # Validate scrap reason if scrapping
     if quantity_scrapped > Decimal("0") and not scrap_reason:
-        raise OperationError(
-            "Scrap reason is required when quantity_scrapped > 0",
-            400
-        )
+        raise OperationError("Scrap reason is required when quantity_scrapped > 0", 400)
 
     # Update operation
-    op.status = 'complete'
+    op.status = "complete"
     op.actual_end = datetime.utcnow()
     op.quantity_completed = quantity_completed
     op.quantity_scrapped = quantity_scrapped
@@ -460,6 +436,7 @@ def complete_operation(
     scrap_result = None
     if quantity_scrapped > Decimal("0") and scrap_reason:
         from app.services.scrap_service import process_operation_scrap, ScrapError
+
         try:
             scrap_result = process_operation_scrap(
                 db=db,
@@ -504,11 +481,7 @@ def complete_operation(
     return op, scrap_result
 
 
-def auto_skip_downstream_operations(
-    db: Session,
-    po: ProductionOrder,
-    completed_op: ProductionOrderOperation
-) -> int:
+def auto_skip_downstream_operations(db: Session, po: ProductionOrder, completed_op: ProductionOrderOperation) -> int:
     """
     Auto-skip all downstream operations when no pieces remain.
 
@@ -538,22 +511,19 @@ def auto_skip_downstream_operations(
             continue
 
         # Only skip pending/queued ops
-        if op.status in ('pending', 'queued'):
-            op.status = 'skipped'
+        if op.status in ("pending", "queued"):
+            op.status = "skipped"
             op.notes = f"SKIPPED: Auto-skipped - no pieces from operation {completed_op.sequence}"
             op.updated_at = datetime.utcnow()
             skipped_count += 1
-            logger.info(f"Auto-skipped operation {op.id} (seq {op.sequence}) due to 0 pieces from op {completed_op.sequence}")
+            logger.info(
+                f"Auto-skipped operation {op.id} (seq {op.sequence}) due to 0 pieces from op {completed_op.sequence}"
+            )
 
     return skipped_count
 
 
-def skip_operation(
-    db: Session,
-    po_id: int,
-    op_id: int,
-    reason: str
-) -> ProductionOrderOperation:
+def skip_operation(db: Session, po_id: int, op_id: int, reason: str) -> ProductionOrderOperation:
     """
     Skip an operation.
 
@@ -570,19 +540,18 @@ def skip_operation(
     po, op = get_operation_with_validation(db, po_id, op_id)
 
     # Check operation status
-    if op.status not in ('pending', 'queued'):
+    if op.status not in ("pending", "queued"):
         raise OperationError(f"Cannot skip operation in status '{op.status}'", 400)
 
     # Check previous operation
     prev_op = get_previous_operation(db, po, op)
-    if prev_op and prev_op.status not in ('complete', 'skipped'):
+    if prev_op and prev_op.status not in ("complete", "skipped"):
         raise OperationError(
-            f"Previous operation (sequence {prev_op.sequence}) must be complete before skipping this one",
-            400
+            f"Previous operation (sequence {prev_op.sequence}) must be complete before skipping this one", 400
         )
 
     # Update operation
-    op.status = 'skipped'
+    op.status = "skipped"
     op.notes = f"SKIPPED: {reason}"
     op.updated_at = datetime.utcnow()
 
@@ -593,10 +562,7 @@ def skip_operation(
     return op
 
 
-def list_operations(
-    db: Session,
-    po_id: int
-) -> List[ProductionOrderOperation]:
+def list_operations(db: Session, po_id: int) -> List[ProductionOrderOperation]:
     """
     List operations for a production order.
 

@@ -7,6 +7,7 @@ This module handles automatic status transitions:
 
 Triggered by production_orders.py when a PO is completed.
 """
+
 from sqlalchemy.orm import Session
 
 from app.models.sales_order import SalesOrder
@@ -31,9 +32,7 @@ def sync_on_production_complete(db: Session, production_order: ProductionOrder) 
     if not production_order.sales_order_id:
         return False
 
-    sales_order = db.query(SalesOrder).filter(
-        SalesOrder.id == production_order.sales_order_id
-    ).first()
+    sales_order = db.query(SalesOrder).filter(SalesOrder.id == production_order.sales_order_id).first()
 
     if not sales_order:
         logger.warning(
@@ -43,18 +42,14 @@ def sync_on_production_complete(db: Session, production_order: ProductionOrder) 
         return False
 
     # Get all production orders for this sales order
-    all_production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == sales_order.id
-    ).all()
+    all_production_orders = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == sales_order.id).all()
 
     if not all_production_orders:
         return False
 
     # Check if ALL are completed or closed
     completed_statuses = {"completed", "closed"}
-    all_complete = all(
-        po.status in completed_statuses for po in all_production_orders
-    )
+    all_complete = all(po.status in completed_statuses for po in all_production_orders)
 
     if not all_complete:
         return False
@@ -74,9 +69,7 @@ def sync_on_production_complete(db: Session, production_order: ProductionOrder) 
     # Update order status if in_production
     if sales_order.status == "in_production":
         sales_order.status = "ready_to_ship"
-        logger.info(
-            f"Auto-updated {sales_order.order_number} status to 'ready_to_ship'"
-        )
+        logger.info(f"Auto-updated {sales_order.order_number} status to 'ready_to_ship'")
         updated = True
 
     return updated
@@ -93,9 +86,7 @@ def check_sales_order_production_status(db: Session, sales_order_id: int) -> dic
     Returns:
         Dict with production status info
     """
-    production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == sales_order_id
-    ).all()
+    production_orders = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == sales_order_id).all()
 
     if not production_orders:
         return {

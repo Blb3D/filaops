@@ -41,10 +41,7 @@ class GenericAdapter(PrinterDiscoveryAdapter):
         """Generic adapter doesn't support auto-discovery"""
         return []
 
-    async def test_connection(
-        self,
-        config: PrinterConnectionConfig
-    ) -> tuple[bool, Optional[str]]:
+    async def test_connection(self, config: PrinterConnectionConfig) -> tuple[bool, Optional[str]]:
         """Test if printer is reachable via ping or port check"""
         if not config.ip_address:
             return True, None  # No IP = manual tracking only, always "ok"
@@ -83,20 +80,12 @@ class GenericAdapter(PrinterDiscoveryAdapter):
             param = "-n" if platform.system().lower() == "windows" else "-c"
             command = ["ping", param, "1", "-w", "1000", ip]
 
-            result = subprocess.run(
-                command,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                timeout=2
-            )
+            result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2)
             return result.returncode == 0
         except Exception:
             return False
 
-    async def get_status(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterStatus]:
+    async def get_status(self, config: PrinterConnectionConfig) -> Optional[PrinterStatus]:
         """
         Generic status check.
 

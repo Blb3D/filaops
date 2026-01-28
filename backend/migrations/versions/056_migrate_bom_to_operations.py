@@ -15,13 +15,13 @@ Revision ID: 056_migrate_bom
 Revises: 055_add_product_image_url
 Create Date: 2025-01-21
 """
+
 from alembic import op
-import sqlalchemy as sa
 from sqlalchemy import text
 
 # revision identifiers
-revision = '056_migrate_bom'
-down_revision = '055_add_product_image_url'
+revision = "056_migrate_bom"
+down_revision = "055_add_product_image_url"
 branch_labels = None
 depends_on = None
 
@@ -130,7 +130,7 @@ def upgrade():
         # Migrate each line
         for line in lines:
             # Determine target operation
-            if line.consume_stage == 'shipping':
+            if line.consume_stage == "shipping":
                 target_op = shipping_op
             else:
                 target_op = production_op  # Default: production stage
@@ -141,13 +141,14 @@ def upgrade():
                 WHERE routing_operation_id = :op_id
                 AND component_id = :comp_id
             """)
-            existing = connection.execute(existing_query, {
-                "op_id": target_op.id,
-                "comp_id": line.component_id
-            }).fetchone()
+            existing = connection.execute(
+                existing_query, {"op_id": target_op.id, "comp_id": line.component_id}
+            ).fetchone()
 
             if existing:
-                print(f"  Product {product_id}: Material {line.component_id} already exists at op {target_op.id}, skipping")
+                print(
+                    f"  Product {product_id}: Material {line.component_id} already exists at op {target_op.id}, skipping"
+                )
                 skipped_count += 1
                 continue
 
@@ -180,15 +181,18 @@ def upgrade():
                 )
             """)
 
-            connection.execute(insert_query, {
-                "op_id": target_op.id,
-                "comp_id": line.component_id,
-                "qty": float(line.quantity) if line.quantity else 1.0,
-                "unit": line.unit or "EA",
-                "scrap": float(line.scrap_factor) if line.scrap_factor else 0,
-                "cost_only": line.is_cost_only or False,
-                "notes": f"[Migrated from BOM] {line.notes or ''}".strip()
-            })
+            connection.execute(
+                insert_query,
+                {
+                    "op_id": target_op.id,
+                    "comp_id": line.component_id,
+                    "qty": float(line.quantity) if line.quantity else 1.0,
+                    "unit": line.unit or "EA",
+                    "scrap": float(line.scrap_factor) if line.scrap_factor else 0,
+                    "cost_only": line.is_cost_only or False,
+                    "notes": f"[Migrated from BOM] {line.notes or ''}".strip(),
+                },
+            )
 
             migrated_count += 1
 

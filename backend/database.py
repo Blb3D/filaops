@@ -18,10 +18,7 @@ if not DATABASE_URL:
 # Create engine for PostgreSQL
 # Using NullPool for connection management
 engine = create_engine(
-    DATABASE_URL,
-    poolclass=NullPool,
-    echo=True if os.getenv("DEBUG") == "True" else False,
-    future=True
+    DATABASE_URL, poolclass=NullPool, echo=True if os.getenv("DEBUG") == "True" else False, future=True
 )
 
 # Create SessionLocal class for database sessions
@@ -29,6 +26,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create Base class for models
 Base = declarative_base()
+
 
 def get_db():
     """
@@ -46,6 +44,7 @@ def get_db():
     finally:
         db.close()
 
+
 def init_db():
     """
     Initialize database - create all tables.
@@ -54,6 +53,7 @@ def init_db():
 
     Base.metadata.create_all(bind=engine)
     print("Database initialized successfully!")
+
 
 def check_connection():
     """

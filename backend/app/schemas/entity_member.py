@@ -3,6 +3,7 @@ Entity Member Schemas
 
 Pydantic models for LLC member/partner CRUD operations.
 """
+
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, List, Literal
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field
 
 class EntityMemberCreate(BaseModel):
     """Create a new entity member."""
+
     name: str = Field(..., min_length=1, max_length=255)
     member_type: Literal["individual", "entity", "trust"] = "individual"
     tax_id_last4: Optional[str] = Field(None, max_length=4, pattern=r"^\d{4}$")
@@ -34,6 +36,7 @@ class EntityMemberCreate(BaseModel):
 
 class EntityMemberUpdate(BaseModel):
     """Update an existing entity member."""
+
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     member_type: Optional[Literal["individual", "entity", "trust"]] = None
     tax_id_last4: Optional[str] = Field(None, max_length=4, pattern=r"^\d{4}$")
@@ -58,6 +61,7 @@ class EntityMemberUpdate(BaseModel):
 
 class EntityMemberResponse(BaseModel):
     """Entity member response."""
+
     id: int
     name: str
     member_type: str
@@ -89,6 +93,7 @@ class EntityMemberResponse(BaseModel):
 
 class EntityMemberListResponse(BaseModel):
     """List of entity members with summary."""
+
     members: List[EntityMemberResponse]
     total_ownership: Decimal
     member_count: int
@@ -97,6 +102,7 @@ class EntityMemberListResponse(BaseModel):
 
 class CapitalTransactionCreate(BaseModel):
     """Record a capital contribution or distribution."""
+
     amount: Decimal = Field(..., description="Positive for contribution, negative for distribution")
     description: Optional[str] = Field(None, max_length=500)
     transaction_date: date

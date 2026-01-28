@@ -3,6 +3,7 @@ Integration tests for Admin endpoints
 
 Tests BOM management, dashboard, and admin-only access control
 """
+
 from decimal import Decimal
 
 
@@ -173,10 +174,7 @@ class TestBOMListEndpoint:
 
     def test_list_boms_filter_by_product(self, client, admin_headers, sample_bom):
         """Test filtering BOMs by product_id"""
-        response = client.get(
-            f"/api/v1/admin/bom/?product_id={sample_bom.product_id}",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/admin/bom/?product_id={sample_bom.product_id}", headers=admin_headers)
         assert response.status_code == 200
         assert len(response.json()) == 1
 
@@ -235,10 +233,7 @@ class TestBOMDetailEndpoint:
 
     def test_get_bom_by_product(self, client, admin_headers, sample_bom):
         """Test getting BOM by product ID"""
-        response = client.get(
-            f"/api/v1/admin/bom/product/{sample_bom.product_id}",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/admin/bom/product/{sample_bom.product_id}", headers=admin_headers)
         assert response.status_code == 200
         assert response.json()["id"] == sample_bom.id
 
@@ -267,10 +262,10 @@ class TestBOMCreateEndpoint:
                         "quantity": 1.5,
                         "sequence": 1,
                         "scrap_factor": 2.0,
-                        "notes": "Test material line"
+                        "notes": "Test material line",
                     }
-                ]
-            }
+                ],
+            },
         )
 
         assert response.status_code == 201
@@ -285,11 +280,7 @@ class TestBOMCreateEndpoint:
         response = client.post(
             "/api/v1/admin/bom/",
             headers=admin_headers,
-            json={
-                "product_id": sample_product.id,
-                "code": "EMPTY-BOM",
-                "name": "Empty BOM"
-            }
+            json={"product_id": sample_product.id, "code": "EMPTY-BOM", "name": "Empty BOM"},
         )
 
         assert response.status_code == 201
@@ -301,11 +292,7 @@ class TestBOMCreateEndpoint:
         response = client.post(
             "/api/v1/admin/bom/",
             headers=admin_headers,
-            json={
-                "product_id": 99999,
-                "code": "INVALID-BOM",
-                "name": "Invalid BOM"
-            }
+            json={"product_id": 99999, "code": "INVALID-BOM", "name": "Invalid BOM"},
         )
 
         assert response.status_code == 404
@@ -320,13 +307,8 @@ class TestBOMCreateEndpoint:
                 "product_id": sample_product.id,
                 "code": "BAD-BOM",
                 "name": "BOM with bad component",
-                "lines": [
-                    {
-                        "component_id": 99999,
-                        "quantity": 1.0
-                    }
-                ]
-            }
+                "lines": [{"component_id": 99999, "quantity": 1.0}],
+            },
         )
 
         assert response.status_code == 400
@@ -341,10 +323,7 @@ class TestBOMUpdateEndpoint:
         response = client.patch(
             f"/api/v1/admin/bom/{sample_bom.id}",
             headers=admin_headers,
-            json={
-                "name": "Updated BOM Name",
-                "notes": "Updated notes"
-            }
+            json={"name": "Updated BOM Name", "notes": "Updated notes"},
         )
 
         assert response.status_code == 200
@@ -355,9 +334,7 @@ class TestBOMUpdateEndpoint:
     def test_update_bom_version(self, client, admin_headers, sample_bom):
         """Test updating BOM version"""
         response = client.patch(
-            f"/api/v1/admin/bom/{sample_bom.id}",
-            headers=admin_headers,
-            json={"version": 2, "revision": "2.0"}
+            f"/api/v1/admin/bom/{sample_bom.id}", headers=admin_headers, json={"version": 2, "revision": "2.0"}
         )
 
         assert response.status_code == 200
@@ -366,20 +343,13 @@ class TestBOMUpdateEndpoint:
 
     def test_update_bom_not_found(self, client, admin_headers):
         """Test updating non-existent BOM"""
-        response = client.patch(
-            "/api/v1/admin/bom/99999",
-            headers=admin_headers,
-            json={"name": "New Name"}
-        )
+        response = client.patch("/api/v1/admin/bom/99999", headers=admin_headers, json={"name": "New Name"})
 
         assert response.status_code == 404
 
     def test_delete_bom(self, client, admin_headers, sample_bom, db_session):
         """Test soft deleting BOM"""
-        response = client.delete(
-            f"/api/v1/admin/bom/{sample_bom.id}",
-            headers=admin_headers
-        )
+        response = client.delete(f"/api/v1/admin/bom/{sample_bom.id}", headers=admin_headers)
 
         assert response.status_code == 204
 
@@ -409,12 +379,7 @@ class TestBOMLineEndpoints:
         response = client.post(
             f"/api/v1/admin/bom/{sample_bom.id}/lines",
             headers=admin_headers,
-            json={
-                "component_id": component.id,
-                "quantity": 2.0,
-                "sequence": 3,
-                "notes": "New line added"
-            }
+            json={"component_id": component.id, "quantity": 2.0, "sequence": 3, "notes": "New line added"},
         )
 
         assert response.status_code == 201
@@ -428,10 +393,7 @@ class TestBOMLineEndpoints:
         response = client.post(
             f"/api/v1/admin/bom/{sample_bom.id}/lines",
             headers=admin_headers,
-            json={
-                "component_id": 99999,
-                "quantity": 1.0
-            }
+            json={"component_id": 99999, "quantity": 1.0},
         )
 
         assert response.status_code == 400
@@ -441,15 +403,13 @@ class TestBOMLineEndpoints:
         """Test updating a BOM line"""
         # Get a line ID
         from app.models.bom import BOMLine
+
         line = db_session.query(BOMLine).filter(BOMLine.bom_id == sample_bom.id).first()
 
         response = client.patch(
             f"/api/v1/admin/bom/{sample_bom.id}/lines/{line.id}",
             headers=admin_headers,
-            json={
-                "quantity": 0.75,
-                "notes": "Updated quantity"
-            }
+            json={"quantity": 0.75, "notes": "Updated quantity"},
         )
 
         assert response.status_code == 200
@@ -460,13 +420,11 @@ class TestBOMLineEndpoints:
     def test_delete_line(self, client, admin_headers, sample_bom, db_session):
         """Test deleting a BOM line"""
         from app.models.bom import BOMLine
+
         line = db_session.query(BOMLine).filter(BOMLine.bom_id == sample_bom.id).first()
         line_id = line.id
 
-        response = client.delete(
-            f"/api/v1/admin/bom/{sample_bom.id}/lines/{line_id}",
-            headers=admin_headers
-        )
+        response = client.delete(f"/api/v1/admin/bom/{sample_bom.id}/lines/{line_id}", headers=admin_headers)
 
         assert response.status_code == 204
 
@@ -480,10 +438,7 @@ class TestBOMUtilityEndpoints:
 
     def test_recalculate_bom_cost(self, client, admin_headers, sample_bom):
         """Test BOM cost recalculation"""
-        response = client.post(
-            f"/api/v1/admin/bom/{sample_bom.id}/recalculate",
-            headers=admin_headers
-        )
+        response = client.post(f"/api/v1/admin/bom/{sample_bom.id}/recalculate", headers=admin_headers)
 
         assert response.status_code == 200
         data = response.json()
@@ -509,11 +464,7 @@ class TestBOMUtilityEndpoints:
         response = client.post(
             f"/api/v1/admin/bom/{sample_bom.id}/copy",
             headers=admin_headers,
-            json={
-                "target_product_id": target.id,
-                "include_lines": True,
-                "new_version": 1
-            }
+            json={"target_product_id": target.id, "include_lines": True, "new_version": 1},
         )
 
         assert response.status_code == 201
@@ -538,10 +489,7 @@ class TestBOMUtilityEndpoints:
         response = client.post(
             f"/api/v1/admin/bom/{sample_bom.id}/copy",
             headers=admin_headers,
-            json={
-                "target_product_id": target.id,
-                "include_lines": False
-            }
+            json={"target_product_id": target.id, "include_lines": False},
         )
 
         assert response.status_code == 201
@@ -560,13 +508,8 @@ class TestBOMValidation:
             json={
                 "product_id": sample_product.id,
                 "code": "BAD-BOM",
-                "lines": [
-                    {
-                        "component_id": sample_material.id,
-                        "quantity": -1.0
-                    }
-                ]
-            }
+                "lines": [{"component_id": sample_material.id, "quantity": -1.0}],
+            },
         )
 
         assert response.status_code == 422  # Validation error
@@ -574,12 +517,11 @@ class TestBOMValidation:
     def test_update_line_invalid_scrap_factor(self, client, admin_headers, sample_bom, db_session):
         """Test that scrap factor > 100 is rejected"""
         from app.models.bom import BOMLine
+
         line = db_session.query(BOMLine).filter(BOMLine.bom_id == sample_bom.id).first()
 
         response = client.patch(
-            f"/api/v1/admin/bom/{sample_bom.id}/lines/{line.id}",
-            headers=admin_headers,
-            json={"scrap_factor": 150.0}
+            f"/api/v1/admin/bom/{sample_bom.id}/lines/{line.id}", headers=admin_headers, json={"scrap_factor": 150.0}
         )
 
         assert response.status_code == 422

@@ -3,6 +3,7 @@ Authentication endpoints for customer portal
 
 Handles user registration, login, token refresh, and profile retrieval
 """
+
 from datetime import datetime, timedelta
 from typing import Annotated
 
@@ -42,6 +43,7 @@ from app.core.security import (
     REFRESH_TOKEN_EXPIRE_DAYS,
 )
 from app.logging_config import get_logger
+
 # Re-exports for backwards compatibility (prefer importing from app.api.v1.deps directly)
 from app.api.v1.deps import get_current_admin_user as get_current_admin_user  # noqa: F401, E402
 from app.api.v1.deps import get_current_staff_user as get_current_staff_user  # noqa: F401, E402
@@ -58,10 +60,8 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 # DEPENDENCY: Get Current User
 # ============================================================================
 
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Session = Depends(get_db)
-) -> User:
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)], db: Session = Depends(get_db)) -> User:
     """
     Dependency to get the current authenticated user from access token
 
@@ -93,10 +93,7 @@ async def get_current_user(
 
     # Check if user is active
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
     return user
 
@@ -105,13 +102,10 @@ async def get_current_user(
 # ENDPOINT: User Registration
 # ============================================================================
 
+
 @router.post("/register", response_model=UserWithTokens, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")  # type: ignore
-async def register_user(
-    request: Request,
-    user_data: UserRegister,
-    db: Session = Depends(get_db)
-):
+async def register_user(request: Request, user_data: UserRegister, db: Session = Depends(get_db)):
     """
     Register a new user
 
@@ -131,10 +125,7 @@ async def register_user(
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
 
     # Hash password
     password_hashed = hash_password(user_data.password)
@@ -173,24 +164,18 @@ async def register_user(
 
     # Return user profile with tokens
     user_dict = UserResponse.model_validate(new_user).model_dump()
-    return {
-        **user_dict,
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    return {**user_dict, "access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
 
 # ============================================================================
 # ENDPOINT: User Login
 # ============================================================================
 
+
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit("5/minute")  # type: ignore
 async def login_user(
-    request: Request,
-    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
-    db: Session = Depends(get_db)
+    request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()], db: Session = Depends(get_db)
 ):
     """
     Login with email and password
@@ -219,7 +204,7 @@ async def login_user(
                 detail="Incorrect email or password",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-        
+
         # Verify password
         try:
             password_valid = verify_password(form_data.password, user.password_hash)  # type: ignore[arg-type]
@@ -228,9 +213,9 @@ async def login_user(
             logger.error(f"Password verification error for user {user.id}: {str(e)}")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Authentication error. Please contact support."
+                detail="Authentication error. Please contact support.",
             )
-        
+
         if not password_valid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -240,10 +225,7 @@ async def login_user(
 
         # Check if user is active
         if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is inactive")
 
         # Update last login timestamp
         user.last_login_at = datetime.utcnow()  # type: ignore[assignment]
@@ -257,12 +239,10 @@ async def login_user(
         # Store refresh token in database
         token_hash = hash_refresh_token(refresh_token)
         expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-        
+
         # Check if token hash already exists (shouldn't happen, but handle it)
-        existing_token = db.query(RefreshToken).filter(
-            RefreshToken.token_hash == token_hash
-        ).first()
-        
+        existing_token = db.query(RefreshToken).filter(RefreshToken.token_hash == token_hash).first()
+
         if existing_token:
             # Revoke old token
             existing_token.revoked = True  # type: ignore[assignment]
@@ -272,7 +252,7 @@ async def login_user(
             refresh_token = create_refresh_token(user.id)  # type: ignore[arg-type]
             token_hash = hash_refresh_token(refresh_token)
             expires_at = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-        
+
         refresh_token_record = RefreshToken(
             user_id=user.id,
             token_hash=token_hash,
@@ -282,19 +262,14 @@ async def login_user(
         db.add(refresh_token_record)
         db.commit()
 
-        return {
-            "access_token": access_token,
-            "refresh_token": refresh_token,
-            "token_type": "bearer"
-        }
+        return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
     except HTTPException:
         raise
     except Exception as e:
         # Log the actual error for debugging
         logger.error(f"Login error: {str(e)}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login failed due to an internal error"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Login failed due to an internal error"
         )
 
 
@@ -302,11 +277,9 @@ async def login_user(
 # ENDPOINT: Refresh Token
 # ============================================================================
 
+
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_access_token(
-    refresh_data: RefreshTokenRequest,
-    db: Session = Depends(get_db)
-):
+async def refresh_access_token(refresh_data: RefreshTokenRequest, db: Session = Depends(get_db)):
     """
     Refresh access token using refresh token
 
@@ -336,11 +309,11 @@ async def refresh_access_token(
 
     # Verify refresh token exists in database and is not revoked
     token_hash = hash_refresh_token(refresh_data.refresh_token)
-    stored_token = db.query(RefreshToken).filter(
-        RefreshToken.token_hash == token_hash,
-        RefreshToken.user_id == user_id,
-        RefreshToken.revoked.is_(False)
-    ).first()
+    stored_token = (
+        db.query(RefreshToken)
+        .filter(RefreshToken.token_hash == token_hash, RefreshToken.user_id == user_id, RefreshToken.revoked.is_(False))
+        .first()
+    )
 
     if not stored_token or not stored_token.is_valid:
         raise credentials_exception
@@ -369,21 +342,16 @@ async def refresh_access_token(
     db.add(new_refresh_token_record)
     db.commit()
 
-    return {
-        "access_token": new_access_token,
-        "refresh_token": new_refresh_token,
-        "token_type": "bearer"
-    }
+    return {"access_token": new_access_token, "refresh_token": new_refresh_token, "token_type": "bearer"}
 
 
 # ============================================================================
 # ENDPOINT: Get Current User
 # ============================================================================
 
+
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_profile(
-    current_user: Annotated[User, Depends(get_current_user)]
-):
+async def get_current_user_profile(current_user: Annotated[User, Depends(get_current_user)]):
     """
     Get current user profile
 
@@ -403,14 +371,10 @@ async def get_current_user_profile(
 # PORTAL ENDPOINTS: Simplified Auth for Customer Portal
 # ============================================================================
 
+
 def generate_customer_number(db: Session) -> str:
     """Generate next customer number in format CUST-NNN"""
-    last_user = (
-        db.query(User)
-        .filter(User.customer_number.isnot(None))
-        .order_by(desc(User.customer_number))
-        .first()
-    )
+    last_user = db.query(User).filter(User.customer_number.isnot(None)).order_by(desc(User.customer_number)).first()
 
     if last_user and last_user.customer_number:  # type: ignore[truthy-function]
         try:
@@ -426,11 +390,7 @@ def generate_customer_number(db: Session) -> str:
 
 @router.post("/portal/register", response_model=PortalCustomerResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("3/minute")  # type: ignore
-async def portal_register(
-    request: Request,
-    user_data: PortalRegister,
-    db: Session = Depends(get_db)
-):
+async def portal_register(request: Request, user_data: PortalRegister, db: Session = Depends(get_db)):
     """
     Register a new customer from the portal.
 
@@ -443,8 +403,7 @@ async def portal_register(
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered. Please login instead."
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered. Please login instead."
         )
 
     # Generate customer number
@@ -473,11 +432,7 @@ async def portal_register(
 
     logger.info(
         "New customer registered",
-        extra={
-            "customer_number": customer_number,
-            "email": user_data.email,
-            "customer_id": new_user.id
-        }
+        extra={"customer_number": customer_number, "email": user_data.email, "customer_id": new_user.id},
     )
 
     return new_user
@@ -485,11 +440,7 @@ async def portal_register(
 
 @router.post("/portal/login", response_model=PortalCustomerResponse)
 @limiter.limit("5/minute")  # type: ignore
-async def portal_login(
-    request: Request,
-    login_data: PortalLogin,
-    db: Session = Depends(get_db)
-):
+async def portal_login(request: Request, login_data: PortalLogin, db: Session = Depends(get_db)):
     """
     Simple JSON login for the customer portal.
 
@@ -500,17 +451,11 @@ async def portal_login(
 
     # Verify user exists and password is correct
     if not user or not verify_password(login_data.password, user.password_hash):  # type: ignore[arg-type]
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect email or password")
 
     # Check if user is active
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
 
     # Update last login timestamp
     user.last_login_at = datetime.utcnow()  # type: ignore[assignment]
@@ -524,31 +469,21 @@ async def portal_login(
 
     logger.info(
         "Customer logged in",
-        extra={
-            "customer_number": user.customer_number,
-            "email": user.email,
-            "customer_id": user.id
-        }
+        extra={"customer_number": user.customer_number, "email": user.email, "customer_id": user.id},
     )
 
     return user
 
 
 @router.get("/portal/customer/{customer_id}", response_model=PortalCustomerResponse)
-async def get_portal_customer(
-    customer_id: int,
-    db: Session = Depends(get_db)
-):
+async def get_portal_customer(customer_id: int, db: Session = Depends(get_db)):
     """
     Get customer info by ID (for admin/portal use).
     """
     user = db.query(User).filter(User.id == customer_id).first()
 
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Customer not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Customer not found")
 
     return user
 
@@ -557,12 +492,11 @@ async def get_portal_customer(
 # PASSWORD RESET ENDPOINTS (Admin-Approved)
 # ============================================================================
 
+
 @router.post("/password-reset/request", response_model=PasswordResetRequestResponse)
 @limiter.limit("3/minute")  # type: ignore
 async def request_password_reset(
-    request: Request,
-    request_data: PasswordResetRequestCreate,
-    db: Session = Depends(get_db)
+    request: Request, request_data: PasswordResetRequestCreate, db: Session = Depends(get_db)
 ):
     """
     Request a password reset.
@@ -587,16 +521,18 @@ async def request_password_reset(
         return PasswordResetRequestResponse(message=success_message)
 
     # Check for existing pending request (avoid spam)
-    existing_request = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.user_id == user.id,
-        PasswordResetRequest.status == 'pending',
-        PasswordResetRequest.expires_at > datetime.utcnow()
-    ).first()
+    existing_request = (
+        db.query(PasswordResetRequest)
+        .filter(
+            PasswordResetRequest.user_id == user.id,
+            PasswordResetRequest.status == "pending",
+            PasswordResetRequest.expires_at > datetime.utcnow(),
+        )
+        .first()
+    )
 
     if existing_request:
-        return PasswordResetRequestResponse(
-            message="A password reset request is already pending approval."
-        )
+        return PasswordResetRequestResponse(message="A password reset request is already pending approval.")
 
     # Generate tokens
     reset_token = secrets.token_urlsafe(32)
@@ -607,8 +543,8 @@ async def request_password_reset(
         user_id=user.id,
         token=reset_token,
         approval_token=approval_token,
-        status='pending',
-        expires_at=datetime.utcnow() + timedelta(hours=24)
+        status="pending",
+        expires_at=datetime.utcnow() + timedelta(hours=24),
     )
     db.add(reset_request)
     db.commit()
@@ -616,7 +552,7 @@ async def request_password_reset(
 
     # Check if email is configured
     email_configured = bool(settings.SMTP_USER and settings.SMTP_PASSWORD)
-    
+
     if email_configured:
         # Send approval email to admin (normal flow)
         email_sent = email_service.send_password_reset_approval_request(
@@ -624,99 +560,75 @@ async def request_password_reset(
             user_email=user.email,  # type: ignore[arg-type]
             user_name=user.full_name,
             approval_token=approval_token,
-            frontend_url=settings.FRONTEND_URL
+            frontend_url=settings.FRONTEND_URL,
         )
-        
+
         if not email_sent:
             # Email failed to send, but request was created
             logger.warning(f"Password reset request created but email failed to send for user {user.email}")
-        
+
         logger.info(
             "Password reset requested (requires admin approval)",
-            extra={
-                "user_id": user.id,
-                "email": user.email,
-                "request_id": reset_request.id
-            }
+            extra={"user_id": user.id, "email": user.email, "request_id": reset_request.id},
         )
-        
+
         return PasswordResetRequestResponse(
             message=success_message,
-            request_id=reset_request.id  # type: ignore[arg-type]
+            request_id=reset_request.id,  # type: ignore[arg-type]
         )
     else:
         # Email not configured - auto-approve and return reset link directly
-        reset_request.status = 'approved'  # type: ignore[assignment]
+        reset_request.status = "approved"  # type: ignore[assignment]
         reset_request.approved_at = datetime.utcnow()  # type: ignore[assignment]
         reset_request.expires_at = datetime.utcnow() + timedelta(hours=24)  # type: ignore[assignment] # 24 hours to use
         db.commit()
-        
+
         # Use relative URL - frontend will construct full URL
         reset_url = f"/reset-password/{reset_token}"
-        
+
         logger.info(
             "Password reset auto-approved (email not configured)",
-            extra={
-                "user_id": user.id,
-                "email": user.email,
-                "request_id": reset_request.id,
-                "reset_token": reset_token
-            }
+            extra={"user_id": user.id, "email": user.email, "request_id": reset_request.id, "reset_token": reset_token},
         )
-        
+
         return PasswordResetRequestResponse(
             message="Password reset link generated. Use the link below to reset your password.",
             request_id=reset_request.id,  # type: ignore[arg-type]
             reset_token=reset_token,
-            reset_url=reset_url
+            reset_url=reset_url,
         )
 
 
 @router.get("/password-reset/approve/{approval_token}", response_model=PasswordResetApprovalResponse)
-async def approve_password_reset(
-    approval_token: str,
-    db: Session = Depends(get_db)
-):
+async def approve_password_reset(approval_token: str, db: Session = Depends(get_db)):
     """
     Approve a password reset request (admin action via email link).
 
     After approval, the user will receive an email with the reset link.
     """
     # Find the reset request
-    reset_request = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.approval_token == approval_token
-    ).first()
+    reset_request = db.query(PasswordResetRequest).filter(PasswordResetRequest.approval_token == approval_token).first()
 
     if not reset_request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Password reset request not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Password reset request not found")
 
-    if reset_request.status != 'pending':  # type: ignore[comparison-overlap]
+    if reset_request.status != "pending":  # type: ignore[comparison-overlap]
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Request has already been {reset_request.status}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Request has already been {reset_request.status}"
         )
 
     if reset_request.expires_at < datetime.utcnow():  # type: ignore[operator]
-        reset_request.status = 'expired'  # type: ignore[assignment]
+        reset_request.status = "expired"  # type: ignore[assignment]
         db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Password reset request has expired"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password reset request has expired")
 
     # Get the user
     user = db.query(User).filter(User.id == reset_request.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Approve the request
-    reset_request.status = 'approved'  # type: ignore[assignment]
+    reset_request.status = "approved"  # type: ignore[assignment]
     reset_request.approved_at = datetime.utcnow()  # type: ignore[assignment]
     # Extend expiry for 1 hour after approval for user to complete reset
     reset_request.expires_at = datetime.utcnow() + timedelta(hours=1)  # type: ignore[assignment]
@@ -727,63 +639,45 @@ async def approve_password_reset(
         user_email=user.email,  # type: ignore[arg-type]
         user_name=user.full_name,
         reset_token=reset_request.token,  # type: ignore[arg-type]
-        frontend_url=settings.FRONTEND_URL
+        frontend_url=settings.FRONTEND_URL,
     )
 
     logger.info(
-        "Password reset approved",
-        extra={
-            "user_id": user.id,
-            "email": user.email,
-            "request_id": reset_request.id
-        }
+        "Password reset approved", extra={"user_id": user.id, "email": user.email, "request_id": reset_request.id}
     )
 
     return PasswordResetApprovalResponse(
         message="Password reset approved. User has been notified via email.",
         user_email=user.email,  # type: ignore[arg-type]
-        status="approved"
+        status="approved",
     )
 
 
 @router.get("/password-reset/deny/{approval_token}", response_model=PasswordResetApprovalResponse)
-async def deny_password_reset(
-    approval_token: str,
-    reason: str | None = None,
-    db: Session = Depends(get_db)
-):
+async def deny_password_reset(approval_token: str, reason: str | None = None, db: Session = Depends(get_db)):
     """
     Deny a password reset request (admin action via email link).
 
     The user will be notified that their request was denied.
     """
     # Find the reset request
-    reset_request = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.approval_token == approval_token
-    ).first()
+    reset_request = db.query(PasswordResetRequest).filter(PasswordResetRequest.approval_token == approval_token).first()
 
     if not reset_request:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Password reset request not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Password reset request not found")
 
-    if reset_request.status != 'pending':  # type: ignore[comparison-overlap]
+    if reset_request.status != "pending":  # type: ignore[comparison-overlap]
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Request has already been {reset_request.status}"
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Request has already been {reset_request.status}"
         )
 
     # Get the user
     user = db.query(User).filter(User.id == reset_request.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Deny the request
-    reset_request.status = 'denied'  # type: ignore[assignment]
+    reset_request.status = "denied"  # type: ignore[assignment]
     reset_request.admin_notes = reason  # type: ignore[assignment]
     db.commit()
 
@@ -791,160 +685,105 @@ async def deny_password_reset(
     email_service.send_password_reset_denied(
         user_email=user.email,  # type: ignore[arg-type]
         user_name=user.full_name,
-        reason=reason
+        reason=reason,
     )
 
     logger.info(
         "Password reset denied",
-        extra={
-            "user_id": user.id,
-            "email": user.email,
-            "request_id": reset_request.id,
-            "reason": reason
-        }
+        extra={"user_id": user.id, "email": user.email, "request_id": reset_request.id, "reason": reason},
     )
 
     return PasswordResetApprovalResponse(
         message="Password reset denied. User has been notified.",
         user_email=user.email,  # type: ignore[arg-type]
-        status="denied"
+        status="denied",
     )
 
 
 @router.get("/password-reset/status/{token}", response_model=PasswordResetStatus)
-async def check_reset_status(
-    token: str,
-    db: Session = Depends(get_db)
-):
+async def check_reset_status(token: str, db: Session = Depends(get_db)):
     """
     Check the status of a password reset token.
 
     Used by the frontend to determine if the user can proceed with password reset.
     """
-    reset_request = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.token == token
-    ).first()
+    reset_request = db.query(PasswordResetRequest).filter(PasswordResetRequest.token == token).first()
 
     if not reset_request:  # type: ignore[truthy-function]
-        return PasswordResetStatus(
-            status="invalid",
-            message="Invalid or expired reset token",
-            can_reset=False
-        )
+        return PasswordResetStatus(status="invalid", message="Invalid or expired reset token", can_reset=False)
 
-    if reset_request.status == 'pending':  # type: ignore[comparison-overlap]
-        return PasswordResetStatus(
-            status="pending",
-            message="Your request is awaiting admin approval",
-            can_reset=False
-        )
+    if reset_request.status == "pending":  # type: ignore[comparison-overlap]
+        return PasswordResetStatus(status="pending", message="Your request is awaiting admin approval", can_reset=False)
 
-    if reset_request.status == 'denied':  # type: ignore[comparison-overlap]
-        return PasswordResetStatus(
-            status="denied",
-            message="Your password reset request was denied",
-            can_reset=False
-        )
+    if reset_request.status == "denied":  # type: ignore[comparison-overlap]
+        return PasswordResetStatus(status="denied", message="Your password reset request was denied", can_reset=False)
 
-    if reset_request.status == 'completed':  # type: ignore[comparison-overlap]
-        return PasswordResetStatus(
-            status="completed",
-            message="This reset link has already been used",
-            can_reset=False
-        )
+    if reset_request.status == "completed":  # type: ignore[comparison-overlap]
+        return PasswordResetStatus(status="completed", message="This reset link has already been used", can_reset=False)
 
     if reset_request.expires_at < datetime.utcnow():  # type: ignore[operator]
-        return PasswordResetStatus(
-            status="expired",
-            message="This reset link has expired",
-            can_reset=False
-        )
+        return PasswordResetStatus(status="expired", message="This reset link has expired", can_reset=False)
 
-    if reset_request.status == 'approved':  # type: ignore[comparison-overlap]
-        return PasswordResetStatus(
-            status="approved",
-            message="You can now reset your password",
-            can_reset=True
-        )
+    if reset_request.status == "approved":  # type: ignore[comparison-overlap]
+        return PasswordResetStatus(status="approved", message="You can now reset your password", can_reset=True)
 
-    return PasswordResetStatus(
-        status="unknown",
-        message="Unknown status",
-        can_reset=False
-    )
+    return PasswordResetStatus(status="unknown", message="Unknown status", can_reset=False)
 
 
 @router.post("/password-reset/complete", response_model=PasswordResetRequestResponse)
-async def complete_password_reset(
-    reset_data: PasswordResetComplete,
-    db: Session = Depends(get_db)
-):
+async def complete_password_reset(reset_data: PasswordResetComplete, db: Session = Depends(get_db)):
     """
     Complete the password reset by setting a new password.
 
     Requires an approved reset token.
     """
     # Find the reset request
-    reset_request = db.query(PasswordResetRequest).filter(
-        PasswordResetRequest.token == reset_data.token
-    ).first()
+    reset_request = db.query(PasswordResetRequest).filter(PasswordResetRequest.token == reset_data.token).first()
 
     if not reset_request:  # type: ignore[truthy-function]
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid reset token"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid reset token")
 
-    if reset_request.status != 'approved':  # type: ignore[comparison-overlap]
+    if reset_request.status != "approved":  # type: ignore[comparison-overlap]
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot reset password. Request status: {reset_request.status}"
+            detail=f"Cannot reset password. Request status: {reset_request.status}",
         )
 
     if reset_request.expires_at < datetime.utcnow():  # type: ignore[operator]
-        reset_request.status = 'expired'  # type: ignore[assignment]
+        reset_request.status = "expired"  # type: ignore[assignment]
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset token has expired. Please request a new password reset."
+            detail="Reset token has expired. Please request a new password reset.",
         )
 
     # Get the user
     user = db.query(User).filter(User.id == reset_request.user_id).first()
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     # Update password
     user.password_hash = hash_password(reset_data.new_password)  # type: ignore[assignment]
 
     # Mark request as completed
-    reset_request.status = 'completed'  # type: ignore[assignment]
+    reset_request.status = "completed"  # type: ignore[assignment]
     reset_request.completed_at = datetime.utcnow()  # type: ignore[assignment]
 
     # Revoke all existing refresh tokens for security
-    db.query(RefreshToken).filter(
-        RefreshToken.user_id == user.id,
-        RefreshToken.revoked.is_(False)
-    ).update({"revoked": True, "revoked_at": datetime.utcnow()})
+    db.query(RefreshToken).filter(RefreshToken.user_id == user.id, RefreshToken.revoked.is_(False)).update(
+        {"revoked": True, "revoked_at": datetime.utcnow()}
+    )
 
     db.commit()
 
     # Send confirmation email
     email_service.send_password_reset_completed(
         user_email=user.email,  # type: ignore[arg-type]
-        user_name=user.full_name
+        user_name=user.full_name,
     )
 
     logger.info(
-        "Password reset completed",
-        extra={
-            "user_id": user.id,
-            "email": user.email,
-            "request_id": reset_request.id
-        }
+        "Password reset completed", extra={"user_id": user.id, "email": user.email, "request_id": reset_request.id}
     )
 
     return PasswordResetRequestResponse(

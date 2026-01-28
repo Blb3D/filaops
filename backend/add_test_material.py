@@ -1,4 +1,5 @@
 """Add test material to routing operation"""
+
 from decimal import Decimal
 from app.db.session import SessionLocal
 from app.models.manufacturing import RoutingOperationMaterial
@@ -15,7 +16,7 @@ material = RoutingOperationMaterial(
     scrap_factor=Decimal("5"),
     is_cost_only=False,
     is_optional=False,
-    notes="Black PLA filament for print"
+    notes="Black PLA filament for print",
 )
 db.add(material)
 db.commit()

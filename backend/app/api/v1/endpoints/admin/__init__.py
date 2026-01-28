@@ -1,11 +1,25 @@
 """
 Admin endpoints - requires admin authentication
 """
+
 from fastapi import APIRouter
 from . import (
-    bom, dashboard, fulfillment, audit, accounting, traceability,
-    customers, inventory_transactions, analytics, export, data_import, orders,
-    users, uom, locations, system
+    bom,
+    dashboard,
+    fulfillment,
+    audit,
+    accounting,
+    traceability,
+    customers,
+    inventory_transactions,
+    analytics,
+    export,
+    data_import,
+    orders,
+    users,
+    uom,
+    locations,
+    system,
 )
 
 router = APIRouter()

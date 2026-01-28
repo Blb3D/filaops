@@ -1,16 +1,18 @@
-﻿"""
+"""
 Optional Google Drive integration.
 - Lazy-imports Google libs only when used.
 - Controlled by env/settings ENABLE_GOOGLE_DRIVE (default False).
 """
+
 from __future__ import annotations
 import os
 from typing import Optional
 
-_ENABLE_ENV = os.getenv("ENABLE_GOOGLE_DRIVE", "false").strip().lower() in {"1","true","yes","on"}
+_ENABLE_ENV = os.getenv("ENABLE_GOOGLE_DRIVE", "false").strip().lower() in {"1", "true", "yes", "on"}
 
 try:
     from app.core.config import settings  # type: ignore
+
     ENABLE = bool(getattr(settings, "ENABLE_GOOGLE_DRIVE", _ENABLE_ENV))
 except Exception:
     ENABLE = _ENABLE_ENV
@@ -30,6 +32,7 @@ def _import_google():
         from googleapiclient.discovery import build  # type: ignore
         from googleapiclient.http import MediaFileUpload  # type: ignore
         from google.oauth2.credentials import Credentials  # type: ignore
+
         return build, MediaFileUpload, Credentials
     except Exception as e:
         raise GoogleDriveUnavailable(

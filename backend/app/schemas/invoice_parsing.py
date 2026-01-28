@@ -3,6 +3,7 @@ Invoice Parsing Schemas
 
 Pydantic models for invoice parsing and PO creation workflow.
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List
@@ -12,13 +13,15 @@ from enum import Enum
 
 class MatchConfidence(str, Enum):
     """Confidence level for product matching"""
-    EXACT = "exact"      # Vendor SKU found in vendor_items
-    FUZZY = "fuzzy"      # Similar SKU or description match
-    NONE = "none"        # No match found
+
+    EXACT = "exact"  # Vendor SKU found in vendor_items
+    FUZZY = "fuzzy"  # Similar SKU or description match
+    NONE = "none"  # No match found
 
 
 class ParsedInvoiceLine(BaseModel):
     """A single line item from a parsed invoice"""
+
     line_number: int = Field(..., description="Line number on invoice")
     vendor_sku: str = Field(..., description="Vendor's SKU/part number")
     description: str = Field("", description="Item description from invoice")
@@ -41,6 +44,7 @@ class ParsedInvoiceLine(BaseModel):
 
 class ParsedInvoice(BaseModel):
     """Complete parsed invoice data"""
+
     # Vendor info
     vendor_name: str = Field(..., description="Detected vendor name")
     vendor_id: Optional[int] = Field(None, description="Matched vendor ID")
@@ -76,12 +80,14 @@ class ParsedInvoice(BaseModel):
 
 class InvoiceParseRequest(BaseModel):
     """Request to parse an invoice file"""
+
     vendor_id: Optional[int] = Field(None, description="Pre-select vendor if known")
     file_type: Optional[str] = Field(None, description="Override file type detection")
 
 
 class InvoiceParseResponse(BaseModel):
     """Response from invoice parsing"""
+
     success: bool
     parsed_invoice: Optional[ParsedInvoice] = None
     error: Optional[str] = None
@@ -90,6 +96,7 @@ class InvoiceParseResponse(BaseModel):
 
 class ConfirmedInvoiceLine(BaseModel):
     """A line item confirmed by user for PO creation"""
+
     vendor_sku: str
     product_id: int  # Must be mapped
     quantity: Decimal
@@ -103,6 +110,7 @@ class ConfirmedInvoiceLine(BaseModel):
 
 class CreatePOFromInvoiceRequest(BaseModel):
     """Request to create PO from parsed invoice"""
+
     vendor_id: int
     invoice_number: Optional[str] = None
     invoice_date: Optional[date] = None

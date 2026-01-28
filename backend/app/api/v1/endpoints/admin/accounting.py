@@ -12,6 +12,7 @@ Also provides:
 
 These are views into the business data, formatted for accounting purposes.
 """
+
 from typing import Optional, Dict, Any
 from decimal import Decimal
 from datetime import datetime, timedelta, date
@@ -41,20 +42,16 @@ router = APIRouter(prefix="/accounting", tags=["Accounting"])
 # Query Parameter Schemas
 # ============================================================================
 
+
 class SalesExportParams(BaseModel):
     """Query parameters for sales export endpoint."""
+
     start_date: date = Field(..., description="Start date for export (inclusive)")
     end_date: date = Field(..., description="End date for export (inclusive)")
     format: str = Field(default="csv", description="Export format (csv)")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "start_date": "2025-01-01",
-                "end_date": "2025-12-31",
-                "format": "csv"
-            }
-        }
+        json_schema_extra = {"example": {"start_date": "2025-01-01", "end_date": "2025-12-31", "format": "csv"}}
 
 
 # Account codes matching ACCOUNTING_ARCHITECTURE.md
@@ -79,12 +76,7 @@ async def get_inventory_by_account(
     - Finished Goods (1320): PRD-*, completed products
     """
     # Get all inventory with product info
-    inventory_items = db.query(
-        Inventory,
-        Product
-    ).join(Product).filter(
-        Inventory.on_hand_quantity > 0
-    ).all()
+    inventory_items = db.query(Inventory, Product).join(Product).filter(Inventory.on_hand_quantity > 0).all()
 
     accounts: Dict[str, Dict[str, Any]] = {
         code: {
@@ -112,26 +104,28 @@ async def get_inventory_by_account(
             account = "1300"  # Default to raw materials
 
         # Calculate value (use product standard_cost if available)
-        unit_cost = getattr(product, 'standard_cost', None) or Decimal("0")
+        unit_cost = getattr(product, "standard_cost", None) or Decimal("0")
         total_value = inv.on_hand_quantity * unit_cost
 
         accounts[account]["total_value"] += total_value
         accounts[account]["total_units"] += inv.on_hand_quantity
-        accounts[account]["items"].append({
-            "product_id": product.id,
-            "sku": product.sku,
-            "name": product.name,
-            "on_hand": float(inv.on_hand_quantity),
-            "allocated": float(inv.allocated_quantity),
-            "available": float(inv.available_quantity) if inv.available_quantity else float(inv.on_hand_quantity - inv.allocated_quantity),
-            "unit_cost": float(unit_cost),
-            "total_value": float(total_value),
-        })
+        accounts[account]["items"].append(
+            {
+                "product_id": product.id,
+                "sku": product.sku,
+                "name": product.name,
+                "on_hand": float(inv.on_hand_quantity),
+                "allocated": float(inv.allocated_quantity),
+                "available": float(inv.available_quantity)
+                if inv.available_quantity
+                else float(inv.on_hand_quantity - inv.allocated_quantity),
+                "unit_cost": float(unit_cost),
+                "total_value": float(total_value),
+            }
+        )
 
     # Calculate WIP from production orders
-    wip_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(['in_progress', 'printed'])
-    ).all()
+    wip_orders = db.query(ProductionOrder).filter(ProductionOrder.status.in_(["in_progress", "printed"])).all()
 
     wip_value = Decimal("0")
     wip_items = []
@@ -140,18 +134,20 @@ async def get_inventory_by_account(
         reserved = db.query(
             func.sum(func.abs(InventoryTransaction.quantity) * func.coalesce(InventoryTransaction.cost_per_unit, 0))
         ).filter(
-            InventoryTransaction.reference_type == 'production_order',
+            InventoryTransaction.reference_type == "production_order",
             InventoryTransaction.reference_id == po.id,
-            InventoryTransaction.transaction_type == 'reservation'
+            InventoryTransaction.transaction_type == "reservation",
         ).scalar() or Decimal("0")
 
         wip_value += reserved
-        wip_items.append({
-            "production_order_id": po.id,
-            "code": po.code,
-            "status": po.status,
-            "estimated_value": float(reserved),
-        })
+        wip_items.append(
+            {
+                "production_order_id": po.id,
+                "code": po.code,
+                "status": po.status,
+                "estimated_value": float(reserved),
+            }
+        )
 
     accounts["1310"]["total_value"] = wip_value
     accounts["1310"]["items"] = wip_items
@@ -164,9 +160,7 @@ async def get_inventory_by_account(
             "wip": float(accounts["1310"]["total_value"]),
             "finished_goods": float(accounts["1320"]["total_value"]),
             "total_inventory": float(
-                accounts["1300"]["total_value"] +
-                accounts["1310"]["total_value"] +
-                accounts["1320"]["total_value"]
+                accounts["1300"]["total_value"] + accounts["1310"]["total_value"] + accounts["1320"]["total_value"]
             ),
         },
     }
@@ -189,21 +183,25 @@ async def get_transactions_as_journal(
     """
     cutoff = datetime.utcnow() - timedelta(days=days)
 
-    query = db.query(InventoryTransaction).filter(
-        InventoryTransaction.created_at >= cutoff
-    ).order_by(InventoryTransaction.created_at.desc())
+    query = (
+        db.query(InventoryTransaction)
+        .filter(InventoryTransaction.created_at >= cutoff)
+        .order_by(InventoryTransaction.created_at.desc())
+    )
 
     if order_id:
         # Get production order IDs for this sales order
-        po_ids = [po.id for po in db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order_id
-        ).all()]
+        po_ids = [po.id for po in db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()]
 
         query = query.filter(
-            ((InventoryTransaction.reference_type == 'production_order') &
-             (InventoryTransaction.reference_id.in_(po_ids))) |
-            ((InventoryTransaction.reference_type.in_(['shipment', 'consolidated_shipment'])) &
-             (InventoryTransaction.reference_id == order_id))
+            (
+                (InventoryTransaction.reference_type == "production_order")
+                & (InventoryTransaction.reference_id.in_(po_ids))
+            )
+            | (
+                (InventoryTransaction.reference_type.in_(["shipment", "consolidated_shipment"]))
+                & (InventoryTransaction.reference_id == order_id)
+            )
         )
 
     transactions = query.limit(200).all()
@@ -245,11 +243,11 @@ async def get_transactions_as_journal(
         }
 
         # Determine accounts based on transaction type
-        if txn.transaction_type == 'reservation':
+        if txn.transaction_type == "reservation":
             entry["debit_account"] = {"code": "1310", "name": "WIP", "amount": value}
             entry["credit_account"] = {"code": "1300", "name": "Raw Materials", "amount": value}
-        elif txn.transaction_type == 'consumption':
-            if txn.reference_type in ['shipment', 'consolidated_shipment']:
+        elif txn.transaction_type == "consumption":
+            if txn.reference_type in ["shipment", "consolidated_shipment"]:
                 # Packaging consumption at shipping
                 entry["debit_account"] = {"code": "5100", "name": "COGS", "amount": value}
                 entry["credit_account"] = {"code": "1300", "name": "Raw Materials", "amount": value}
@@ -257,7 +255,7 @@ async def get_transactions_as_journal(
                 # Material consumption at production complete
                 entry["debit_account"] = {"code": "5100", "name": "COGS", "amount": value}
                 entry["credit_account"] = {"code": "1310", "name": "WIP", "amount": value}
-        elif txn.transaction_type == 'receipt':
+        elif txn.transaction_type == "receipt":
             if sku.startswith("PRD-"):
                 # Finished goods receipt
                 entry["debit_account"] = {"code": "1320", "name": "Finished Goods", "amount": value}
@@ -266,10 +264,10 @@ async def get_transactions_as_journal(
                 # Raw material receipt
                 entry["debit_account"] = {"code": "1300", "name": "Raw Materials", "amount": value}
                 entry["credit_account"] = {"code": "2100", "name": "Accounts Payable", "amount": value}
-        elif txn.transaction_type == 'scrap':
+        elif txn.transaction_type == "scrap":
             entry["debit_account"] = {"code": "5100", "name": "COGS (Scrap)", "amount": value}
             entry["credit_account"] = {"code": "1310", "name": "WIP", "amount": value}
-        elif txn.transaction_type == 'release':
+        elif txn.transaction_type == "release":
             # Reservation released (e.g., consolidated shipping)
             entry["debit_account"] = {"code": "1300", "name": "Raw Materials", "amount": value}
             entry["credit_account"] = {"code": "1310", "name": "WIP", "amount": value}
@@ -304,26 +302,32 @@ async def get_order_cost_breakdown(
         return {"error": "Order not found"}
 
     # Get production orders
-    production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == order_id
-    ).all()
+    production_orders = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order_id).all()
 
     po_ids = [po.id for po in production_orders]
 
     # Get all consumption and scrap transactions
     # Scrap transactions from failed WOs also count as COGS (materials consumed with no output)
-    consumptions = db.query(InventoryTransaction).filter(
-        InventoryTransaction.reference_type == 'production_order',
-        InventoryTransaction.reference_id.in_(po_ids),
-        InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
-    ).all()
+    consumptions = (
+        db.query(InventoryTransaction)
+        .filter(
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.reference_id.in_(po_ids),
+            InventoryTransaction.transaction_type.in_(["consumption", "scrap"]),
+        )
+        .all()
+    )
 
     # Packaging consumptions
-    packaging = db.query(InventoryTransaction).filter(
-        InventoryTransaction.reference_type.in_(['shipment', 'consolidated_shipment']),
-        InventoryTransaction.reference_id == order_id,
-        InventoryTransaction.transaction_type == 'consumption'
-    ).all()
+    packaging = (
+        db.query(InventoryTransaction)
+        .filter(
+            InventoryTransaction.reference_type.in_(["shipment", "consolidated_shipment"]),
+            InventoryTransaction.reference_id == order_id,
+            InventoryTransaction.transaction_type == "consumption",
+        )
+        .all()
+    )
 
     # Calculate costs
     material_cost = Decimal("0")
@@ -342,12 +346,14 @@ async def get_order_cost_breakdown(
             labor_cost += value
         else:
             material_cost += value
-            material_items.append({
-                "sku": sku,
-                "quantity": qty,
-                "unit_cost": unit_cost,
-                "total": float(value),
-            })
+            material_items.append(
+                {
+                    "sku": sku,
+                    "quantity": qty,
+                    "unit_cost": unit_cost,
+                    "total": float(value),
+                }
+            )
 
     packaging_items = []
     for txn in packaging:
@@ -357,12 +363,14 @@ async def get_order_cost_breakdown(
         unit_cost = float(txn.cost_per_unit) if txn.cost_per_unit else 0
         value = Decimal(str(qty * unit_cost))
         packaging_cost += value
-        packaging_items.append({
-            "sku": sku,
-            "quantity": qty,
-            "unit_cost": unit_cost,
-            "total": float(value),
-        })
+        packaging_items.append(
+            {
+                "sku": sku,
+                "quantity": qty,
+                "unit_cost": unit_cost,
+                "total": float(value),
+            }
+        )
 
     # Shipping cost from order (not included in COGS - it's an operating expense)
     shipping_cost = order.shipping_cost or Decimal("0")
@@ -412,10 +420,11 @@ async def get_cogs_summary(
     cutoff = datetime.utcnow() - timedelta(days=days)
 
     # Get shipped orders in period
-    shipped_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.in_(['shipped', 'completed']),
-        SalesOrder.shipped_at >= cutoff
-    ).all()
+    shipped_orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.status.in_(["shipped", "completed"]), SalesOrder.shipped_at >= cutoff)
+        .all()
+    )
 
     total_revenue = Decimal("0")
     total_material = Decimal("0")
@@ -425,46 +434,53 @@ async def get_cogs_summary(
 
     # Batch queries to avoid N+1
     shipped_order_ids = [order.id for order in shipped_orders]
-    
+
     # Get all production orders for shipped orders
     sales_to_po_map = {}
     all_po_ids = []
     if shipped_order_ids:
-        production_orders = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id.in_(shipped_order_ids)
-        ).all()
+        production_orders = (
+            db.query(ProductionOrder).filter(ProductionOrder.sales_order_id.in_(shipped_order_ids)).all()
+        )
         for po in production_orders:
             if po.sales_order_id not in sales_to_po_map:
                 sales_to_po_map[po.sales_order_id] = []
             sales_to_po_map[po.sales_order_id].append(po.id)
             all_po_ids.append(po.id)
-    
+
     # Get all consumption and scrap transactions in one query
     # Scrap = materials consumed in failed WOs (remake costs roll into COGS)
     po_consumptions = {}
     if all_po_ids:
-        consumptions = db.query(InventoryTransaction).options(
-            joinedload(InventoryTransaction.product)
-        ).filter(
-            InventoryTransaction.reference_type == 'production_order',
-            InventoryTransaction.reference_id.in_(all_po_ids),
-            InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
-        ).all()
-        
+        consumptions = (
+            db.query(InventoryTransaction)
+            .options(joinedload(InventoryTransaction.product))
+            .filter(
+                InventoryTransaction.reference_type == "production_order",
+                InventoryTransaction.reference_id.in_(all_po_ids),
+                InventoryTransaction.transaction_type.in_(["consumption", "scrap"]),
+            )
+            .all()
+        )
+
         for txn in consumptions:
             if txn.reference_id not in po_consumptions:
                 po_consumptions[txn.reference_id] = []
             po_consumptions[txn.reference_id].append(txn)
-    
+
     # Get all packaging transactions in one query
     pkg_consumptions_map = {}
     if shipped_order_ids:
-        pkg_consumptions = db.query(InventoryTransaction).filter(
-            InventoryTransaction.reference_type.in_(['shipment', 'consolidated_shipment']),
-            InventoryTransaction.reference_id.in_(shipped_order_ids),
-            InventoryTransaction.transaction_type == 'consumption'
-        ).all()
-        
+        pkg_consumptions = (
+            db.query(InventoryTransaction)
+            .filter(
+                InventoryTransaction.reference_type.in_(["shipment", "consolidated_shipment"]),
+                InventoryTransaction.reference_id.in_(shipped_order_ids),
+                InventoryTransaction.transaction_type == "consumption",
+            )
+            .all()
+        )
+
         for txn in pkg_consumptions:
             if txn.reference_id not in pkg_consumptions_map:
                 pkg_consumptions_map[txn.reference_id] = []
@@ -472,7 +488,7 @@ async def get_cogs_summary(
 
     for order in shipped_orders:
         # Revenue excludes tax per GAAP
-        total_revenue += (order.total_price or Decimal("0"))
+        total_revenue += order.total_price or Decimal("0")
         total_shipping += order.shipping_cost or Decimal("0")
 
         # Get costs from batched transactions
@@ -522,6 +538,7 @@ async def get_cogs_summary(
 # Financial Dashboard
 # ==============================================================================
 
+
 @router.get("/dashboard")
 async def get_accounting_dashboard(
     db: Session = Depends(get_db),
@@ -542,7 +559,7 @@ async def get_accounting_dashboard(
 
     # Get company settings for fiscal year
     settings = db.query(CompanySettings).first()
-    fiscal_month = (settings.fiscal_year_start_month if settings and settings.fiscal_year_start_month else 1)
+    fiscal_month = settings.fiscal_year_start_month if settings and settings.fiscal_year_start_month else 1
 
     # Calculate fiscal year start
     if now.month >= fiscal_month:
@@ -551,10 +568,11 @@ async def get_accounting_dashboard(
         fiscal_year_start = today_start.replace(year=now.year - 1, month=fiscal_month, day=1)
 
     # Revenue MTD (recognized at shipment per GAAP)
-    mtd_orders = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= month_start,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).all()
+    mtd_orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.shipped_at >= month_start, SalesOrder.status.in_(["shipped", "completed"]))
+        .all()
+    )
 
     # Revenue excludes tax (tax is a liability, not revenue)
     mtd_revenue = sum(float((o.grand_total or o.total_price or 0) - (o.tax_amount or 0)) for o in mtd_orders)
@@ -562,10 +580,11 @@ async def get_accounting_dashboard(
     mtd_orders_count = len(mtd_orders)
 
     # Revenue YTD
-    ytd_orders = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= fiscal_year_start,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).all()
+    ytd_orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.shipped_at >= fiscal_year_start, SalesOrder.status.in_(["shipped", "completed"]))
+        .all()
+    )
 
     # Revenue excludes tax (tax is a liability, not revenue)
     ytd_revenue = sum(float((o.grand_total or o.total_price or 0) - (o.tax_amount or 0)) for o in ytd_orders)
@@ -574,36 +593,32 @@ async def get_accounting_dashboard(
 
     # Payments received MTD
     mtd_payments = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
-        Payment.payment_date >= month_start,
-        Payment.status == "completed",
-        Payment.payment_type == "payment"
+        Payment.payment_date >= month_start, Payment.status == "completed", Payment.payment_type == "payment"
     ).scalar() or Decimal("0")
 
     # Payments received YTD
     ytd_payments = db.query(func.coalesce(func.sum(Payment.amount), 0)).filter(
-        Payment.payment_date >= fiscal_year_start,
-        Payment.status == "completed",
-        Payment.payment_type == "payment"
+        Payment.payment_date >= fiscal_year_start, Payment.status == "completed", Payment.payment_type == "payment"
     ).scalar() or Decimal("0")
 
     # Outstanding payments
     # Batch query to avoid N+1: fetch all payment sums for outstanding orders in one query
-    outstanding_orders = db.query(SalesOrder).filter(
-        SalesOrder.payment_status.in_(["pending", "partial"]),
-        SalesOrder.status.notin_(["cancelled"])
-    ).all()
+    outstanding_orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.payment_status.in_(["pending", "partial"]), SalesOrder.status.notin_(["cancelled"]))
+        .all()
+    )
 
     # Fetch all payment sums in one query
     order_ids = [order.id for order in outstanding_orders]
     payment_sums = {}
     if order_ids:
-        payments_result = db.query(
-            Payment.sales_order_id,
-            func.coalesce(func.sum(Payment.amount), 0).label('paid')
-        ).filter(
-            Payment.sales_order_id.in_(order_ids),
-            Payment.status == "completed"
-        ).group_by(Payment.sales_order_id).all()
+        payments_result = (
+            db.query(Payment.sales_order_id, func.coalesce(func.sum(Payment.amount), 0).label("paid"))
+            .filter(Payment.sales_order_id.in_(order_ids), Payment.status == "completed")
+            .group_by(Payment.sales_order_id)
+            .all()
+        )
         payment_sums = {row.sales_order_id: row.paid for row in payments_result}
 
     total_outstanding = Decimal("0")
@@ -613,47 +628,55 @@ async def get_accounting_dashboard(
         total_outstanding += max(order_total - paid, Decimal("0"))
 
     # COGS this month (from shipped orders)
-    shipped_mtd = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= month_start,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).all()
+    shipped_mtd = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.shipped_at >= month_start, SalesOrder.status.in_(["shipped", "completed"]))
+        .all()
+    )
 
     mtd_cogs = Decimal("0")
-    
+
     # Batch queries to avoid N+1
     shipped_order_ids = [order.id for order in shipped_mtd]
-    
+
     # Build mapping of sales_order_id -> list of production_order_ids
     sales_to_po_map = {}
     all_po_ids = []
     if shipped_order_ids:
-        production_orders = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id.in_(shipped_order_ids)
-        ).all()
-        
+        production_orders = (
+            db.query(ProductionOrder).filter(ProductionOrder.sales_order_id.in_(shipped_order_ids)).all()
+        )
+
         for po in production_orders:
             if po.sales_order_id not in sales_to_po_map:
                 sales_to_po_map[po.sales_order_id] = []
             sales_to_po_map[po.sales_order_id].append(po.id)
             all_po_ids.append(po.id)
-    
+
     # Query all material costs in one batch (including scrap from failed WOs)
     po_material_costs = {}
     if all_po_ids:
-        material_costs_result = db.query(
-            InventoryTransaction.reference_id,
-            func.coalesce(
-                func.sum(func.abs(InventoryTransaction.quantity) * func.coalesce(InventoryTransaction.cost_per_unit, 0)),
-                0
-            ).label('material_cost')
-        ).filter(
-            InventoryTransaction.reference_type == 'production_order',
-            InventoryTransaction.reference_id.in_(all_po_ids),
-            InventoryTransaction.transaction_type.in_(['consumption', 'scrap'])
-        ).group_by(InventoryTransaction.reference_id).all()
-        
+        material_costs_result = (
+            db.query(
+                InventoryTransaction.reference_id,
+                func.coalesce(
+                    func.sum(
+                        func.abs(InventoryTransaction.quantity) * func.coalesce(InventoryTransaction.cost_per_unit, 0)
+                    ),
+                    0,
+                ).label("material_cost"),
+            )
+            .filter(
+                InventoryTransaction.reference_type == "production_order",
+                InventoryTransaction.reference_id.in_(all_po_ids),
+                InventoryTransaction.transaction_type.in_(["consumption", "scrap"]),
+            )
+            .group_by(InventoryTransaction.reference_id)
+            .all()
+        )
+
         po_material_costs = {row.reference_id: row.material_cost for row in material_costs_result}
-    
+
     # Calculate COGS using batched data
     # Note: Only include actual production costs, not customer shipping charges
     for order in shipped_mtd:
@@ -700,6 +723,7 @@ async def get_accounting_dashboard(
 # Sales Journal
 # ==============================================================================
 
+
 @router.get("/sales-journal")
 async def get_sales_journal(
     db: Session = Depends(get_db),
@@ -731,7 +755,7 @@ async def get_sales_journal(
     query = db.query(SalesOrder).filter(
         SalesOrder.shipped_at >= start_date,
         SalesOrder.shipped_at <= end_date_eod,
-        SalesOrder.status.in_(["shipped", "completed"])
+        SalesOrder.status.in_(["shipped", "completed"]),
     )
 
     if status:
@@ -773,7 +797,7 @@ async def get_sales_journal(
             "subtotal": float(subtotal),
             "tax_rate": float(order.tax_rate or 0) if order.tax_rate else None,
             "tax_amount": float(tax),
-            "is_taxable": order.is_taxable if hasattr(order, 'is_taxable') else (tax > 0),
+            "is_taxable": order.is_taxable if hasattr(order, "is_taxable") else (tax > 0),
             "shipping": float(shipping),
             "grand_total": float(grand_total),
             "paid_at": order.paid_at.isoformat() if order.paid_at else None,
@@ -824,11 +848,16 @@ async def export_sales_journal_csv(
     end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Use shipped_at for accrual accounting (revenue recognized at shipment)
-    orders = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= start_date,
-        SalesOrder.shipped_at <= end_date_eod,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).order_by(SalesOrder.shipped_at).all()
+    orders = (
+        db.query(SalesOrder)
+        .filter(
+            SalesOrder.shipped_at >= start_date,
+            SalesOrder.shipped_at <= end_date_eod,
+            SalesOrder.status.in_(["shipped", "completed"]),
+        )
+        .order_by(SalesOrder.shipped_at)
+        .all()
+    )
 
     output = io.StringIO()
 
@@ -849,31 +878,35 @@ async def export_sales_journal_csv(
             grand_total = float(order.grand_total or (subtotal + tax + shipping))
 
             # Main transaction line (Accounts Receivable)
-            writer.writerow([
-                "TRNS", date_str, "Accounts Receivable", order.order_number,
-                "Sales", f"{grand_total:.2f}", f"Sales Order {order.order_number}"
-            ])
+            writer.writerow(
+                [
+                    "TRNS",
+                    date_str,
+                    "Accounts Receivable",
+                    order.order_number,
+                    "Sales",
+                    f"{grand_total:.2f}",
+                    f"Sales Order {order.order_number}",
+                ]
+            )
 
             # Split: Sales Income (credit = negative in QB)
             if subtotal > 0:
-                writer.writerow([
-                    "SPL", date_str, "Sales Income", order.order_number,
-                    "Sales", f"-{subtotal:.2f}", "Product Sales"
-                ])
+                writer.writerow(
+                    ["SPL", date_str, "Sales Income", order.order_number, "Sales", f"-{subtotal:.2f}", "Product Sales"]
+                )
 
             # Split: Sales Tax Payable
             if tax > 0:
-                writer.writerow([
-                    "SPL", date_str, "Sales Tax Payable", order.order_number,
-                    "Sales", f"-{tax:.2f}", "Sales Tax"
-                ])
+                writer.writerow(
+                    ["SPL", date_str, "Sales Tax Payable", order.order_number, "Sales", f"-{tax:.2f}", "Sales Tax"]
+                )
 
             # Split: Shipping Income
             if shipping > 0:
-                writer.writerow([
-                    "SPL", date_str, "Shipping Income", order.order_number,
-                    "Sales", f"-{shipping:.2f}", "Shipping"
-                ])
+                writer.writerow(
+                    ["SPL", date_str, "Shipping Income", order.order_number, "Sales", f"-{shipping:.2f}", "Shipping"]
+                )
 
             writer.writerow(["ENDTRNS"])
 
@@ -885,29 +918,44 @@ async def export_sales_journal_csv(
         writer.writerow(["# Verify with qualified accountant before use in tax filings."])
         writer.writerow([f"# Date Range: {start_date} to {end_date}"])
         writer.writerow([])
-        writer.writerow([
-            "Date", "Order Number", "Status", "Payment Status", "Source",
-            "Product", "Quantity", "Subtotal", "Tax Rate", "Tax Amount",
-            "Shipping", "Grand Total", "Paid Date", "Shipped Date"
-        ])
+        writer.writerow(
+            [
+                "Date",
+                "Order Number",
+                "Status",
+                "Payment Status",
+                "Source",
+                "Product",
+                "Quantity",
+                "Subtotal",
+                "Tax Rate",
+                "Tax Amount",
+                "Shipping",
+                "Grand Total",
+                "Paid Date",
+                "Shipped Date",
+            ]
+        )
 
         for order in orders:
-            writer.writerow([
-                order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Revenue recognition date
-                order.order_number,
-                order.status,
-                order.payment_status,
-                order.source or "portal",
-                order.product_name or "",
-                order.quantity,
-                float(order.total_price or 0),  # Subtotal (excludes tax)
-                float(order.tax_rate or 0) if order.tax_rate else "",
-                float(order.tax_amount or 0),  # Tax liability
-                float(order.shipping_cost or 0),
-                float(order.grand_total or 0),
-                order.paid_at.strftime("%Y-%m-%d") if order.paid_at else "",
-                order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",
-            ])
+            writer.writerow(
+                [
+                    order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Revenue recognition date
+                    order.order_number,
+                    order.status,
+                    order.payment_status,
+                    order.source or "portal",
+                    order.product_name or "",
+                    order.quantity,
+                    float(order.total_price or 0),  # Subtotal (excludes tax)
+                    float(order.tax_rate or 0) if order.tax_rate else "",
+                    float(order.tax_amount or 0),  # Tax liability
+                    float(order.shipping_cost or 0),
+                    float(order.grand_total or 0),
+                    order.paid_at.strftime("%Y-%m-%d") if order.paid_at else "",
+                    order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",
+                ]
+            )
 
     output.seek(0)
     filename = f"sales_journal_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
@@ -915,13 +963,14 @@ async def export_sales_journal_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
 # ==============================================================================
 # Tax Center
 # ==============================================================================
+
 
 @router.get("/tax-summary")
 async def get_tax_summary(
@@ -955,16 +1004,18 @@ async def get_tax_summary(
 
     # Get orders in period (use shipped_at for accrual accounting per GAAP)
     # Tax liability is recognized when revenue is recognized (at shipment)
-    orders = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= period_start,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).all()
+    orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.shipped_at >= period_start, SalesOrder.status.in_(["shipped", "completed"]))
+        .all()
+    )
 
     # Get pending orders (not yet shipped) to show future tax liability
-    pending_orders = db.query(SalesOrder).filter(
-        SalesOrder.status.notin_(["shipped", "completed", "cancelled"]),
-        SalesOrder.tax_amount > 0
-    ).all()
+    pending_orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.status.notin_(["shipped", "completed", "cancelled"]), SalesOrder.tax_amount > 0)
+        .all()
+    )
 
     pending_tax = sum(float(o.tax_amount or 0) for o in pending_orders)
     pending_order_count = len(pending_orders)
@@ -980,7 +1031,7 @@ async def get_tax_summary(
         tax = order.tax_amount or Decimal("0")
 
         # Check if taxable (use is_taxable field if available, otherwise check tax_amount)
-        is_taxable = getattr(order, 'is_taxable', None)
+        is_taxable = getattr(order, "is_taxable", None)
         if is_taxable is None:
             is_taxable = tax > 0
 
@@ -1016,15 +1067,17 @@ async def get_tax_summary(
         month_taxable = sum(
             float(o.total_price or 0)
             for o in month_orders
-            if (getattr(o, 'is_taxable', None) or (o.tax_amount and o.tax_amount > 0))
+            if (getattr(o, "is_taxable", None) or (o.tax_amount and o.tax_amount > 0))
         )
 
-        monthly_breakdown.append({
-            "month": current.strftime("%B %Y"),
-            "taxable_sales": month_taxable,
-            "tax_collected": month_tax,
-            "order_count": len(month_orders),
-        })
+        monthly_breakdown.append(
+            {
+                "month": current.strftime("%B %Y"),
+                "taxable_sales": month_taxable,
+                "tax_collected": month_tax,
+                "order_count": len(month_orders),
+            }
+        )
 
         # Move to next month
         current = (current.replace(day=28) + timedelta(days=4)).replace(day=1)
@@ -1078,10 +1131,12 @@ async def export_tax_summary_csv(
         period_start = today_start.replace(month=1, day=1)
 
     # Use shipped_at for accrual accounting (tax liability at revenue recognition)
-    orders = db.query(SalesOrder).filter(
-        SalesOrder.shipped_at >= period_start,
-        SalesOrder.status.in_(["shipped", "completed"])
-    ).order_by(SalesOrder.shipped_at).all()
+    orders = (
+        db.query(SalesOrder)
+        .filter(SalesOrder.shipped_at >= period_start, SalesOrder.status.in_(["shipped", "completed"]))
+        .order_by(SalesOrder.shipped_at)
+        .all()
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -1093,29 +1148,30 @@ async def export_tax_summary_csv(
     writer.writerow([])
 
     # Header
-    writer.writerow([
-        "Date", "Order Number", "Taxable", "Subtotal", "Tax Rate %",
-        "Tax Amount", "Grand Total", "Payment Status"
-    ])
+    writer.writerow(
+        ["Date", "Order Number", "Taxable", "Subtotal", "Tax Rate %", "Tax Amount", "Grand Total", "Payment Status"]
+    )
 
     for order in orders:
-        is_taxable = getattr(order, 'is_taxable', None)
+        is_taxable = getattr(order, "is_taxable", None)
         if is_taxable is None:
             is_taxable = (order.tax_amount or 0) > 0
 
-        writer.writerow([
-            order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Tax recognition date
-            order.order_number,
-            "Yes" if is_taxable else "No",
-            float(order.total_price or 0),  # Taxable amount (excludes tax itself)
-            float(order.tax_rate or 0) * 100 if order.tax_rate else "",
-            float(order.tax_amount or 0),
-            float(order.grand_total or 0),
-            order.payment_status,
-        ])
+        writer.writerow(
+            [
+                order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Tax recognition date
+                order.order_number,
+                "Yes" if is_taxable else "No",
+                float(order.total_price or 0),  # Taxable amount (excludes tax itself)
+                float(order.tax_rate or 0) * 100 if order.tax_rate else "",
+                float(order.tax_amount or 0),
+                float(order.grand_total or 0),
+                order.payment_status,
+            ]
+        )
 
     # Summary row
-    total_taxable = sum(float(o.total_price or 0) for o in orders if getattr(o, 'is_taxable', (o.tax_amount or 0) > 0))
+    total_taxable = sum(float(o.total_price or 0) for o in orders if getattr(o, "is_taxable", (o.tax_amount or 0) > 0))
     total_tax = sum(float(o.tax_amount or 0) for o in orders)
     total_grand = sum(float(o.grand_total or 0) for o in orders)
 
@@ -1128,13 +1184,14 @@ async def export_tax_summary_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
 # ==============================================================================
 # Payments Journal
 # ==============================================================================
+
 
 @router.get("/payments-journal")
 async def get_payments_journal(
@@ -1154,12 +1211,10 @@ async def get_payments_journal(
     # Extend end_date to end of day to include all transactions on that date
     end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-    query = db.query(Payment).options(
-        joinedload(Payment.sales_order)
-    ).filter(
-        Payment.payment_date >= start_date,
-        Payment.payment_date <= end_date_eod,
-        Payment.status == "completed"
+    query = (
+        db.query(Payment)
+        .options(joinedload(Payment.sales_order))
+        .filter(Payment.payment_date >= start_date, Payment.payment_date <= end_date_eod, Payment.status == "completed")
     )
 
     if payment_method:
@@ -1183,16 +1238,18 @@ async def get_payments_journal(
             method = p.payment_method or "other"
             by_method[method] = by_method.get(method, Decimal("0")) + amount
 
-        entries.append({
-            "date": p.payment_date.isoformat() if p.payment_date else None,
-            "payment_number": p.payment_number,
-            "order_number": p.sales_order.order_number if p.sales_order else None,
-            "payment_method": p.payment_method,
-            "payment_type": p.payment_type,
-            "amount": float(amount),
-            "transaction_id": p.transaction_id,
-            "notes": p.notes,
-        })
+        entries.append(
+            {
+                "date": p.payment_date.isoformat() if p.payment_date else None,
+                "payment_number": p.payment_number,
+                "order_number": p.sales_order.order_number if p.sales_order else None,
+                "payment_method": p.payment_method,
+                "payment_type": p.payment_type,
+                "amount": float(amount),
+                "transaction_id": p.transaction_id,
+                "notes": p.notes,
+            }
+        )
 
     return {
         "period": {
@@ -1227,13 +1284,13 @@ async def export_payments_journal_csv(
     # Extend end_date to end of day to include all transactions on that date
     end_date_eod = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
 
-    payments = db.query(Payment).options(
-        joinedload(Payment.sales_order)
-    ).filter(
-        Payment.payment_date >= start_date,
-        Payment.payment_date <= end_date_eod,
-        Payment.status == "completed"
-    ).order_by(Payment.payment_date).all()
+    payments = (
+        db.query(Payment)
+        .options(joinedload(Payment.sales_order))
+        .filter(Payment.payment_date >= start_date, Payment.payment_date <= end_date_eod, Payment.status == "completed")
+        .order_by(Payment.payment_date)
+        .all()
+    )
 
     output = io.StringIO()
     writer = csv.writer(output)
@@ -1244,22 +1301,21 @@ async def export_payments_journal_csv(
     writer.writerow([f"# Date Range: {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}"])
     writer.writerow([])
 
-    writer.writerow([
-        "Date", "Payment Number", "Order Number", "Type", "Method",
-        "Amount", "Transaction ID", "Notes"
-    ])
+    writer.writerow(["Date", "Payment Number", "Order Number", "Type", "Method", "Amount", "Transaction ID", "Notes"])
 
     for p in payments:
-        writer.writerow([
-            p.payment_date.strftime("%Y-%m-%d") if p.payment_date else "",
-            p.payment_number,
-            p.sales_order.order_number if p.sales_order else "",
-            p.payment_type,
-            p.payment_method,
-            float(p.amount or 0),
-            p.transaction_id or "",
-            p.notes or "",
-        ])
+        writer.writerow(
+            [
+                p.payment_date.strftime("%Y-%m-%d") if p.payment_date else "",
+                p.payment_number,
+                p.sales_order.order_number if p.sales_order else "",
+                p.payment_type,
+                p.payment_method,
+                float(p.amount or 0),
+                p.transaction_id or "",
+                p.notes or "",
+            ]
+        )
 
     output.seek(0)
     filename = f"payments_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"
@@ -1267,13 +1323,14 @@ async def export_payments_journal_csv(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
 # ==============================================================================
 # Tax Time Export
 # ==============================================================================
+
 
 @router.get("/export/sales")
 async def export_sales_for_tax_time(
@@ -1303,12 +1360,13 @@ async def export_sales_for_tax_time(
 
     # Query sales orders in the date range
     # Use created_at for the date range (can be changed to shipped_at for accrual basis)
-    orders = db.query(SalesOrder).options(
-        joinedload(SalesOrder.user)
-    ).filter(
-        SalesOrder.created_at >= start_datetime,
-        SalesOrder.created_at <= end_datetime
-    ).order_by(SalesOrder.created_at).all()
+    orders = (
+        db.query(SalesOrder)
+        .options(joinedload(SalesOrder.user))
+        .filter(SalesOrder.created_at >= start_datetime, SalesOrder.created_at <= end_datetime)
+        .order_by(SalesOrder.created_at)
+        .all()
+    )
 
     # Generate CSV
     output = io.StringIO()
@@ -1323,17 +1381,19 @@ async def export_sales_for_tax_time(
     writer.writerow([])  # Blank line before data
 
     # CSV Header
-    writer.writerow([
-        "Order Number",
-        "Order Date",
-        "Customer Name",
-        "Subtotal",
-        "Tax Amount",
-        "Shipping",
-        "Total",
-        "Status",
-        "Payment Status"
-    ])
+    writer.writerow(
+        [
+            "Order Number",
+            "Order Date",
+            "Customer Name",
+            "Subtotal",
+            "Tax Amount",
+            "Shipping",
+            "Total",
+            "Status",
+            "Payment Status",
+        ]
+    )
 
     # Write data rows
     for order in orders:
@@ -1356,17 +1416,19 @@ async def export_sales_for_tax_time(
         shipping = float(order.shipping_cost or 0)
         total = float(order.grand_total or 0)
 
-        writer.writerow([
-            order.order_number,
-            order_date,
-            customer_name,
-            f"{subtotal:.2f}",
-            f"{tax_amount:.2f}",
-            f"{shipping:.2f}",
-            f"{total:.2f}",
-            order.status,
-            order.payment_status
-        ])
+        writer.writerow(
+            [
+                order.order_number,
+                order_date,
+                customer_name,
+                f"{subtotal:.2f}",
+                f"{tax_amount:.2f}",
+                f"{shipping:.2f}",
+                f"{total:.2f}",
+                order.status,
+                order.payment_status,
+            ]
+        )
 
     # Prepare response
     output.seek(0)
@@ -1375,5 +1437,5 @@ async def export_sales_for_tax_time(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )

@@ -8,12 +8,12 @@ Revision ID: 045_seed_coa
 Revises: 044_gl_tables
 Create Date: 2026-01-16
 """
+
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '045_seed_coa'
-down_revision = '044_gl_tables'
+revision = "045_seed_coa"
+down_revision = "044_gl_tables"
 branch_labels = None
 depends_on = None
 

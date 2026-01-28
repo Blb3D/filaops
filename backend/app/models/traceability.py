@@ -11,12 +11,10 @@ For recalls:
 - LOT level: "Recall all products using lot #PLA-2025-0042"
 - SERIAL level: "Recall serial numbers BLB-20251205-0001 through 0015"
 """
+
 from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import (
-    Column, Integer, String, Numeric, DateTime, Date, ForeignKey,
-    Text, Boolean, Index
-)
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean, Index
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -43,6 +41,7 @@ class SerialNumber(Base):
     - Material lots consumed (what went into it)
     - Sales order line (who bought it)
     """
+
     __tablename__ = "serial_numbers"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -57,7 +56,7 @@ class SerialNumber(Base):
     production_order_id = Column(Integer, ForeignKey("production_orders.id"), nullable=False, index=True)
 
     # Status: manufactured, in_stock, sold, shipped, returned, scrapped
-    status = Column(String(30), default='manufactured', nullable=False, index=True)
+    status = Column(String(30), default="manufactured", nullable=False, index=True)
 
     # Quality
     qc_passed = Column(Boolean, default=True, nullable=False)
@@ -89,8 +88,8 @@ class SerialNumber(Base):
 
     # Indexes for recall queries
     __table_args__ = (
-        Index('ix_serial_product_status', 'product_id', 'status'),
-        Index('ix_serial_manufactured_date', 'manufactured_at'),
+        Index("ix_serial_product_status", "product_id", "status"),
+        Index("ix_serial_manufactured_date", "manufactured_at"),
     )
 
     def __repr__(self):
@@ -121,6 +120,7 @@ class MaterialLot(Base):
 
     Format: {MATERIAL_CODE}-{YYYY}-{XXXX} (e.g., PLA-BLK-2025-0042)
     """
+
     __tablename__ = "material_lots"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -145,20 +145,15 @@ class MaterialLot(Base):
     @property
     def quantity_remaining(self) -> Decimal:
         """Calculate remaining quantity in lot."""
-        return (
-            self.quantity_received
-            - self.quantity_consumed
-            - self.quantity_scrapped
-            + self.quantity_adjusted
-        )
+        return self.quantity_received - self.quantity_consumed - self.quantity_scrapped + self.quantity_adjusted
 
     # Status: active, depleted, quarantine, expired, recalled
-    status = Column(String(30), default='active', nullable=False, index=True)
+    status = Column(String(30), default="active", nullable=False, index=True)
 
     # Quality/Compliance
     certificate_of_analysis = Column(Text, nullable=True)  # CoA data or file path
     coa_file_path = Column(String(500), nullable=True)
-    inspection_status = Column(String(30), default='pending')  # pending, passed, failed, waived
+    inspection_status = Column(String(30), default="pending")  # pending, passed, failed, waived
 
     # Expiration tracking
     manufactured_date = Column(Date, nullable=True)  # When vendor made it
@@ -186,9 +181,9 @@ class MaterialLot(Base):
 
     # Indexes for FIFO and recall queries
     __table_args__ = (
-        Index('ix_lot_product_status', 'product_id', 'status'),
-        Index('ix_lot_received_date', 'received_date'),
-        Index('ix_lot_expiration', 'expiration_date'),
+        Index("ix_lot_product_status", "product_id", "status"),
+        Index("ix_lot_received_date", "received_date"),
+        Index("ix_lot_expiration", "expiration_date"),
     )
 
     def __repr__(self):
@@ -219,6 +214,7 @@ class ProductionLotConsumption(Base):
 
     Created when production starts and materials are reserved/consumed.
     """
+
     __tablename__ = "production_lot_consumptions"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -247,9 +243,7 @@ class ProductionLotConsumption(Base):
     serial_number = relationship("SerialNumber", back_populates="lot_consumptions")
 
     # Index for recall queries
-    __table_args__ = (
-        Index('ix_consumption_lot_production', 'material_lot_id', 'production_order_id'),
-    )
+    __table_args__ = (Index("ix_consumption_lot_production", "material_lot_id", "production_order_id"),)
 
     def __repr__(self):
         return f"<ProductionLotConsumption PO:{self.production_order_id} Lot:{self.material_lot_id} Qty:{self.quantity_consumed}>"
@@ -267,6 +261,7 @@ class CustomerTraceabilityProfile(Base):
     - CoC template preferences
     - Retention periods
     """
+
     __tablename__ = "customer_traceability_profiles"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -275,7 +270,7 @@ class CustomerTraceabilityProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
 
     # Traceability level: none, lot, serial, full
-    traceability_level = Column(String(20), default='none', nullable=False)
+    traceability_level = Column(String(20), default="none", nullable=False)
 
     # Compliance requirements
     requires_coc = Column(Boolean, default=False)  # Certificate of Conformance

@@ -12,6 +12,7 @@ Handles the complete quote-to-ship workflow:
 
 This module bridges quotes/orders with production and shipping.
 """
+
 from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
@@ -32,6 +33,7 @@ from app.models.bom import BOM
 from app.models.printer import Printer
 from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
 from app.models.traceability import SerialNumber
+
 # MaterialInventory removed - using unified Inventory table (Phase 1.4)
 from app.services.shipping_service import shipping_service
 from app.services.transaction_service import TransactionService, MaterialConsumption, ShipmentItem, PackagingUsed
@@ -43,27 +45,18 @@ router = APIRouter(prefix="/fulfillment", tags=["Admin - Fulfillment"])
 
 def get_default_location(db: Session) -> InventoryLocation:
     """Get or create the default inventory location (MAIN warehouse)."""
-    location = db.query(InventoryLocation).filter(
-        InventoryLocation.code == 'MAIN'
-    ).first()
-    
+    location = db.query(InventoryLocation).filter(InventoryLocation.code == "MAIN").first()
+
     if not location:
         # Try to get any active location
-        location = db.query(InventoryLocation).filter(
-            InventoryLocation.active.is_(True)
-        ).first()
-    
+        location = db.query(InventoryLocation).filter(InventoryLocation.active.is_(True)).first()
+
     if not location:
         # Create default location if none exists
-        location = InventoryLocation(
-            code="MAIN",
-            name="Main Warehouse",
-            type="warehouse",
-            active=True
-        )
+        location = InventoryLocation(code="MAIN", name="Main Warehouse", type="warehouse", active=True)
         db.add(location)
         db.flush()
-    
+
     return location
 
 
@@ -71,8 +64,10 @@ def get_default_location(db: Session) -> InventoryLocation:
 # SCHEMAS
 # ============================================================================
 
+
 class ProductionQueueItem(BaseModel):
     """A single item in the production queue"""
+
     id: int
     code: str
     order_number: Optional[str] = None
@@ -95,6 +90,7 @@ class ProductionQueueItem(BaseModel):
 
 class ProductionQueueResponse(BaseModel):
     """Production queue with stats"""
+
     items: List[ProductionQueueItem]
     stats: dict
     total: int
@@ -102,19 +98,20 @@ class ProductionQueueResponse(BaseModel):
 
 class FulfillmentStatsResponse(BaseModel):
     """Stats for the fulfillment dashboard"""
+
     # Quote stats
     pending_quotes: int
     quotes_needing_review: int
-    
+
     # Production stats
     scheduled: int
     in_progress: int
     ready_for_qc: int
-    
+
     # Shipping stats
     ready_to_ship: int
     shipped_today: int
-    
+
     # Revenue
     pending_revenue: float
     shipped_revenue_today: float
@@ -122,27 +119,31 @@ class FulfillmentStatsResponse(BaseModel):
 
 class StartProductionRequest(BaseModel):
     """Request to start production on an order"""
+
     printer_id: Optional[str] = None  # Printer code like "leonardo" or "donatello"
     notes: Optional[str] = None
 
 
 class CompleteProductionRequest(BaseModel):
     """Request to complete production with good/bad quantity tracking"""
+
     actual_time_minutes: Optional[int] = None
     actual_material_grams: Optional[float] = None
     qty_good: Optional[int] = None  # Good sellable parts produced
-    qty_bad: Optional[int] = None   # Scrapped parts (adhesion loss, defects, etc.)
+    qty_bad: Optional[int] = None  # Scrapped parts (adhesion loss, defects, etc.)
     qc_notes: Optional[str] = None
 
 
 class CreateShippingLabelRequest(BaseModel):
     """Request to create a shipping label"""
+
     carrier_preference: Optional[str] = None  # USPS, UPS, FedEx
     service_preference: Optional[str] = None  # Priority, Ground, etc.
 
 
 class ShipOrderRequest(BaseModel):
     """Request to mark order as shipped"""
+
     tracking_number: str
     carrier: str
     shipping_cost: Optional[float] = None
@@ -151,6 +152,7 @@ class ShipOrderRequest(BaseModel):
 
 class BulkStatusUpdate(BaseModel):
     """Request to update multiple orders"""
+
     production_order_ids: List[int]
     new_status: str
     notes: Optional[str] = None
@@ -158,6 +160,7 @@ class BulkStatusUpdate(BaseModel):
 
 class ShipFromStockRequest(BaseModel):
     """Request to ship from existing FG inventory (Ship-from-Stock path)"""
+
     rate_id: str  # EasyPost rate ID from get-rates
     shipment_id: str  # EasyPost shipment ID from get-rates
     packaging_product_id: Optional[int] = None  # Optional: override default box
@@ -170,6 +173,7 @@ class ShipFromStockRequest(BaseModel):
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
 
 def build_production_queue_item(po: ProductionOrder, db: Session) -> dict:
     """Build a queue item from a production order with all related data"""
@@ -194,10 +198,10 @@ def build_production_queue_item(po: ProductionOrder, db: Session) -> dict:
             sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
             if quote.user_id:
                 customer = db.query(User).filter(User.id == quote.user_id).first()
-    
+
     # Get product details
     product = db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
-    
+
     return {
         "id": po.id,
         "code": po.code,
@@ -224,6 +228,7 @@ def build_production_queue_item(po: ProductionOrder, db: Session) -> dict:
 # ENDPOINTS
 # ============================================================================
 
+
 @router.get("/stats", response_model=FulfillmentStatsResponse)
 async def get_fulfillment_stats(
     db: Session = Depends(get_db),
@@ -231,54 +236,57 @@ async def get_fulfillment_stats(
 ):
     """
     Get fulfillment dashboard statistics.
-    
+
     Returns counts for each stage of the fulfillment process.
     """
     now = datetime.utcnow()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     # Quote stats
     pending_quotes = db.query(Quote).filter(Quote.status == "pending").count()
     quotes_needing_review = db.query(Quote).filter(Quote.status == "pending_review").count()
-    
+
     # Production stats
-    scheduled = db.query(ProductionOrder).filter(
-        ProductionOrder.status.in_(["scheduled", "confirmed", "released"])
-    ).count()
-    
-    in_progress = db.query(ProductionOrder).filter(
-        ProductionOrder.status == "in_progress"
-    ).count()
-    
-    ready_for_qc = db.query(ProductionOrder).filter(
-        ProductionOrder.status == "printed"  # Waiting for QC
-    ).count()
-    
-    # Shipping stats - orders where production is complete
-    ready_to_ship = db.query(SalesOrder).filter(
-        or_(
-            SalesOrder.status == "ready_to_ship",
-            SalesOrder.status == "quality_check"
+    scheduled = (
+        db.query(ProductionOrder).filter(ProductionOrder.status.in_(["scheduled", "confirmed", "released"])).count()
+    )
+
+    in_progress = db.query(ProductionOrder).filter(ProductionOrder.status == "in_progress").count()
+
+    ready_for_qc = (
+        db.query(ProductionOrder)
+        .filter(
+            ProductionOrder.status == "printed"  # Waiting for QC
         )
-    ).count()
-    
-    shipped_today = db.query(SalesOrder).filter(
-        SalesOrder.status == "shipped",
-        SalesOrder.shipped_at >= today_start
-    ).count()
-    
+        .count()
+    )
+
+    # Shipping stats - orders where production is complete
+    ready_to_ship = (
+        db.query(SalesOrder)
+        .filter(or_(SalesOrder.status == "ready_to_ship", SalesOrder.status == "quality_check"))
+        .count()
+    )
+
+    shipped_today = (
+        db.query(SalesOrder).filter(SalesOrder.status == "shipped", SalesOrder.shipped_at >= today_start).count()
+    )
+
     # Revenue calculations
-    pending_revenue_result = db.query(func.sum(SalesOrder.grand_total)).filter(
-        SalesOrder.status.in_(["pending", "confirmed", "in_production"])
-    ).scalar()
+    pending_revenue_result = (
+        db.query(func.sum(SalesOrder.grand_total))
+        .filter(SalesOrder.status.in_(["pending", "confirmed", "in_production"]))
+        .scalar()
+    )
     pending_revenue = float(pending_revenue_result) if pending_revenue_result else 0.0
-    
-    shipped_revenue_result = db.query(func.sum(SalesOrder.grand_total)).filter(
-        SalesOrder.status == "shipped",
-        SalesOrder.shipped_at >= today_start
-    ).scalar()
+
+    shipped_revenue_result = (
+        db.query(func.sum(SalesOrder.grand_total))
+        .filter(SalesOrder.status == "shipped", SalesOrder.shipped_at >= today_start)
+        .scalar()
+    )
     shipped_revenue_today = float(shipped_revenue_result) if shipped_revenue_result else 0.0
-    
+
     return FulfillmentStatsResponse(
         pending_quotes=pending_quotes,
         quotes_needing_review=quotes_needing_review,
@@ -303,61 +311,55 @@ async def get_production_queue(
 ):
     """
     Get the production queue with all orders that need to be fulfilled.
-    
+
     Filter options:
     - status: scheduled, in_progress, printed, completed, cancelled
     - priority: low, normal, high, urgent
-    
+
     Returns items sorted by priority (urgent first) then by creation date.
     """
     query = db.query(ProductionOrder)
-    
+
     # Apply filters
     if status_filter:
         if status_filter == "active":
             # Show all non-complete, non-cancelled
-            query = query.filter(
-                ~ProductionOrder.status.in_(["complete", "cancelled"])
-            )
+            query = query.filter(~ProductionOrder.status.in_(["complete", "cancelled"]))
         else:
             query = query.filter(ProductionOrder.status == status_filter)
     else:
         # Default: show active orders
-        query = query.filter(
-            ~ProductionOrder.status.in_(["complete", "cancelled"])
-        )
-    
+        query = query.filter(~ProductionOrder.status.in_(["complete", "cancelled"]))
+
     if priority_filter:
         query = query.filter(ProductionOrder.priority == priority_filter)
-    
+
     # Get total count
     total = query.count()
-    
+
     # Sort: by priority (1=highest/urgent, 5=lowest), then by created_at
     # Priority is stored as integer: 1=urgent, 2=high, 3=normal, 4=low, 5=lowest
     production_orders = (
-        query
-        .order_by(ProductionOrder.priority, desc(ProductionOrder.created_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
+        query.order_by(ProductionOrder.priority, desc(ProductionOrder.created_at)).offset(offset).limit(limit).all()
     )
-    
+
     # Build queue items with related data
     items = [build_production_queue_item(po, db) for po in production_orders]
-    
+
     # Calculate stats
     stats = {
         "total_active": total,
         "scheduled": db.query(ProductionOrder).filter(ProductionOrder.status.in_(["scheduled", "confirmed"])).count(),
         "in_progress": db.query(ProductionOrder).filter(ProductionOrder.status == "in_progress").count(),
         "printed": db.query(ProductionOrder).filter(ProductionOrder.status == "printed").count(),
-        "urgent_count": db.query(ProductionOrder).filter(
+        "urgent_count": db.query(ProductionOrder)
+        .filter(
             ProductionOrder.priority == 1,  # 1 = urgent (highest priority)
-            ~ProductionOrder.status.in_(["complete", "cancelled"])
-        ).count(),
+            ~ProductionOrder.status.in_(["complete", "cancelled"]),
+        )
+        .count(),
     }
-    
+
     return ProductionQueueResponse(
         items=items,
         stats=stats,
@@ -373,21 +375,21 @@ async def get_production_order_details(
 ):
     """
     Get detailed information about a specific production order.
-    
+
     Includes related quote, sales order, product, BOM, and customer info.
     """
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
-    
+
     if not po:
         raise HTTPException(status_code=404, detail="Production order not found")
-    
+
     # Build the basic queue item
     item = build_production_queue_item(po, db)
-    
+
     # Get additional details
     product = db.query(Product).filter(Product.id == po.product_id).first() if po.product_id else None
     bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first() if po.product_id else None  # noqa: E712
-    
+
     # Get quote and sales order details
     # FIXED: Use direct link first, fallback to quote lookup for legacy POs
     quote = None
@@ -402,10 +404,10 @@ async def get_production_order_details(
         quote = db.query(Quote).filter(Quote.product_id == po.product_id).first()
         if quote:
             sales_order = db.query(SalesOrder).filter(SalesOrder.quote_id == quote.id).first()
-    
+
     # Get print jobs
     print_jobs = db.query(PrintJob).filter(PrintJob.production_order_id == po.id).all()
-    
+
     return {
         **item,
         "product": {
@@ -413,13 +415,17 @@ async def get_production_order_details(
             "sku": product.sku,
             "name": product.name,
             "type": product.type,
-        } if product else None,
+        }
+        if product
+        else None,
         "bom": {
             "id": bom.id,
             "code": bom.code,
             "total_cost": float(bom.total_cost) if bom.total_cost else None,
             "line_count": len(bom.lines) if bom.lines else 0,
-        } if bom else None,
+        }
+        if bom
+        else None,
         "quote": {
             "id": quote.id,
             "quote_number": quote.quote_number,
@@ -441,8 +447,12 @@ async def get_production_order_details(
                 "state": quote.shipping_state,
                 "zip": quote.shipping_zip,
                 "country": quote.shipping_country,
-            } if quote.shipping_address_line1 else None,
-        } if quote else None,
+            }
+            if quote.shipping_address_line1
+            else None,
+        }
+        if quote
+        else None,
         "sales_order": {
             "id": sales_order.id,
             "order_number": sales_order.order_number,
@@ -451,7 +461,9 @@ async def get_production_order_details(
             "grand_total": float(sales_order.grand_total) if sales_order.grand_total else None,
             "tracking_number": sales_order.tracking_number,
             "carrier": sales_order.carrier,
-        } if sales_order else None,
+        }
+        if sales_order
+        else None,
         "print_jobs": [
             {
                 "id": pj.id,
@@ -478,31 +490,28 @@ async def start_production(
 ):
     """
     Start production on an order.
-    
+
     Changes status to 'in_progress' and records start time.
     Optionally assigns to a specific printer.
     """
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
-    
+
     if not po:
         raise HTTPException(status_code=404, detail="Production order not found")
-    
+
     if po.status not in ["scheduled", "confirmed", "released", "pending", "draft"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot start production for order with status '{po.status}'"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Cannot start production for order with status '{po.status}'")
+
     # Update production order
     po.status = "in_progress"
     po.start_date = datetime.utcnow()
-    
+
     if request.notes:
         po.notes = (po.notes + "\n" if po.notes else "") + f"[{datetime.utcnow().isoformat()}] Started: {request.notes}"
-    
+
     # Create or update print job
     print_job = db.query(PrintJob).filter(PrintJob.production_order_id == po.id).first()
-    
+
     if not print_job:
         print_job = PrintJob(
             production_order_id=po.id,
@@ -527,7 +536,7 @@ async def start_production(
                 print_job.printer_id = int(request.printer_id)
             except ValueError:
                 pass  # Invalid printer code, continue without assignment
-    
+
     # =========================================================================
     # BOM EXPLOSION AND MATERIAL RESERVATION
     # =========================================================================
@@ -540,17 +549,14 @@ async def start_production(
     if po.bom_id:
         bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
     elif po.product_id:
-        bom = db.query(BOM).filter(
-            BOM.product_id == po.product_id,
-            BOM.active.is_(True)
-        ).first()
+        bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
     if bom and bom.lines:
         production_qty = float(po.quantity)
 
         # =====================================================================
         # PHASE 1.4: Ensure Inventory records exist for all BOM components
-        # 
+        #
         # After MaterialInventory migration, Inventory is the source of truth.
         # Ensure Inventory records exist for all materials before reserving.
         # =====================================================================
@@ -558,27 +564,20 @@ async def start_production(
             component = line.component
             if component:
                 # Find or create Inventory record (for all components, not just materials)
-                inv = db.query(Inventory).filter(
-                    Inventory.product_id == component.id
-                ).first()
-                
+                inv = db.query(Inventory).filter(Inventory.product_id == component.id).first()
+
                 if not inv:
                     # Get default location
                     from app.models.inventory import InventoryLocation
-                    location = db.query(InventoryLocation).filter(
-                        InventoryLocation.code == 'MAIN'
-                    ).first()
-                    
+
+                    location = db.query(InventoryLocation).filter(InventoryLocation.code == "MAIN").first()
+
                     if not location:
                         # Create default location if it doesn't exist
-                        location = InventoryLocation(
-                            name="Main Warehouse",
-                            code="MAIN",
-                            type="warehouse"
-                        )
+                        location = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse")
                         db.add(location)
                         db.flush()
-                    
+
                     # Create Inventory record with zero quantity
                     inv = Inventory(
                         product_id=component.id,
@@ -587,12 +586,14 @@ async def start_production(
                         allocated_quantity=Decimal("0"),
                     )
                     db.add(inv)
-                    synced_materials.append({
-                        "sku": component.sku,
-                        "action": "created",
-                        "quantity": 0.0,
-                    })
-        
+                    synced_materials.append(
+                        {
+                            "sku": component.sku,
+                            "action": "created",
+                            "quantity": 0.0,
+                        }
+                    )
+
         # Flush to ensure Inventory records are available for reservation
         db.flush()
 
@@ -612,12 +613,10 @@ async def start_production(
 
             # Apply scrap factor if any
             if line.scrap_factor:
-                required_qty *= (1 + float(line.scrap_factor) / 100)
+                required_qty *= 1 + float(line.scrap_factor) / 100
 
             # Find inventory for this component (any location for now)
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == line.component_id
-            ).first()
+            inventory = db.query(Inventory).filter(Inventory.product_id == line.component_id).first()
 
             if inventory and float(inventory.available_quantity) >= required_qty:
                 # Reserve the material - only update allocated_quantity
@@ -629,6 +628,7 @@ async def start_production(
 
                 # Create reservation transaction with cost for accounting
                 from app.services.inventory_service import get_effective_cost_per_inventory_unit
+
                 unit_cost = get_effective_cost_per_inventory_unit(component)
                 total_cost = Decimal(str(required_qty)) * unit_cost if unit_cost else None
                 transaction = InventoryTransaction(
@@ -646,24 +646,28 @@ async def start_production(
                 )
                 db.add(transaction)
 
-                reserved_materials.append({
-                    "component_id": line.component_id,
-                    "component_sku": component_sku,
-                    "component_name": component_name,
-                    "quantity_reserved": round(required_qty, 4),
-                    "inventory_remaining": round(new_available, 4),
-                })
+                reserved_materials.append(
+                    {
+                        "component_id": line.component_id,
+                        "component_sku": component_sku,
+                        "component_name": component_name,
+                        "quantity_reserved": round(required_qty, 4),
+                        "inventory_remaining": round(new_available, 4),
+                    }
+                )
             else:
                 # Insufficient inventory - log but continue (warn, don't block)
                 available = float(inventory.available_quantity) if inventory else 0
-                insufficient_materials.append({
-                    "component_id": line.component_id,
-                    "component_sku": component_sku,
-                    "component_name": component_name,
-                    "quantity_required": round(required_qty, 4),
-                    "quantity_available": round(available, 4),
-                    "shortage": round(required_qty - available, 4),
-                })
+                insufficient_materials.append(
+                    {
+                        "component_id": line.component_id,
+                        "component_sku": component_sku,
+                        "component_name": component_name,
+                        "quantity_required": round(required_qty, 4),
+                        "quantity_available": round(available, 4),
+                        "shortage": round(required_qty - available, 4),
+                    }
+                )
 
     # Update related sales order if exists
     # FIXED: Use direct link first, fallback to quote lookup for legacy POs
@@ -691,7 +695,9 @@ async def start_production(
             "id": printer.id,
             "code": printer.code,
             "name": printer.name,
-        } if printer else None,
+        }
+        if printer
+        else None,
         "bom_id": bom.id if bom else None,
         "materials_synced": synced_materials,  # BUG FIX #5: Show what was synced
         "materials_reserved": reserved_materials,
@@ -721,10 +727,7 @@ async def complete_print(
         raise HTTPException(status_code=404, detail="Production order not found")
 
     if po.status != "in_progress":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot complete print for order with status '{po.status}'"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot complete print for order with status '{po.status}'")
 
     ordered_qty = int(po.quantity)
     qty_good = request.qty_good if request.qty_good is not None else ordered_qty
@@ -764,61 +767,65 @@ async def complete_print(
     if po.bom_id:
         bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
     elif po.product_id:
-        bom = db.query(BOM).filter(
-            BOM.product_id == po.product_id,
-            BOM.active.is_(True)
-        ).first()
+        bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
     # Build a set of component_ids that should be consumed at production stage
     production_stage_components = set()
     if bom and bom.lines:
         for line in bom.lines:
             # Default is 'production', so consume if not explicitly 'shipping'
-            if getattr(line, 'consume_stage', 'production') != 'shipping':
+            if getattr(line, "consume_stage", "production") != "shipping":
                 production_stage_components.add(line.component_id)
 
     # Find all reservation transactions for this production order
-    reservation_txns = db.query(InventoryTransaction).filter(
-        InventoryTransaction.reference_type == "production_order",
-        InventoryTransaction.reference_id == po.id,
-        InventoryTransaction.transaction_type == "reservation"
-    ).all()
+    reservation_txns = (
+        db.query(InventoryTransaction)
+        .filter(
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.reference_id == po.id,
+            InventoryTransaction.transaction_type == "reservation",
+        )
+        .all()
+    )
 
     for res_txn in reservation_txns:
         # Skip shipping-stage items (boxes, packaging) - they're consumed at buy_label
         if res_txn.product_id not in production_stage_components:
             component = db.query(Product).filter(Product.id == res_txn.product_id).first()
             component_sku = component.sku if component else "N/A"
-            consumed_materials.append({
-                "component_sku": component_sku,
-                "quantity_consumed": 0,
-                "skipped_reason": "shipping-stage item (consumed at ship time)",
-            })
+            consumed_materials.append(
+                {
+                    "component_sku": component_sku,
+                    "quantity_consumed": 0,
+                    "skipped_reason": "shipping-stage item (consumed at ship time)",
+                }
+            )
             continue
         reserved_qty = abs(float(res_txn.quantity))
 
         # Find the inventory record
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == res_txn.product_id,
-            Inventory.location_id == res_txn.location_id
-        ).first()
+        inventory = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == res_txn.product_id, Inventory.location_id == res_txn.location_id)
+            .first()
+        )
 
         if inventory:
             # Release reservation only - on_hand decrement and GL handled by TransactionService
-            inventory.allocated_quantity = Decimal(str(
-                max(0, float(inventory.allocated_quantity) - reserved_qty)
-            ))
+            inventory.allocated_quantity = Decimal(str(max(0, float(inventory.allocated_quantity) - reserved_qty)))
 
             # Get component info for response and TransactionService
             component = db.query(Product).filter(Product.id == res_txn.product_id).first()
             component_sku = component.sku if component else "N/A"
 
             # Track for TransactionService call below (no manual txn creation here)
-            consumed_materials.append({
-                "component_id": res_txn.product_id,  # For TransactionService
-                "component_sku": component_sku,
-                "quantity_consumed": round(reserved_qty, 4),
-            })
+            consumed_materials.append(
+                {
+                    "component_id": res_txn.product_id,  # For TransactionService
+                    "component_sku": component_sku,
+                    "quantity_consumed": round(reserved_qty, 4),
+                }
+            )
 
     # =========================================================================
     # MATERIAL CONSUMPTION via TransactionService (atomic + GL entries)
@@ -830,12 +837,14 @@ async def complete_print(
     for mat in consumed_materials:
         if mat.get("quantity_consumed", 0) > 0 and mat.get("component_id"):
             product = db.query(Product).filter(Product.id == mat["component_id"]).first()
-            materials_to_consume.append(MaterialConsumption(
-                product_id=mat["component_id"],
-                quantity=Decimal(str(mat["quantity_consumed"])),
-                unit_cost=product.standard_cost if product and product.standard_cost else Decimal("0"),
-                unit=product.unit if product and product.unit else "EA",
-            ))
+            materials_to_consume.append(
+                MaterialConsumption(
+                    product_id=mat["component_id"],
+                    quantity=Decimal(str(mat["quantity_consumed"])),
+                    unit_cost=product.standard_cost if product and product.standard_cost else Decimal("0"),
+                    unit=product.unit if product and product.unit else "EA",
+                )
+            )
 
     if materials_to_consume:
         inv_txns, journal_entry = txn_service.issue_materials_for_operation(
@@ -886,8 +895,8 @@ async def complete_print(
                     cost_per_unit=Decimal(str(hourly_rate)),
                     total_cost=Decimal(str(machine_cost)),
                     unit="HR",
-                    notes=f"Machine time for {po.code}: {actual_hours:.2f} hrs @ ${hourly_rate}/hr = ${machine_cost:.2f}" +
-                          (f" on {printer_info['name']}" if printer_info else ""),
+                    notes=f"Machine time for {po.code}: {actual_hours:.2f} hrs @ ${hourly_rate}/hr = ${machine_cost:.2f}"
+                    + (f" on {printer_info['name']}" if printer_info else ""),
                     created_by="system",
                 )
                 db.add(machine_txn)
@@ -920,6 +929,7 @@ async def complete_print(
         # Get product for cost calculation
         product = db.query(Product).filter(Product.id == po.product_id).first()
         from app.services.inventory_service import get_effective_cost_per_inventory_unit
+
         unit_cost = get_effective_cost_per_inventory_unit(product) if product else None
         total_cost = Decimal(str(qty_bad)) * unit_cost if unit_cost else None
         # Create a scrap/variance transaction for tracking
@@ -967,8 +977,8 @@ async def complete_print(
         "finished_goods_added": finished_goods_added,
         "scrap_recorded": scrap_recorded,
         "reprint_needed": reprint_needed,
-        "message": f"Print complete for {po.code}: {qty_good} good, {qty_bad} scrapped. FG will be added to inventory at QC pass." +
-                   (f" SHORTFALL: {shortfall} parts need reprint!" if reprint_needed else ""),
+        "message": f"Print complete for {po.code}: {qty_good} good, {qty_bad} scrapped. FG will be added to inventory at QC pass."
+        + (f" SHORTFALL: {shortfall} parts need reprint!" if reprint_needed else ""),
     }
 
 
@@ -995,16 +1005,13 @@ async def pass_quality_check(
     FG receipt happens HERE because parts should only enter inventory after QC.
     """
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
-    
+
     if not po:
         raise HTTPException(status_code=404, detail="Production order not found")
-    
+
     if po.status != "printed":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot pass QC for order with status '{po.status}'"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Cannot pass QC for order with status '{po.status}'")
+
     # Complete production order
     po.status = "completed"
     # Don't overwrite finish_date - it was set in complete_print when printing finished
@@ -1015,7 +1022,7 @@ async def pass_quality_check(
 
     # =========================================================================
     # NO MATERIAL CONSUMPTION HERE - Already done in complete_print()
-    # 
+    #
     # BUG FIX: Previously this endpoint ALSO consumed materials, causing
     # double-consumption when both complete_print and pass_qc were called.
     # Materials are physically consumed during printing, so consumption
@@ -1070,9 +1077,7 @@ async def pass_quality_check(
         )
 
         # Get updated inventory for response
-        fg_inventory = db.query(Inventory).filter(
-            Inventory.product_id == fg_product_id
-        ).first()
+        fg_inventory = db.query(Inventory).filter(Inventory.product_id == fg_product_id).first()
 
         finished_goods_added = {
             "product_sku": product.sku if product else "N/A",
@@ -1104,20 +1109,17 @@ async def fail_quality_check(
 ):
     """
     Mark order as failed QC.
-    
+
     If reprint=True, creates a new production order for reprint.
     """
     po = db.query(ProductionOrder).filter(ProductionOrder.id == production_order_id).first()
-    
+
     if not po:
         raise HTTPException(status_code=404, detail="Production order not found")
-    
+
     if po.status != "printed":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot fail QC for order with status '{po.status}'"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Cannot fail QC for order with status '{po.status}'")
+
     # Mark as failed
     po.status = "qc_failed"
     po.notes = (po.notes + "\n" if po.notes else "") + f"[{datetime.utcnow().isoformat()}] QC FAILED: {failure_reason}"
@@ -1133,38 +1135,38 @@ async def fail_quality_check(
     if po.bom_id:
         bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
     elif po.product_id:
-        bom = db.query(BOM).filter(
-            BOM.product_id == po.product_id,
-            BOM.active.is_(True)
-        ).first()
+        bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
     # Build set of shipping-stage component IDs
     shipping_stage_components = set()
     if bom and bom.lines:
         for line in bom.lines:
-            if getattr(line, 'consume_stage', 'production') == 'shipping':
+            if getattr(line, "consume_stage", "production") == "shipping":
                 shipping_stage_components.add(line.component_id)
 
     # Find remaining reservation transactions (should only be shipping-stage)
-    reservation_txns = db.query(InventoryTransaction).filter(
-        InventoryTransaction.reference_type == "production_order",
-        InventoryTransaction.reference_id == po.id,
-        InventoryTransaction.transaction_type == "reservation"
-    ).all()
+    reservation_txns = (
+        db.query(InventoryTransaction)
+        .filter(
+            InventoryTransaction.reference_type == "production_order",
+            InventoryTransaction.reference_id == po.id,
+            InventoryTransaction.transaction_type == "reservation",
+        )
+        .all()
+    )
 
     for res_txn in reservation_txns:
         reserved_qty = abs(float(res_txn.quantity))
 
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == res_txn.product_id,
-            Inventory.location_id == res_txn.location_id
-        ).first()
+        inventory = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == res_txn.product_id, Inventory.location_id == res_txn.location_id)
+            .first()
+        )
 
         if inventory:
             # Release the reservation (return to available, NOT consumed)
-            inventory.allocated_quantity = Decimal(str(
-                max(0, float(inventory.allocated_quantity) - reserved_qty)
-            ))
+            inventory.allocated_quantity = Decimal(str(max(0, float(inventory.allocated_quantity) - reserved_qty)))
             # NOTE: Do NOT decrement on_hand - material wasn't used!
 
             component = db.query(Product).filter(Product.id == res_txn.product_id).first()
@@ -1189,10 +1191,12 @@ async def fail_quality_check(
             )
             db.add(release_txn)
 
-            released_materials.append({
-                "component_sku": component_sku,
-                "quantity_released": round(reserved_qty, 4),
-            })
+            released_materials.append(
+                {
+                    "component_sku": component_sku,
+                    "quantity_released": round(reserved_qty, 4),
+                }
+            )
 
     # =========================================================================
     # WIP SCRAP via TransactionService (atomic + GL entries)
@@ -1205,8 +1209,10 @@ async def fail_quality_check(
 
     if qty_scrapped > 0 and fg_product:
         # Get unit cost (WIP value per unit)
-        unit_cost = fg_product.standard_cost if fg_product.standard_cost else (
-            fg_product.cost if fg_product.cost else Decimal("0")
+        unit_cost = (
+            fg_product.standard_cost
+            if fg_product.standard_cost
+            else (fg_product.cost if fg_product.cost else Decimal("0"))
         )
 
         txn_service = TransactionService(db)
@@ -1246,9 +1252,9 @@ async def fail_quality_check(
             next_num = last_num + 1
         else:
             next_num = 1
-        
+
         new_code = f"PO-{year}-{next_num:03d}"
-        
+
         new_po = ProductionOrder(
             code=new_code,
             product_id=po.product_id,
@@ -1260,9 +1266,9 @@ async def fail_quality_check(
             notes=f"REPRINT of {po.code}. Original failed QC: {failure_reason}",
         )
         db.add(new_po)
-    
+
     db.commit()
-    
+
     return {
         "success": True,
         "production_order_id": po.id,
@@ -1305,18 +1311,16 @@ async def get_orders_ready_to_ship(
         # Get reserved box from BOM (shipping-stage item)
         reserved_box = None
         if quote and quote.product_id:
-            bom = db.query(BOM).filter(
-                BOM.product_id == quote.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == quote.product_id, BOM.active.is_(True)).first()
 
             if bom and bom.lines:
                 for line in bom.lines:
-                    if getattr(line, 'consume_stage', 'production') == 'shipping':
+                    if getattr(line, "consume_stage", "production") == "shipping":
                         box_product = db.query(Product).filter(Product.id == line.component_id).first()
                         if box_product:
                             # Parse box dimensions from product name
                             from app.services.bom_service import parse_box_dimensions
+
                             dims = parse_box_dimensions(box_product.name)
                             reserved_box = {
                                 "product_id": box_product.id,
@@ -1326,40 +1330,46 @@ async def get_orders_ready_to_ship(
                                     "length": dims[0] if dims else None,
                                     "width": dims[1] if dims else None,
                                     "height": dims[2] if dims else None,
-                                } if dims else None,
+                                }
+                                if dims
+                                else None,
                             }
                             break
 
         # Create address key for grouping orders to same destination
         address_key = f"{order.shipping_address_line1}|{order.shipping_city}|{order.shipping_state}|{order.shipping_zip}".lower().strip()
 
-        result.append({
-            "id": order.id,
-            "order_number": order.order_number,
-            "product_name": order.product_name,
-            "quantity": order.quantity,
-            "grand_total": float(order.grand_total) if order.grand_total else None,
-            "customer_name": customer.full_name if customer else None,
-            "customer_email": customer.email if customer else None,
-            "shipping_address": {
-                "name": quote.shipping_name if quote else None,
-                "line1": order.shipping_address_line1,
-                "line2": order.shipping_address_line2,
-                "city": order.shipping_city,
-                "state": order.shipping_state,
-                "zip": order.shipping_zip,
-                "country": order.shipping_country,
-            },
-            "address_key": address_key,  # For grouping orders to same address
-            "material_grams": float(quote.material_grams) if quote and quote.material_grams else None,
-            "dimensions": {
-                "x": float(quote.dimensions_x) if quote and quote.dimensions_x else None,
-                "y": float(quote.dimensions_y) if quote and quote.dimensions_y else None,
-                "z": float(quote.dimensions_z) if quote and quote.dimensions_z else None,
-            } if quote else None,
-            "reserved_box": reserved_box,  # Box from BOM for shipper to use or override
-            "created_at": order.created_at.isoformat(),
-        })
+        result.append(
+            {
+                "id": order.id,
+                "order_number": order.order_number,
+                "product_name": order.product_name,
+                "quantity": order.quantity,
+                "grand_total": float(order.grand_total) if order.grand_total else None,
+                "customer_name": customer.full_name if customer else None,
+                "customer_email": customer.email if customer else None,
+                "shipping_address": {
+                    "name": quote.shipping_name if quote else None,
+                    "line1": order.shipping_address_line1,
+                    "line2": order.shipping_address_line2,
+                    "city": order.shipping_city,
+                    "state": order.shipping_state,
+                    "zip": order.shipping_zip,
+                    "country": order.shipping_country,
+                },
+                "address_key": address_key,  # For grouping orders to same address
+                "material_grams": float(quote.material_grams) if quote and quote.material_grams else None,
+                "dimensions": {
+                    "x": float(quote.dimensions_x) if quote and quote.dimensions_x else None,
+                    "y": float(quote.dimensions_y) if quote and quote.dimensions_y else None,
+                    "z": float(quote.dimensions_z) if quote and quote.dimensions_z else None,
+                }
+                if quote
+                else None,
+                "reserved_box": reserved_box,  # Box from BOM for shipper to use or override
+                "created_at": order.created_at.isoformat(),
+            }
+        )
 
     return {
         "orders": result,
@@ -1380,10 +1390,14 @@ async def get_available_boxes(
     from app.services.bom_service import parse_box_dimensions
 
     # Get all box products (matching the pattern used in bom_service)
-    box_products = db.query(Product).filter(
-        Product.active.is_(True),  # noqa: E712
-        Product.name.like('%box%')
-    ).all()
+    box_products = (
+        db.query(Product)
+        .filter(
+            Product.active.is_(True),  # noqa: E712
+            Product.name.like("%box%"),
+        )
+        .all()
+    )
 
     boxes = []
     for box in box_products:
@@ -1391,17 +1405,19 @@ async def get_available_boxes(
         if dims:
             length, width, height = dims
             volume = length * width * height
-            boxes.append({
-                "product_id": box.id,
-                "sku": box.sku,
-                "name": box.name,
-                "dimensions": {
-                    "length": length,
-                    "width": width,
-                    "height": height,
-                },
-                "volume": volume,
-            })
+            boxes.append(
+                {
+                    "product_id": box.id,
+                    "sku": box.sku,
+                    "name": box.name,
+                    "dimensions": {
+                        "length": length,
+                        "width": width,
+                        "height": height,
+                    },
+                    "volume": volume,
+                }
+            )
 
     # Sort by volume (smallest first)
     boxes.sort(key=lambda x: x["volume"])
@@ -1416,8 +1432,10 @@ async def get_available_boxes(
 # CONSOLIDATED SHIPPING - Must be before parameterized routes!
 # =============================================================================
 
+
 class ConsolidatedShipRequest(BaseModel):
     """Request to get rates for consolidated shipment"""
+
     order_ids: List[int]
     box_product_id: Optional[int] = None
 
@@ -1439,15 +1457,14 @@ async def get_consolidated_shipping_rates(
         raise HTTPException(status_code=400, detail="Need at least 2 orders to consolidate")
 
     # Fetch all orders
-    orders = db.query(SalesOrder).filter(
-        SalesOrder.id.in_(request.order_ids),
-        SalesOrder.status == "ready_to_ship"
-    ).all()
+    orders = (
+        db.query(SalesOrder).filter(SalesOrder.id.in_(request.order_ids), SalesOrder.status == "ready_to_ship").all()
+    )
 
     if len(orders) != len(request.order_ids):
         raise HTTPException(
             status_code=400,
-            detail=f"Some orders not found or not ready to ship. Found {len(orders)} of {len(request.order_ids)}"
+            detail=f"Some orders not found or not ready to ship. Found {len(orders)} of {len(request.order_ids)}",
         )
 
     # Verify all orders go to same address
@@ -1459,7 +1476,7 @@ async def get_consolidated_shipping_rates(
         if order_key != address_key:
             raise HTTPException(
                 status_code=400,
-                detail=f"Order {order.order_number} has different shipping address. Cannot consolidate."
+                detail=f"Order {order.order_number} has different shipping address. Cannot consolidate.",
             )
 
     # Calculate combined weight from all orders
@@ -1510,11 +1527,7 @@ async def get_consolidated_shipping_rates(
     )
 
     if not rates:
-        return {
-            "success": False,
-            "rates": [],
-            "error": "No shipping rates available. Please verify the address."
-        }
+        return {"success": False, "rates": [], "error": "No shipping rates available. Please verify the address."}
 
     formatted_rates = [
         {
@@ -1565,80 +1578,68 @@ async def buy_consolidated_shipping_label(
         raise HTTPException(status_code=400, detail="Need at least 2 orders to consolidate")
 
     # Fetch all orders
-    orders = db.query(SalesOrder).filter(
-        SalesOrder.id.in_(order_ids),
-        SalesOrder.status == "ready_to_ship"
-    ).all()
+    orders = db.query(SalesOrder).filter(SalesOrder.id.in_(order_ids), SalesOrder.status == "ready_to_ship").all()
 
     if len(orders) != len(order_ids):
-        raise HTTPException(
-            status_code=400,
-            detail="Some orders not found or not ready to ship"
-        )
+        raise HTTPException(status_code=400, detail="Some orders not found or not ready to ship")
 
     # Buy the label
     result = shipping_service.buy_label(rate_id=rate_id, shipment_id=shipment_id)
 
     if not result.success:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to purchase label: {result.error}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to purchase label: {result.error}")
 
     # Consume packaging from FIRST order only (consolidated = one box)
     packaging_consumed = []
     first_order = orders[0]
 
-    production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == first_order.id
-    ).all()
+    production_orders = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == first_order.id).all()
 
     for po in production_orders:
         bom = None
         if po.bom_id:
             bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
         elif po.product_id:
-            bom = db.query(BOM).filter(
-                BOM.product_id == po.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
         if not bom or not bom.lines:
             continue
 
         for line in bom.lines:
-            if getattr(line, 'consume_stage', 'production') != 'shipping':
+            if getattr(line, "consume_stage", "production") != "shipping":
                 continue
 
-            res_txn = db.query(InventoryTransaction).filter(
-                InventoryTransaction.reference_type == "production_order",
-                InventoryTransaction.reference_id == po.id,
-                InventoryTransaction.product_id == line.component_id,
-                InventoryTransaction.transaction_type == "reservation"
-            ).first()
+            res_txn = (
+                db.query(InventoryTransaction)
+                .filter(
+                    InventoryTransaction.reference_type == "production_order",
+                    InventoryTransaction.reference_id == po.id,
+                    InventoryTransaction.product_id == line.component_id,
+                    InventoryTransaction.transaction_type == "reservation",
+                )
+                .first()
+            )
 
             if not res_txn:
                 continue
 
             reserved_qty = abs(float(res_txn.quantity))
 
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == res_txn.product_id,
-                Inventory.location_id == res_txn.location_id
-            ).first()
+            inventory = (
+                db.query(Inventory)
+                .filter(Inventory.product_id == res_txn.product_id, Inventory.location_id == res_txn.location_id)
+                .first()
+            )
 
             if inventory:
-                inventory.allocated_quantity = Decimal(str(
-                    max(0, float(inventory.allocated_quantity) - reserved_qty)
-                ))
-                inventory.on_hand_quantity = Decimal(str(
-                    max(0, float(inventory.on_hand_quantity) - reserved_qty)
-                ))
+                inventory.allocated_quantity = Decimal(str(max(0, float(inventory.allocated_quantity) - reserved_qty)))
+                inventory.on_hand_quantity = Decimal(str(max(0, float(inventory.on_hand_quantity) - reserved_qty)))
 
                 component = db.query(Product).filter(Product.id == res_txn.product_id).first()
 
                 # Get cost for accounting
                 from app.services.inventory_service import get_effective_cost_per_inventory_unit
+
                 unit_cost = get_effective_cost_per_inventory_unit(component) if component else None
                 total_cost = Decimal(str(reserved_qty)) * unit_cost if unit_cost else None
 
@@ -1657,56 +1658,58 @@ async def buy_consolidated_shipping_label(
                 )
                 db.add(consumption_txn)
 
-                packaging_consumed.append({
-                    "component_sku": component.sku if component else "N/A",
-                    "quantity_consumed": round(reserved_qty, 4),
-                })
+                packaging_consumed.append(
+                    {
+                        "component_sku": component.sku if component else "N/A",
+                        "quantity_consumed": round(reserved_qty, 4),
+                    }
+                )
 
     # Release packaging reservations from OTHER orders (not consumed, just released)
     for order in orders[1:]:
-        other_pos = db.query(ProductionOrder).filter(
-            ProductionOrder.sales_order_id == order.id
-        ).all()
+        other_pos = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == order.id).all()
 
         for po in other_pos:
             bom = None
             if po.bom_id:
                 bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
             elif po.product_id:
-                bom = db.query(BOM).filter(
-                    BOM.product_id == po.product_id,
-                    BOM.active.is_(True)
-                ).first()
+                bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
             if not bom or not bom.lines:
                 continue
 
             for line in bom.lines:
-                if getattr(line, 'consume_stage', 'production') != 'shipping':
+                if getattr(line, "consume_stage", "production") != "shipping":
                     continue
 
-                res_txn = db.query(InventoryTransaction).filter(
-                    InventoryTransaction.reference_type == "production_order",
-                    InventoryTransaction.reference_id == po.id,
-                    InventoryTransaction.product_id == line.component_id,
-                    InventoryTransaction.transaction_type == "reservation"
-                ).first()
+                res_txn = (
+                    db.query(InventoryTransaction)
+                    .filter(
+                        InventoryTransaction.reference_type == "production_order",
+                        InventoryTransaction.reference_id == po.id,
+                        InventoryTransaction.product_id == line.component_id,
+                        InventoryTransaction.transaction_type == "reservation",
+                    )
+                    .first()
+                )
 
                 if not res_txn:
                     continue
 
                 reserved_qty = abs(float(res_txn.quantity))
 
-                inventory = db.query(Inventory).filter(
-                    Inventory.product_id == res_txn.product_id,
-                    Inventory.location_id == res_txn.location_id
-                ).first()
+                inventory = (
+                    db.query(Inventory)
+                    .filter(Inventory.product_id == res_txn.product_id, Inventory.location_id == res_txn.location_id)
+                    .first()
+                )
 
                 if inventory:
                     # Just release the reservation (box not used)
-                    inventory.allocated_quantity = Decimal(str(
-                        max(0, float(inventory.allocated_quantity) - reserved_qty)
-                    ))
+                    inventory.allocated_quantity = Decimal(
+                        str(max(0, float(inventory.allocated_quantity) - reserved_qty))
+                    )
 
                     component = db.query(Product).filter(Product.id == res_txn.product_id).first()
 
@@ -1757,6 +1760,7 @@ async def buy_consolidated_shipping_label(
 # SINGLE ORDER SHIPPING - Parameterized routes must come after static routes!
 # =============================================================================
 
+
 @router.post("/ship/{sales_order_id}/get-rates")
 async def get_shipping_rates_for_order(
     sales_order_id: int,
@@ -1788,10 +1792,7 @@ async def get_shipping_rates_for_order(
     # Calculate weight
     weight_oz = 16.0  # Default 1 lb
     if quote and quote.material_grams:
-        weight_oz = shipping_service.estimate_weight_oz(
-            float(quote.material_grams),
-            order.quantity
-        )
+        weight_oz = shipping_service.estimate_weight_oz(float(quote.material_grams), order.quantity)
 
     # Determine box dimensions
     length, width, height = 10.0, 8.0, 4.0
@@ -1808,8 +1809,7 @@ async def get_shipping_rates_for_order(
     elif quote and quote.dimensions_x and quote.dimensions_y and quote.dimensions_z:
         # Use BOM's default box estimation
         length, width, height = shipping_service.estimate_box_size(
-            (float(quote.dimensions_x), float(quote.dimensions_y), float(quote.dimensions_z)),
-            order.quantity
+            (float(quote.dimensions_x), float(quote.dimensions_y), float(quote.dimensions_z)), order.quantity
         )
 
     # Get shipping name
@@ -1833,11 +1833,7 @@ async def get_shipping_rates_for_order(
     )
 
     if not rates:
-        return {
-            "success": False,
-            "rates": [],
-            "error": "No shipping rates available. Please verify the address."
-        }
+        return {"success": False, "rates": [], "error": "No shipping rates available. Please verify the address."}
 
     # Format rates
     formatted_rates = [
@@ -1889,19 +1885,13 @@ async def buy_shipping_label(
         raise HTTPException(status_code=404, detail="Sales order not found")
 
     if order.status != "ready_to_ship":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot create label for order with status '{order.status}'"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot create label for order with status '{order.status}'")
 
     # Buy the label
     result = shipping_service.buy_label(rate_id=rate_id, shipment_id=shipment_id)
 
     if not result.success:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to purchase label: {result.error}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to purchase label: {result.error}")
 
     # =========================================================================
     # SHIPMENT via TransactionService (atomic + GL entries)
@@ -1918,78 +1908,88 @@ async def buy_shipping_label(
 
     # Get quote for product info
     quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
-    fg_product = db.query(Product).filter(Product.id == quote.product_id).first() if quote and quote.product_id else None
+    fg_product = (
+        db.query(Product).filter(Product.id == quote.product_id).first() if quote and quote.product_id else None
+    )
     qty_shipped = order.quantity or 1
 
     # Build packaging list from BOM shipping-stage items
     packaging_list = []  # List[PackagingUsed]
-    production_orders = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == sales_order_id
-    ).all()
+    production_orders = db.query(ProductionOrder).filter(ProductionOrder.sales_order_id == sales_order_id).all()
 
     for po in production_orders:
         bom = None
         if po.bom_id:
             bom = db.query(BOM).filter(BOM.id == po.bom_id).first()
         elif po.product_id:
-            bom = db.query(BOM).filter(
-                BOM.product_id == po.product_id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == po.product_id, BOM.active.is_(True)).first()
 
         if not bom or not bom.lines:
             continue
 
         for line in bom.lines:
-            if getattr(line, 'consume_stage', 'production') != 'shipping':
+            if getattr(line, "consume_stage", "production") != "shipping":
                 continue
 
             # Find reservation to get actual reserved quantity
-            res_txn = db.query(InventoryTransaction).filter(
-                InventoryTransaction.reference_type == "production_order",
-                InventoryTransaction.reference_id == po.id,
-                InventoryTransaction.product_id == line.component_id,
-                InventoryTransaction.transaction_type == "reservation"
-            ).first()
+            res_txn = (
+                db.query(InventoryTransaction)
+                .filter(
+                    InventoryTransaction.reference_type == "production_order",
+                    InventoryTransaction.reference_id == po.id,
+                    InventoryTransaction.product_id == line.component_id,
+                    InventoryTransaction.transaction_type == "reservation",
+                )
+                .first()
+            )
 
             if res_txn:
                 reserved_qty = int(abs(float(res_txn.quantity)))  # PackagingUsed expects int
                 pkg_product = db.query(Product).filter(Product.id == line.component_id).first()
                 pkg_cost = pkg_product.cost if pkg_product and pkg_product.cost else Decimal("0")
 
-                packaging_list.append(PackagingUsed(
-                    product_id=line.component_id,
-                    quantity=reserved_qty,
-                    unit_cost=pkg_cost,
-                ))
+                packaging_list.append(
+                    PackagingUsed(
+                        product_id=line.component_id,
+                        quantity=reserved_qty,
+                        unit_cost=pkg_cost,
+                    )
+                )
 
                 # Release the reservation (TransactionService handles the consumption)
-                inventory = db.query(Inventory).filter(
-                    Inventory.product_id == res_txn.product_id,
-                    Inventory.location_id == res_txn.location_id
-                ).first()
+                inventory = (
+                    db.query(Inventory)
+                    .filter(Inventory.product_id == res_txn.product_id, Inventory.location_id == res_txn.location_id)
+                    .first()
+                )
                 if inventory:
-                    inventory.allocated_quantity = Decimal(str(
-                        max(0, float(inventory.allocated_quantity) - reserved_qty)
-                    ))
+                    inventory.allocated_quantity = Decimal(
+                        str(max(0, float(inventory.allocated_quantity) - reserved_qty))
+                    )
 
-                packaging_consumed.append({
-                    "component_sku": pkg_product.sku if pkg_product else "N/A",
-                    "quantity_consumed": reserved_qty,
-                })
+                packaging_consumed.append(
+                    {
+                        "component_sku": pkg_product.sku if pkg_product else "N/A",
+                        "quantity_consumed": reserved_qty,
+                    }
+                )
 
     # Call TransactionService for atomic shipment with GL
     if fg_product and qty_shipped > 0:
-        fg_cost = fg_product.standard_cost if fg_product.standard_cost else (
-            fg_product.cost if fg_product.cost else Decimal("0")
+        fg_cost = (
+            fg_product.standard_cost
+            if fg_product.standard_cost
+            else (fg_product.cost if fg_product.cost else Decimal("0"))
         )
 
         # Build shipment items list (uses ShipmentItem NamedTuple)
-        shipment_items = [ShipmentItem(
-            product_id=fg_product.id,
-            quantity=Decimal(str(qty_shipped)),
-            unit_cost=fg_cost,
-        )]
+        shipment_items = [
+            ShipmentItem(
+                product_id=fg_product.id,
+                quantity=Decimal(str(qty_shipped)),
+                unit_cost=fg_cost,
+            )
+        ]
 
         txn_service = TransactionService(db)
         inv_txns, journal_entry = txn_service.ship_order(
@@ -1999,9 +1999,7 @@ async def buy_shipping_label(
         )
 
         # Get updated FG inventory for response
-        fg_inventory = db.query(Inventory).filter(
-            Inventory.product_id == fg_product.id
-        ).first()
+        fg_inventory = db.query(Inventory).filter(Inventory.product_id == fg_product.id).first()
 
         finished_goods_shipped = {
             "product_sku": fg_product.sku,
@@ -2022,10 +2020,14 @@ async def buy_shipping_label(
     # SERIAL NUMBER TRACEABILITY - Link serials to this shipment
     # =========================================================================
     serials_updated = 0
-    serial_numbers_for_order = db.query(SerialNumber).filter(
-        SerialNumber.sales_order_id == sales_order_id,
-        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
-    ).all()
+    serial_numbers_for_order = (
+        db.query(SerialNumber)
+        .filter(
+            SerialNumber.sales_order_id == sales_order_id,
+            SerialNumber.status.in_(["manufactured", "in_stock", "allocated"]),
+        )
+        .all()
+    )
 
     for serial in serial_numbers_for_order:
         serial.tracking_number = result.tracking_number
@@ -2035,6 +2037,7 @@ async def buy_shipping_label(
 
     if serials_updated > 0:
         from app.logging_config import get_logger
+
         logger = get_logger(__name__)
         logger.info(
             f"Updated {serials_updated} serial number(s) with tracking {result.tracking_number} "
@@ -2061,10 +2064,11 @@ async def buy_shipping_label(
 # SHIP-FROM-STOCK (SFS) - Direct shipping without production
 # =============================================================================
 
+
 @router.post(
     "/ship-from-stock/{sales_order_id}/check",
     summary="Check if order can ship from stock",
-    description="Verify FG inventory is available to fulfill this order without production."
+    description="Verify FG inventory is available to fulfill this order without production.",
 )
 async def check_ship_from_stock(
     sales_order_id: int,
@@ -2087,27 +2091,19 @@ async def check_ship_from_stock(
 
     # 2. Verify order is in a shippable state (not already shipped, not cancelled)
     if order.status in ["shipped", "cancelled", "delivered"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Order cannot be shipped - status is {order.status}"
-        )
+        raise HTTPException(status_code=400, detail=f"Order cannot be shipped - status is {order.status}")
 
     # 3. Get product from quote
     quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
     if not quote or not quote.product_id:
-        raise HTTPException(
-            status_code=400,
-            detail="Order has no linked product - cannot determine what to ship"
-        )
+        raise HTTPException(status_code=400, detail="Order has no linked product - cannot determine what to ship")
 
     product = db.query(Product).filter(Product.id == quote.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
     # 4. Check FG inventory
-    fg_inventory = db.query(Inventory).filter(
-        Inventory.product_id == product.id
-    ).first()
+    fg_inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
 
     on_hand = int(fg_inventory.on_hand_quantity) if fg_inventory else 0
     allocated = int(fg_inventory.allocated_quantity) if fg_inventory else 0
@@ -2115,10 +2111,13 @@ async def check_ship_from_stock(
     required = order.quantity or 1
 
     # 5. Check for existing production orders (might be MTO path)
-    existing_po = db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == sales_order_id,
-        ProductionOrder.status.notin_(["cancelled", "shipped"])
-    ).first()
+    existing_po = (
+        db.query(ProductionOrder)
+        .filter(
+            ProductionOrder.sales_order_id == sales_order_id, ProductionOrder.status.notin_(["cancelled", "shipped"])
+        )
+        .first()
+    )
 
     return {
         "sales_order_id": sales_order_id,
@@ -2142,7 +2141,7 @@ async def check_ship_from_stock(
 @router.post(
     "/ship-from-stock/{sales_order_id}/ship",
     summary="Ship order directly from FG inventory",
-    description="Ship from existing FG inventory without production. Reuses get-rates for shipping quotes."
+    description="Ship from existing FG inventory without production. Reuses get-rates for shipping quotes.",
 )
 async def ship_from_stock(
     sales_order_id: int,
@@ -2172,10 +2171,7 @@ async def ship_from_stock(
         raise HTTPException(status_code=404, detail="Sales order not found")
 
     if order.status in ["shipped", "cancelled", "delivered"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Order cannot be shipped - status is {order.status}"
-        )
+        raise HTTPException(status_code=400, detail=f"Order cannot be shipped - status is {order.status}")
 
     # 2. Get product from quote
     quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
@@ -2191,16 +2187,12 @@ async def ship_from_stock(
     qty_to_ship = order.quantity or 1
 
     if not fg_inventory:
-        raise HTTPException(
-            status_code=400,
-            detail=f"No inventory record for product {product.sku}"
-        )
+        raise HTTPException(status_code=400, detail=f"No inventory record for product {product.sku}")
 
     available = int(fg_inventory.on_hand_quantity) - int(fg_inventory.allocated_quantity)
     if available < qty_to_ship:
         raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient FG inventory. Available: {available}, Required: {qty_to_ship}"
+            status_code=400, detail=f"Insufficient FG inventory. Available: {available}, Required: {qty_to_ship}"
         )
 
     # 4. Buy shipping label (reuse EasyPost shipment from get-rates)
@@ -2210,10 +2202,7 @@ async def ship_from_stock(
     )
 
     if not result.success:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to purchase shipping label: {result.error}"
-        )
+        raise HTTPException(status_code=500, detail=f"Failed to purchase shipping label: {result.error}")
 
     # 5. Ship via TransactionService (FG issue + optional packaging)
     txn_service = TransactionService(db)
@@ -2221,39 +2210,39 @@ async def ship_from_stock(
     finished_goods_shipped = None
 
     # Build shipment items
-    fg_cost = product.standard_cost if product.standard_cost else (
-        product.cost if product.cost else Decimal("0")
-    )
-    shipment_items = [ShipmentItem(
-        product_id=product.id,
-        quantity=Decimal(str(qty_to_ship)),
-        unit_cost=fg_cost,
-    )]
+    fg_cost = product.standard_cost if product.standard_cost else (product.cost if product.cost else Decimal("0"))
+    shipment_items = [
+        ShipmentItem(
+            product_id=product.id,
+            quantity=Decimal(str(qty_to_ship)),
+            unit_cost=fg_cost,
+        )
+    ]
 
     # Handle packaging if specified
     packaging_list = []
     if request.packaging_product_id:
-        pkg_product = db.query(Product).filter(
-            Product.id == request.packaging_product_id
-        ).first()
+        pkg_product = db.query(Product).filter(Product.id == request.packaging_product_id).first()
         if pkg_product:
             pkg_qty = request.packaging_quantity or 1
             pkg_cost = pkg_product.cost if pkg_product.cost else Decimal("0")
 
             # Verify packaging inventory
-            pkg_inventory = db.query(Inventory).filter(
-                Inventory.product_id == pkg_product.id
-            ).first()
+            pkg_inventory = db.query(Inventory).filter(Inventory.product_id == pkg_product.id).first()
             if pkg_inventory and int(pkg_inventory.on_hand_quantity) >= pkg_qty:
-                packaging_list.append(PackagingUsed(
-                    product_id=pkg_product.id,
-                    quantity=pkg_qty,
-                    unit_cost=pkg_cost,
-                ))
-                packaging_consumed.append({
-                    "component_sku": pkg_product.sku,
-                    "quantity_consumed": pkg_qty,
-                })
+                packaging_list.append(
+                    PackagingUsed(
+                        product_id=pkg_product.id,
+                        quantity=pkg_qty,
+                        unit_cost=pkg_cost,
+                    )
+                )
+                packaging_consumed.append(
+                    {
+                        "component_sku": pkg_product.sku,
+                        "quantity_consumed": pkg_qty,
+                    }
+                )
 
     # Execute shipment
     inv_txns, journal_entry = txn_service.ship_order(
@@ -2263,9 +2252,7 @@ async def ship_from_stock(
     )
 
     # Get updated inventory for response
-    fg_inventory = db.query(Inventory).filter(
-        Inventory.product_id == product.id
-    ).first()
+    fg_inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
 
     finished_goods_shipped = {
         "product_sku": product.sku,
@@ -2276,10 +2263,14 @@ async def ship_from_stock(
 
     # 6. Update serial numbers if any exist
     serials_updated = 0
-    serials = db.query(SerialNumber).filter(
-        SerialNumber.sales_order_id == sales_order_id,
-        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
-    ).all()
+    serials = (
+        db.query(SerialNumber)
+        .filter(
+            SerialNumber.sales_order_id == sales_order_id,
+            SerialNumber.status.in_(["manufactured", "in_stock", "allocated"]),
+        )
+        .all()
+    )
     for serial in serials:
         serial.status = "shipped"
         serial.tracking_number = result.tracking_number
@@ -2319,14 +2310,14 @@ async def mark_order_shipped(
 ):
     """
     Manually mark an order as shipped (for when label was created outside system).
-    
+
     Updates tracking info and optionally sends notification to customer.
     """
     order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
-    
+
     if not order:
         raise HTTPException(status_code=404, detail="Sales order not found")
-    
+
     # Update order
     order.tracking_number = request.tracking_number
     order.carrier = request.carrier
@@ -2337,10 +2328,14 @@ async def mark_order_shipped(
 
     # Update serial numbers with tracking info for traceability
     serials_updated = 0
-    serial_numbers_for_order = db.query(SerialNumber).filter(
-        SerialNumber.sales_order_id == sales_order_id,
-        SerialNumber.status.in_(["manufactured", "in_stock", "allocated"])
-    ).all()
+    serial_numbers_for_order = (
+        db.query(SerialNumber)
+        .filter(
+            SerialNumber.sales_order_id == sales_order_id,
+            SerialNumber.status.in_(["manufactured", "in_stock", "allocated"]),
+        )
+        .all()
+    )
 
     for serial in serial_numbers_for_order:
         serial.tracking_number = request.tracking_number
@@ -2355,21 +2350,18 @@ async def mark_order_shipped(
     if order.quote_id:
         quote = db.query(Quote).filter(Quote.id == order.quote_id).first()
         if quote and quote.product_id:
-            fg_inventory = db.query(Inventory).filter(
-                Inventory.product_id == quote.product_id
-            ).first()
+            fg_inventory = db.query(Inventory).filter(Inventory.product_id == quote.product_id).first()
 
             if fg_inventory:
                 qty_shipped = order.quantity or 1
 
                 # Decrement inventory
-                fg_inventory.on_hand_quantity = Decimal(str(
-                    max(0, float(fg_inventory.on_hand_quantity) - qty_shipped)
-                ))
+                fg_inventory.on_hand_quantity = Decimal(str(max(0, float(fg_inventory.on_hand_quantity) - qty_shipped)))
 
                 # Get product for cost calculation
                 product = db.query(Product).filter(Product.id == quote.product_id).first()
                 from app.services.inventory_service import get_effective_cost_per_inventory_unit
+
                 unit_cost = get_effective_cost_per_inventory_unit(product) if product else None
                 total_cost = Decimal(str(qty_shipped)) * unit_cost if unit_cost else None
 
@@ -2418,46 +2410,45 @@ async def bulk_update_status(
 ):
     """
     Update status for multiple production orders at once.
-    
+
     Useful for batch operations like starting multiple prints.
     """
     valid_statuses = ["scheduled", "in_progress", "printed", "completed", "cancelled"]
-    
+
     if request.new_status not in valid_statuses:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
-        )
-    
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}")
+
     updated = []
     errors = []
-    
+
     for po_id in request.production_order_ids:
         po = db.query(ProductionOrder).filter(ProductionOrder.id == po_id).first()
-        
+
         if not po:
             errors.append({"id": po_id, "error": "Not found"})
             continue
-        
+
         try:
             old_status = po.status
             po.status = request.new_status
-            
+
             # Set timestamps based on status
             if request.new_status == "in_progress" and old_status != "in_progress":
                 po.start_date = datetime.utcnow()
             elif request.new_status == "completed" and old_status != "completed":
                 po.finish_date = datetime.utcnow()
-            
+
             if request.notes:
-                po.notes = (po.notes + "\n" if po.notes else "") + f"[{datetime.utcnow().isoformat()}] Bulk update: {request.notes}"
-            
+                po.notes = (
+                    po.notes + "\n" if po.notes else ""
+                ) + f"[{datetime.utcnow().isoformat()}] Bulk update: {request.notes}"
+
             updated.append({"id": po_id, "code": po.code, "old_status": old_status, "new_status": request.new_status})
         except Exception as e:
             errors.append({"id": po_id, "error": str(e)})
-    
+
     db.commit()
-    
+
     return {
         "success": len(errors) == 0,
         "updated_count": len(updated),

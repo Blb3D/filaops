@@ -5,6 +5,7 @@ Export purchase orders in QuickBooks-compatible formats:
 - CSV for QuickBooks Online
 - IIF for QuickBooks Desktop
 """
+
 import csv
 import io
 from datetime import date
@@ -39,18 +40,22 @@ def _get_pos_for_export(
     status_filter: List[str],
 ) -> List[PurchaseOrder]:
     """Get purchase orders within date range and status filter"""
-    query = db.query(PurchaseOrder).options(
-        joinedload(PurchaseOrder.vendor),
-        joinedload(PurchaseOrder.lines).joinedload(PurchaseOrderLine.product)
-    ).filter(
-        and_(
-            PurchaseOrder.status.in_(status_filter),
-            # Use received_date if available, otherwise order_date
-            PurchaseOrder.received_date >= start_date,
-            PurchaseOrder.received_date <= end_date,
+    query = (
+        db.query(PurchaseOrder)
+        .options(
+            joinedload(PurchaseOrder.vendor), joinedload(PurchaseOrder.lines).joinedload(PurchaseOrderLine.product)
         )
-    ).order_by(PurchaseOrder.received_date)
-    
+        .filter(
+            and_(
+                PurchaseOrder.status.in_(status_filter),
+                # Use received_date if available, otherwise order_date
+                PurchaseOrder.received_date >= start_date,
+                PurchaseOrder.received_date <= end_date,
+            )
+        )
+        .order_by(PurchaseOrder.received_date)
+    )
+
     return query.all()
 
 
@@ -70,67 +75,75 @@ def _generate_csv_expense(
     """Generate CSV for QuickBooks Online Expense import"""
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     # Header row
     headers = ["Date", "Vendor", "Ref No", "Account", "Amount", "Memo", "Class"]
     writer.writerow(headers)
-    
+
     for po in pos:
         vendor_name = po.vendor.name if po.vendor else "Unknown Vendor"
         po_date = _format_date(po.received_date or po.order_date)
-        
+
         if include_line_detail:
             # Write each line item separately
             for line in po.lines:
                 product_name = line.product.name if line.product else "Unknown Item"
                 product_sku = line.product.sku if line.product else ""
                 memo = f"{product_sku} - {product_name}" if product_sku else product_name
-                
-                writer.writerow([
+
+                writer.writerow(
+                    [
+                        po_date,
+                        vendor_name,
+                        po.po_number,
+                        "Inventory:Raw Materials",  # Default account
+                        str(line.line_total),
+                        memo,
+                        "Manufacturing",  # Default class
+                    ]
+                )
+        else:
+            # Write subtotal as single line
+            writer.writerow(
+                [
                     po_date,
                     vendor_name,
                     po.po_number,
-                    "Inventory:Raw Materials",  # Default account
-                    str(line.line_total),
-                    memo,
-                    "Manufacturing",  # Default class
-                ])
-        else:
-            # Write subtotal as single line
-            writer.writerow([
-                po_date,
-                vendor_name,
-                po.po_number,
-                "Inventory:Raw Materials",
-                str(po.subtotal),
-                f"PO {po.po_number}",
-                "Manufacturing",
-            ])
-        
+                    "Inventory:Raw Materials",
+                    str(po.subtotal),
+                    f"PO {po.po_number}",
+                    "Manufacturing",
+                ]
+            )
+
         # Add tax line if applicable
         if include_tax and po.tax_amount and po.tax_amount > 0:
-            writer.writerow([
-                po_date,
-                vendor_name,
-                po.po_number,
-                "Expenses:Sales Tax",
-                str(po.tax_amount),
-                "Tax",
-                "Manufacturing",
-            ])
-        
+            writer.writerow(
+                [
+                    po_date,
+                    vendor_name,
+                    po.po_number,
+                    "Expenses:Sales Tax",
+                    str(po.tax_amount),
+                    "Tax",
+                    "Manufacturing",
+                ]
+            )
+
         # Add shipping line if applicable
         if include_shipping and po.shipping_cost and po.shipping_cost > 0:
-            writer.writerow([
-                po_date,
-                vendor_name,
-                po.po_number,
-                "Expenses:Shipping",
-                str(po.shipping_cost),
-                "Shipping",
-                "Manufacturing",
-            ])
-    
+            writer.writerow(
+                [
+                    po_date,
+                    vendor_name,
+                    po.po_number,
+                    "Expenses:Shipping",
+                    str(po.shipping_cost),
+                    "Shipping",
+                    "Manufacturing",
+                ]
+            )
+
     return output.getvalue()
 
 
@@ -143,66 +156,73 @@ def _generate_csv_bill(
     """Generate CSV for QuickBooks Bill import"""
     output = io.StringIO()
     writer = csv.writer(output)
-    
+
     # Header for bills
-    headers = ["Bill No", "Vendor", "Bill Date", "Due Date", "Terms", 
-               "Account", "Amount", "Memo"]
+    headers = ["Bill No", "Vendor", "Bill Date", "Due Date", "Terms", "Account", "Amount", "Memo"]
     writer.writerow(headers)
-    
+
     for po in pos:
         vendor_name = po.vendor.name if po.vendor else "Unknown Vendor"
         bill_date = _format_date(po.received_date or po.order_date)
         terms = po.vendor.payment_terms if po.vendor else "Net 30"
-        
+
         if include_line_detail:
             for line in po.lines:
                 product_name = line.product.name if line.product else "Unknown Item"
-                writer.writerow([
+                writer.writerow(
+                    [
+                        po.po_number,
+                        vendor_name,
+                        bill_date,
+                        "",  # Due date calculated by QB based on terms
+                        terms,
+                        "Inventory:Raw Materials",
+                        str(line.line_total),
+                        product_name,
+                    ]
+                )
+        else:
+            writer.writerow(
+                [
                     po.po_number,
                     vendor_name,
                     bill_date,
-                    "",  # Due date calculated by QB based on terms
+                    "",
                     terms,
                     "Inventory:Raw Materials",
-                    str(line.line_total),
-                    product_name,
-                ])
-        else:
-            writer.writerow([
-                po.po_number,
-                vendor_name,
-                bill_date,
-                "",
-                terms,
-                "Inventory:Raw Materials",
-                str(po.subtotal),
-                f"PO {po.po_number}",
-            ])
-        
+                    str(po.subtotal),
+                    f"PO {po.po_number}",
+                ]
+            )
+
         if include_tax and po.tax_amount and po.tax_amount > 0:
-            writer.writerow([
-                po.po_number,
-                vendor_name,
-                bill_date,
-                "",
-                terms,
-                "Expenses:Sales Tax",
-                str(po.tax_amount),
-                "Tax",
-            ])
-        
+            writer.writerow(
+                [
+                    po.po_number,
+                    vendor_name,
+                    bill_date,
+                    "",
+                    terms,
+                    "Expenses:Sales Tax",
+                    str(po.tax_amount),
+                    "Tax",
+                ]
+            )
+
         if include_shipping and po.shipping_cost and po.shipping_cost > 0:
-            writer.writerow([
-                po.po_number,
-                vendor_name,
-                bill_date,
-                "",
-                terms,
-                "Expenses:Shipping",
-                str(po.shipping_cost),
-                "Shipping",
-            ])
-    
+            writer.writerow(
+                [
+                    po.po_number,
+                    vendor_name,
+                    bill_date,
+                    "",
+                    terms,
+                    "Expenses:Shipping",
+                    str(po.shipping_cost),
+                    "Shipping",
+                ]
+            )
+
     return output.getvalue()
 
 
@@ -214,20 +234,20 @@ def _generate_iif_bill(
 ) -> str:
     """Generate IIF file for QuickBooks Desktop Bill import"""
     lines = []
-    
+
     # IIF Header
     lines.append("!TRNS\tTRNSID\tTRNSTYPE\tDATE\tACCNT\tNAME\tAMOUNT\tDOCNUM\tMEMO")
     lines.append("!SPL\tSPLID\tTRNSTYPE\tDATE\tACCNT\tAMOUNT\tMEMO")
     lines.append("!ENDTRNS")
-    
+
     for po in pos:
         vendor_name = po.vendor.name if po.vendor else "Unknown"
         po_date = _format_date(po.received_date or po.order_date)
         total = po.total_amount
-        
+
         # Main transaction line (credit to A/P)
         lines.append(f"TRNS\t\tBILL\t{po_date}\tAccounts Payable\t{vendor_name}\t-{total}\t{po.po_number}\t")
-        
+
         # Split lines (debits to expense/inventory accounts)
         if include_line_detail:
             for line in po.lines:
@@ -235,21 +255,22 @@ def _generate_iif_bill(
                 lines.append(f"SPL\t\tBILL\t{po_date}\tInventory:Raw Materials\t{line.line_total}\t{product_name}")
         else:
             lines.append(f"SPL\t\tBILL\t{po_date}\tInventory:Raw Materials\t{po.subtotal}\tPO {po.po_number}")
-        
+
         if include_tax and po.tax_amount and po.tax_amount > 0:
             lines.append(f"SPL\t\tBILL\t{po_date}\tExpenses:Sales Tax\t{po.tax_amount}\tTax")
-        
+
         if include_shipping and po.shipping_cost and po.shipping_cost > 0:
             lines.append(f"SPL\t\tBILL\t{po_date}\tExpenses:Shipping\t{po.shipping_cost}\tShipping")
-        
+
         lines.append("ENDTRNS")
-    
+
     return "\n".join(lines)
 
 
 # ============================================================================
 # Preview Endpoint
 # ============================================================================
+
 
 @router.post("/quickbooks/preview", response_model=QBExportPreviewResponse)
 async def preview_quickbooks_export(
@@ -259,7 +280,7 @@ async def preview_quickbooks_export(
 ):
     """
     Preview QuickBooks export before downloading
-    
+
     Shows summary of what will be exported including:
     - Total POs
     - Total amount
@@ -271,68 +292,75 @@ async def preview_quickbooks_export(
         request.end_date,
         request.status_filter or ["received", "closed"],
     )
-    
+
     if not pos:
         raise HTTPException(
-            status_code=404,
-            detail=f"No purchase orders found between {request.start_date} and {request.end_date}"
+            status_code=404, detail=f"No purchase orders found between {request.start_date} and {request.end_date}"
         )
-    
+
     # Build preview lines
     preview_lines = []
     total_amount = Decimal("0")
-    
+
     for po in pos:
         vendor_name = po.vendor.name if po.vendor else "Unknown"
         po_date = po.received_date or po.order_date
-        
+
         if request.include_line_detail:
             for line in po.lines:
                 product_name = line.product.name if line.product else "Unknown"
-                preview_lines.append(QBExportPreviewLine(
+                preview_lines.append(
+                    QBExportPreviewLine(
+                        date=po_date,
+                        vendor=vendor_name,
+                        po_number=po.po_number,
+                        account="Inventory:Raw Materials",
+                        amount=line.line_total,
+                        memo=product_name,
+                        class_name="Manufacturing",
+                    )
+                )
+                total_amount += line.line_total
+        else:
+            preview_lines.append(
+                QBExportPreviewLine(
                     date=po_date,
                     vendor=vendor_name,
                     po_number=po.po_number,
                     account="Inventory:Raw Materials",
-                    amount=line.line_total,
-                    memo=product_name,
+                    amount=po.subtotal,
+                    memo=f"PO {po.po_number}",
                     class_name="Manufacturing",
-                ))
-                total_amount += line.line_total
-        else:
-            preview_lines.append(QBExportPreviewLine(
-                date=po_date,
-                vendor=vendor_name,
-                po_number=po.po_number,
-                account="Inventory:Raw Materials",
-                amount=po.subtotal,
-                memo=f"PO {po.po_number}",
-                class_name="Manufacturing",
-            ))
+                )
+            )
             total_amount += po.subtotal
-        
+
         if request.include_tax and po.tax_amount:
-            preview_lines.append(QBExportPreviewLine(
-                date=po_date,
-                vendor=vendor_name,
-                po_number=po.po_number,
-                account="Expenses:Sales Tax",
-                amount=po.tax_amount,
-                memo="Tax",
-            ))
+            preview_lines.append(
+                QBExportPreviewLine(
+                    date=po_date,
+                    vendor=vendor_name,
+                    po_number=po.po_number,
+                    account="Expenses:Sales Tax",
+                    amount=po.tax_amount,
+                    memo="Tax",
+                )
+            )
             total_amount += po.tax_amount
-        
+
         if request.include_shipping and po.shipping_cost:
-            preview_lines.append(QBExportPreviewLine(
-                date=po_date,
-                vendor=vendor_name,
-                po_number=po.po_number,
-                account="Expenses:Shipping",
-                amount=po.shipping_cost,
-                memo="Shipping",
-            ))
+            preview_lines.append(
+                QBExportPreviewLine(
+                    date=po_date,
+                    vendor=vendor_name,
+                    po_number=po.po_number,
+                    account="Expenses:Shipping",
+                    amount=po.shipping_cost,
+                    memo="Shipping",
+                )
+            )
             total_amount += po.shipping_cost
-    
+
     return QBExportPreviewResponse(
         total_pos=len(pos),
         total_amount=total_amount,
@@ -345,6 +373,7 @@ async def preview_quickbooks_export(
 # Download Endpoint
 # ============================================================================
 
+
 @router.post("/quickbooks/export")
 async def download_quickbooks_export(
     request: QBExportRequest,
@@ -353,11 +382,11 @@ async def download_quickbooks_export(
 ):
     """
     Download QuickBooks export file
-    
+
     Formats:
     - CSV: Universal format for QuickBooks Online
     - IIF: Interchange format for QuickBooks Desktop
-    
+
     Export types:
     - expense: Direct expenses (credit card purchases)
     - bill: Accounts payable bills
@@ -369,13 +398,12 @@ async def download_quickbooks_export(
         request.end_date,
         request.status_filter or ["received", "closed"],
     )
-    
+
     if not pos:
         raise HTTPException(
-            status_code=404,
-            detail=f"No purchase orders found between {request.start_date} and {request.end_date}"
+            status_code=404, detail=f"No purchase orders found between {request.start_date} and {request.end_date}"
         )
-    
+
     # Generate file content based on format and type
     if request.format == QBExportFormat.CSV:
         if request.export_type == QBExportType.BILL:
@@ -386,35 +414,30 @@ async def download_quickbooks_export(
             content = _generate_csv_expense(
                 pos, request.include_tax, request.include_shipping, request.include_line_detail
             )
-        
+
         filename = f"filaops_po_export_{request.start_date}_{request.end_date}.csv"
         media_type = "text/csv"
-        
+
     else:  # IIF format
-        content = _generate_iif_bill(
-            pos, request.include_tax, request.include_shipping, request.include_line_detail
-        )
+        content = _generate_iif_bill(pos, request.include_tax, request.include_shipping, request.include_line_detail)
         filename = f"filaops_po_export_{request.start_date}_{request.end_date}.iif"
         media_type = "application/octet-stream"
-    
+
     logger.info(
         f"Generated QuickBooks export: {len(pos)} POs, format={request.format.value}, "
         f"type={request.export_type.value}, user={current_user.email}"
     )
-    
+
     # Return as downloadable file
     return StreamingResponse(
-        io.StringIO(content),
-        media_type=media_type,
-        headers={
-            "Content-Disposition": f"attachment; filename={filename}"
-        }
+        io.StringIO(content), media_type=media_type, headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 
 # ============================================================================
 # Quick Export (GET with query params for simpler access)
 # ============================================================================
+
 
 @router.get("/quickbooks")
 async def quick_export(
@@ -430,7 +453,7 @@ async def quick_export(
 ):
     """
     Quick export via GET request (for direct links/buttons)
-    
+
     Example: /api/v1/exports/quickbooks?start_date=2025-01-01&end_date=2025-01-31
     """
     request = QBExportRequest(
@@ -442,5 +465,5 @@ async def quick_export(
         include_shipping=include_shipping,
         include_line_detail=include_detail,
     )
-    
+
     return await download_quickbooks_export(request, db, current_user)

@@ -5,6 +5,7 @@ Provides database setup, client creation, and user fixtures.
 Uses PostgreSQL test database (filaops_test) by default.
 Set TEST_USE_POSTGRES=false to use SQLite in-memory for faster tests.
 """
+
 import os
 
 # Set test environment variables BEFORE any app imports
@@ -58,10 +59,24 @@ def create_tables(engine):
     # Import all models to ensure they're registered with Base
     # This imports all models via the models __init__.py
     from app.models import (  # noqa: F401
-        User, RefreshToken, Product, BOM, BOMLine, Quote, SalesOrder,
-        SalesOrderLine, ProductionOrder, Inventory, InventoryTransaction,
-        ScrapReason, UnitOfMeasure, CompanySettings, PurchaseOrder,
-        PurchaseOrderLine, Vendor, InventoryLocation
+        User,
+        RefreshToken,
+        Product,
+        BOM,
+        BOMLine,
+        Quote,
+        SalesOrder,
+        SalesOrderLine,
+        ProductionOrder,
+        Inventory,
+        InventoryTransaction,
+        ScrapReason,
+        UnitOfMeasure,
+        CompanySettings,
+        PurchaseOrder,
+        PurchaseOrderLine,
+        Vendor,
+        InventoryLocation,
     )
 
     # Drop existing tables first to avoid schema conflicts with Alembic migrations
@@ -111,6 +126,7 @@ def db(db_session):
 @pytest.fixture
 def client(db_session):
     """Create a test client with database override"""
+
     def override_get_db():
         try:
             yield db_session

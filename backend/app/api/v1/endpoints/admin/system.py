@@ -3,6 +3,7 @@ Admin System Management Endpoints
 
 Handles system-level operations like updates, maintenance, etc.
 """
+
 import subprocess
 from pathlib import Path
 from typing import Optional
@@ -81,7 +82,7 @@ def _check_docker_available() -> bool:
             return result.returncode == 0
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
             return False
-    
+
     # Not in container, check if docker/docker-compose are installed
     try:
         subprocess.run(
@@ -164,7 +165,7 @@ def _run_update(version: Optional[str] = None):
             )
             if result.returncode != 0:
                 raise Exception(f"Git fetch failed: {result.stderr}")
-            
+
             result = subprocess.run(
                 ["git", "checkout", f"tags/{version}"],
                 cwd=PROJECT_ROOT,
@@ -197,7 +198,7 @@ def _run_update(version: Optional[str] = None):
             compose_cmd = ["docker", "compose"]
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
             compose_cmd = ["docker-compose"]
-        
+
         # Step 3: Rebuild Docker containers
         _update_status["progress"] = "Rebuilding containers..."
         logger.info("Rebuilding Docker containers")
@@ -269,7 +270,7 @@ async def get_update_status(
 ):
     """
     Get current update status
-    
+
     Returns the current status of any ongoing or completed update operation.
     """
     return UpdateStatus(**_update_status)
@@ -283,25 +284,22 @@ async def start_update(
 ):
     """
     Start system update
-    
+
     This endpoint triggers an update of the FilaOps system:
     1. Pulls latest code from git (or specific version)
     2. Rebuilds Docker containers
     3. Runs database migrations
     4. Restarts services
-    
+
     **Security:** Admin-only endpoint. Requires admin authentication.
-    
+
     **Note:** This is a long-running operation. Check status via /update/status.
     """
     global _update_status
 
     # Check if update is already in progress
     if _update_status["status"] in ["checking", "updating"]:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Update already in progress"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Update already in progress")
 
     # Check prerequisites
     if not _check_docker_available():
@@ -317,16 +315,12 @@ async def start_update(
             )
         else:
             detail = "Docker is not available. Please install Docker and docker-compose to use this feature."
-        
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=detail
-        )
+
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
 
     if not _check_git_available():
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Git is not available. Cannot pull updates."
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Git is not available. Cannot pull updates."
         )
 
     # Check if docker-compose.yml exists (production only)
@@ -335,7 +329,7 @@ async def start_update(
     if not docker_compose_file.exists():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="docker-compose.yml not found. This endpoint requires a production Docker deployment."
+            detail="docker-compose.yml not found. This endpoint requires a production Docker deployment.",
         )
 
     # Initialize update status
@@ -366,7 +360,7 @@ async def get_system_version(
 ):
     """
     Get current system version
-    
+
     Returns the current git version/tag of the system.
     """
     version = _get_current_git_version()
@@ -374,4 +368,3 @@ async def get_system_version(
         "version": version,
         "package_version": "1.1.0",  # From package.json or settings
     }
-

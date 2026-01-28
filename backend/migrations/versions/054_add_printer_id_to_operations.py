@@ -14,43 +14,36 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision = '054_add_printer_id'
-down_revision = '053_scrap_records'
+revision = "054_add_printer_id"
+down_revision = "053_scrap_records"
 branch_labels = None
 depends_on = None
 
 
 def upgrade() -> None:
     # Add printer_id column to production_order_operations
-    op.add_column(
-        'production_order_operations',
-        sa.Column('printer_id', sa.Integer(), nullable=True)
-    )
+    op.add_column("production_order_operations", sa.Column("printer_id", sa.Integer(), nullable=True))
 
     # Add foreign key constraint to printers table
     op.create_foreign_key(
-        'fk_production_order_operations_printer_id',
-        'production_order_operations',
-        'printers',
-        ['printer_id'],
-        ['id'],
-        ondelete='SET NULL'
+        "fk_production_order_operations_printer_id",
+        "production_order_operations",
+        "printers",
+        ["printer_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
 
     # Add index for faster lookups
-    op.create_index(
-        'ix_production_order_operations_printer_id',
-        'production_order_operations',
-        ['printer_id']
-    )
+    op.create_index("ix_production_order_operations_printer_id", "production_order_operations", ["printer_id"])
 
 
 def downgrade() -> None:
     # Remove index
-    op.drop_index('ix_production_order_operations_printer_id', 'production_order_operations')
+    op.drop_index("ix_production_order_operations_printer_id", "production_order_operations")
 
     # Remove foreign key
-    op.drop_constraint('fk_production_order_operations_printer_id', 'production_order_operations', type_='foreignkey')
+    op.drop_constraint("fk_production_order_operations_printer_id", "production_order_operations", type_="foreignkey")
 
     # Remove column
-    op.drop_column('production_order_operations', 'printer_id')
+    op.drop_column("production_order_operations", "printer_id")

@@ -3,6 +3,7 @@ Fulfillment Status Schema - API-301
 
 Response schema for GET /api/v1/sales-orders/{order_id}/fulfillment-status
 """
+
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import date
@@ -11,6 +12,7 @@ from enum import Enum
 
 class FulfillmentState(str, Enum):
     """Possible fulfillment states for a sales order."""
+
     READY_TO_SHIP = "ready_to_ship"
     PARTIALLY_READY = "partially_ready"
     BLOCKED = "blocked"
@@ -20,6 +22,7 @@ class FulfillmentState(str, Enum):
 
 class LineStatus(BaseModel):
     """Status of a single order line."""
+
     line_id: int
     line_number: int
     product_id: int
@@ -36,6 +39,7 @@ class LineStatus(BaseModel):
 
 class FulfillmentStatusSummary(BaseModel):
     """High-level fulfillment status."""
+
     state: FulfillmentState
     lines_total: int
     lines_ready: int
@@ -48,6 +52,7 @@ class FulfillmentStatusSummary(BaseModel):
 
 class FulfillmentStatus(BaseModel):
     """Complete fulfillment status for a sales order."""
+
     order_id: int
     order_number: str
     customer_name: str

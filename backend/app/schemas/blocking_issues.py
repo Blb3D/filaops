@@ -2,6 +2,7 @@
 Schemas for blocking issues endpoints.
 Used by both sales order and production order blocking analysis.
 """
+
 from datetime import date
 from decimal import Decimal
 from typing import Optional, List, Any, Dict
@@ -11,13 +12,15 @@ from pydantic import BaseModel, Field
 
 class IssueSeverity(str, Enum):
     """Severity level of a blocking issue."""
+
     BLOCKING = "blocking"  # Prevents fulfillment
-    WARNING = "warning"    # May cause delays
-    INFO = "info"          # Informational only
+    WARNING = "warning"  # May cause delays
+    INFO = "info"  # Informational only
 
 
 class IssueType(str, Enum):
     """Types of blocking issues."""
+
     PRODUCTION_INCOMPLETE = "production_incomplete"
     PRODUCTION_MISSING = "production_missing"
     MATERIAL_SHORTAGE = "material_shortage"
@@ -28,6 +31,7 @@ class IssueType(str, Enum):
 
 class BlockingIssue(BaseModel):
     """A single blocking issue."""
+
     type: IssueType
     severity: IssueSeverity
     message: str
@@ -39,6 +43,7 @@ class BlockingIssue(BaseModel):
 
 class ResolutionAction(BaseModel):
     """Suggested action to resolve blocking issues."""
+
     priority: int
     action: str
     impact: str
@@ -48,6 +53,7 @@ class ResolutionAction(BaseModel):
 
 class StatusSummary(BaseModel):
     """Summary of fulfillment status."""
+
     can_fulfill: bool
     blocking_count: int
     estimated_ready_date: Optional[date] = None
@@ -56,6 +62,7 @@ class StatusSummary(BaseModel):
 
 class LineIssues(BaseModel):
     """Blocking issues for a single sales order line."""
+
     line_number: int
     product_sku: str
     product_name: str
@@ -67,6 +74,7 @@ class LineIssues(BaseModel):
 
 class SalesOrderBlockingIssues(BaseModel):
     """Complete blocking issues analysis for a sales order."""
+
     sales_order_id: int
     sales_order_code: str
     customer: str
@@ -85,8 +93,10 @@ class SalesOrderBlockingIssues(BaseModel):
 # Production Order Blocking Issues (API-202)
 # =============================================================================
 
+
 class IncomingSupply(BaseModel):
     """Incoming supply from purchase order."""
+
     purchase_order_id: int
     purchase_order_code: str
     quantity: Decimal
@@ -96,6 +106,7 @@ class IncomingSupply(BaseModel):
 
 class MaterialIssue(BaseModel):
     """Material availability for production."""
+
     product_id: int
     product_sku: str
     product_name: str
@@ -108,6 +119,7 @@ class MaterialIssue(BaseModel):
 
 class LinkedSalesOrderInfo(BaseModel):
     """Sales order linked to production order."""
+
     id: int
     code: str
     customer: str
@@ -116,6 +128,7 @@ class LinkedSalesOrderInfo(BaseModel):
 
 class POStatusSummary(BaseModel):
     """Summary of production readiness."""
+
     can_produce: bool
     blocking_count: int
     estimated_ready_date: Optional[date] = None
@@ -124,6 +137,7 @@ class POStatusSummary(BaseModel):
 
 class OtherIssue(BaseModel):
     """Non-material blocking issue."""
+
     type: str  # 'machine_unavailable', 'quality_hold', etc.
     severity: IssueSeverity
     message: str
@@ -132,6 +146,7 @@ class OtherIssue(BaseModel):
 
 class ProductionOrderBlockingIssues(BaseModel):
     """Complete blocking issues analysis for a production order."""
+
     production_order_id: int
     production_order_code: str
     product_sku: str

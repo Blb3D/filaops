@@ -1,10 +1,12 @@
 """
 FilaOps ERP - Main FastAPI Application
 """
+
 from contextlib import asynccontextmanager
 
 try:
     import sentry_sdk
+
     SENTRY_AVAILABLE = True
 except ImportError:
     SENTRY_AVAILABLE = False
@@ -44,6 +46,7 @@ else:
 # Security Headers Middleware
 # ===================
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add security headers to all responses."""
 
@@ -72,6 +75,7 @@ def init_database():
         from app.db.session import engine
         from app.db.base import Base
         import app.models  # noqa: F401
+
         logger.info("Checking database tables...")
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables ready")
@@ -84,6 +88,7 @@ def seed_default_data():
     try:
         from app.db.session import SessionLocal
         from app.models.user import User
+
         db = SessionLocal()
         try:
             user_count = db.query(User).count()
@@ -100,13 +105,14 @@ def seed_default_data():
 def _mask_password(url: str) -> str:
     """Mask password in connection string for safe logging."""
     import re
-    return re.sub(r'://([^:]+):([^@]+)@', r'://\1:***@', url)
+
+    return re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", url)
 
 
 def log_startup_configuration():
     """Log configuration at startup for debugging."""
     # Database configuration
-    db_url = getattr(settings, 'database_url', 'NOT SET')
+    db_url = getattr(settings, "database_url", "NOT SET")
     logger.info("=" * 60)
     logger.info("FILAOPS STARTUP CONFIGURATION")
     logger.info("=" * 60)
@@ -118,21 +124,21 @@ def log_startup_configuration():
     logger.info(f"DB Name: {getattr(settings, 'DB_NAME', 'NOT SET')}")
 
     # Check for SQL Server indicators (debugging Viper's issue)
-    if 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower():
+    if "mssql" in db_url.lower() or "sqlserver" in db_url.lower():
         logger.warning("⚠️  SQL SERVER DETECTED - FilaOps v2.x requires PostgreSQL!")
         logger.warning("⚠️  Please update your database configuration.")
-    elif 'postgresql' in db_url.lower() or 'postgres' in db_url.lower():
+    elif "postgresql" in db_url.lower() or "postgres" in db_url.lower():
         logger.info("✓ PostgreSQL database configured correctly")
     else:
         logger.warning(f"⚠️  Unknown database type in URL: {db_url[:30]}...")
 
     # CORS configuration
-    cors_origins = getattr(settings, 'ALLOWED_ORIGINS', [])
+    cors_origins = getattr(settings, "ALLOWED_ORIGINS", [])
     logger.info(f"CORS Origins ({len(cors_origins)} configured):")
     for origin in cors_origins:
         logger.info(f"  - {origin}")
 
-    frontend_url = getattr(settings, 'FRONTEND_URL', 'NOT SET')
+    frontend_url = getattr(settings, "FRONTEND_URL", "NOT SET")
     logger.info(f"Frontend URL: {frontend_url}")
 
     # Environment
@@ -151,7 +157,7 @@ async def lifespan(app: FastAPI):
             "version": settings.VERSION,
             "environment": getattr(settings, "ENVIRONMENT", "development"),
             "debug": getattr(settings, "DEBUG", False),
-        }
+        },
     )
     log_startup_configuration()
     init_database()
@@ -182,7 +188,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=getattr(settings, 'ALLOWED_ORIGINS', []),  # Empty default - must configure explicitly
+    allow_origins=getattr(settings, "ALLOWED_ORIGINS", []),  # Empty default - must configure explicitly
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
@@ -193,11 +199,12 @@ app.add_middleware(
 # Exception Handlers
 # ===================
 
+
 @app.exception_handler(FilaOpsException)
 async def filaops_exception_handler(request: Request, exc: FilaOpsException):
     logger.warning(
         f"FilaOps Exception: {exc.error_code} - {exc.message}",
-        extra={"error_code": exc.error_code, "details": exc.details, "path": request.url.path}
+        extra={"error_code": exc.error_code, "details": exc.details, "path": request.url.path},
     )
     # Add timestamp to error response for consistency
     error_dict = exc.to_dict()
@@ -218,7 +225,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
             "error": "VALIDATION_ERROR",
             "message": "Request validation failed",
             "details": {"errors": errors},
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         },
     )
 
@@ -231,7 +238,7 @@ async def sqlalchemy_exception_handler(request: Request, exc: SQLAlchemyError):
         content={
             "error": "DATABASE_ERROR",
             "message": "A database error occurred. Please try again.",
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         },
     )
 
@@ -244,7 +251,7 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={
             "error": "INTERNAL_ERROR",
             "message": "An unexpected error occurred. Please try again later.",
-            "timestamp": datetime.utcnow().isoformat() + "Z"
+            "timestamp": datetime.utcnow().isoformat() + "Z",
         },
     )
 
@@ -273,15 +280,15 @@ async def debug_config():
     if getattr(settings, "ENVIRONMENT", "development") == "production":
         return {"error": "Debug endpoint disabled in production"}
 
-    db_url = getattr(settings, 'database_url', 'NOT SET')
+    db_url = getattr(settings, "database_url", "NOT SET")
 
     # Determine database type
     db_type = "unknown"
-    if 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower():
+    if "mssql" in db_url.lower() or "sqlserver" in db_url.lower():
         db_type = "SQL Server (WRONG for v2.x!)"
-    elif 'postgresql' in db_url.lower() or 'postgres' in db_url.lower():
+    elif "postgresql" in db_url.lower() or "postgres" in db_url.lower():
         db_type = "PostgreSQL (correct)"
-    elif 'sqlite' in db_url.lower():
+    elif "sqlite" in db_url.lower():
         db_type = "SQLite (not recommended)"
 
     return {
@@ -289,24 +296,25 @@ async def debug_config():
         "environment": getattr(settings, "ENVIRONMENT", "development"),
         "database": {
             "type": db_type,
-            "host": getattr(settings, 'DB_HOST', 'NOT SET'),
-            "port": getattr(settings, 'DB_PORT', 'NOT SET'),
-            "name": getattr(settings, 'DB_NAME', 'NOT SET'),
+            "host": getattr(settings, "DB_HOST", "NOT SET"),
+            "port": getattr(settings, "DB_PORT", "NOT SET"),
+            "name": getattr(settings, "DB_NAME", "NOT SET"),
             "url_prefix": db_url.split("://")[0] if "://" in db_url else "unknown",
         },
         "cors": {
-            "allowed_origins": getattr(settings, 'ALLOWED_ORIGINS', []),
-            "frontend_url": getattr(settings, 'FRONTEND_URL', 'NOT SET'),
+            "allowed_origins": getattr(settings, "ALLOWED_ORIGINS", []),
+            "frontend_url": getattr(settings, "FRONTEND_URL", "NOT SET"),
         },
-        "tier": getattr(settings, 'TIER', 'open'),
-        "debug": getattr(settings, 'DEBUG', False),
+        "tier": getattr(settings, "TIER", "open"),
+        "debug": getattr(settings, "DEBUG", False),
         "hints": {
-            "sql_server_detected": 'mssql' in db_url.lower() or 'sqlserver' in db_url.lower(),
-            "cors_count": len(getattr(settings, 'ALLOWED_ORIGINS', [])),
-        }
+            "sql_server_detected": "mssql" in db_url.lower() or "sqlserver" in db_url.lower(),
+            "cors_count": len(getattr(settings, "ALLOWED_ORIGINS", [])),
+        },
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

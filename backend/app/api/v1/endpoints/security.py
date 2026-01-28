@@ -6,6 +6,7 @@ Provides security audit functionality for the admin dashboard:
 - Export audit reports
 - Check security status
 """
+
 import sys
 import os
 from datetime import datetime
@@ -31,8 +32,10 @@ router = APIRouter(prefix="/security", tags=["Security"])
 # SCHEMAS
 # ============================================================================
 
+
 class CheckStatusEnum(str, Enum):
     """Status of a security check"""
+
     PASS = "pass"
     FAIL = "fail"
     WARN = "warn"
@@ -41,6 +44,7 @@ class CheckStatusEnum(str, Enum):
 
 class CheckCategoryEnum(str, Enum):
     """Category/severity of a security check"""
+
     CRITICAL = "critical"
     WARNING = "warning"
     INFO = "info"
@@ -48,6 +52,7 @@ class CheckCategoryEnum(str, Enum):
 
 class SecurityCheck(BaseModel):
     """Single security check result"""
+
     id: str
     name: str
     category: str
@@ -59,6 +64,7 @@ class SecurityCheck(BaseModel):
 
 class SecuritySummary(BaseModel):
     """Summary of security audit"""
+
     total_checks: int
     passed: int
     failed: int
@@ -69,6 +75,7 @@ class SecuritySummary(BaseModel):
 
 class SystemInfo(BaseModel):
     """System information"""
+
     os: str
     python_version: str
     database: str
@@ -77,6 +84,7 @@ class SystemInfo(BaseModel):
 
 class SecurityAuditResponse(BaseModel):
     """Full security audit response"""
+
     audit_version: str
     generated_at: str
     filaops_version: str
@@ -90,12 +98,12 @@ class SecurityAuditResponse(BaseModel):
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 def run_security_audit() -> dict:
     """Run the security audit and return results as dict"""
     # Add scripts directory to path if needed
     scripts_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
-        "scripts"
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "scripts"
     )
     if scripts_dir not in sys.path:
         sys.path.insert(0, scripts_dir)
@@ -109,20 +117,19 @@ def run_security_audit() -> dict:
     except ImportError as e:
         logger.error(f"Failed to import security_audit module: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Security audit module not found: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Security audit module not found: {str(e)}"
         )
     except Exception as e:
         logger.error(f"Security audit failed: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Security audit failed: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Security audit failed: {str(e)}"
         )
 
 
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
+
 
 @router.get("/audit", response_model=SecurityAuditResponse)
 async def get_security_audit(
@@ -136,10 +143,7 @@ async def get_security_audit(
     """
     # Require admin role
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     logger.info(f"Security audit requested by {current_user.email}")
 
@@ -151,21 +155,19 @@ async def get_security_audit(
         generated_at=result.get("generated_at", datetime.now().isoformat()),
         filaops_version=result.get("filaops_version", "unknown"),
         environment=result.get("environment", "unknown"),
-        summary=SecuritySummary(**result.get("summary", {
-            "total_checks": 0,
-            "passed": 0,
-            "failed": 0,
-            "warnings": 0,
-            "info": 0,
-            "overall_status": "UNKNOWN"
-        })),
+        summary=SecuritySummary(
+            **result.get(
+                "summary",
+                {"total_checks": 0, "passed": 0, "failed": 0, "warnings": 0, "info": 0, "overall_status": "UNKNOWN"},
+            )
+        ),
         checks=[SecurityCheck(**check) for check in result.get("checks", [])],
-        system_info=SystemInfo(**result.get("system_info", {
-            "os": "unknown",
-            "python_version": "unknown",
-            "database": "unknown",
-            "reverse_proxy": "unknown"
-        }))
+        system_info=SystemInfo(
+            **result.get(
+                "system_info",
+                {"os": "unknown", "python_version": "unknown", "database": "unknown", "reverse_proxy": "unknown"},
+            )
+        ),
     )
 
 
@@ -185,16 +187,10 @@ async def export_security_audit(
     """
     # Require admin role
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     if format not in ["json"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported format. Available: json"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported format. Available: json")
 
     logger.info(f"Security audit export ({format}) requested by {current_user.email}")
 
@@ -207,18 +203,10 @@ async def export_security_audit(
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"filaops_security_audit_{timestamp}.json"
-        return JSONResponse(
-            content=result,
-            headers={
-                "Content-Disposition": f'attachment; filename="{filename}"'
-            }
-        )
+        return JSONResponse(content=result, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
     # Future: PDF export
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail="PDF export not yet implemented"
-    )
+    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="PDF export not yet implemented")
 
 
 @router.get("/status")
@@ -233,10 +221,7 @@ async def get_security_status(
     Requires authentication.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     try:
         result = run_security_audit()
@@ -264,7 +249,7 @@ async def get_security_status(
             "status": status_level,
             "message": status_message,
             "summary": summary,
-            "checked_at": result.get("generated_at", datetime.now().isoformat())
+            "checked_at": result.get("generated_at", datetime.now().isoformat()),
         }
 
     except Exception as e:
@@ -273,13 +258,14 @@ async def get_security_status(
             "status": "error",
             "message": f"Could not check security status: {str(e)}",
             "summary": None,
-            "checked_at": datetime.now().isoformat()
+            "checked_at": datetime.now().isoformat(),
         }
 
 
 # ============================================================================
 # REMEDIATION HELPERS
 # ============================================================================
+
 
 @router.post("/remediate/generate-secret-key")
 async def generate_secret_key(
@@ -293,12 +279,10 @@ async def generate_secret_key(
     This is intentional for security (we don't want to auto-modify config files).
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import secrets
+
     new_key = secrets.token_urlsafe(64)
 
     logger.info(f"SECRET_KEY generated for remediation by {current_user.email}")
@@ -311,8 +295,8 @@ async def generate_secret_key(
             "Open your backend/.env file",
             "Find the line: SECRET_KEY=...",
             "Replace the value with the new key",
-            "Save the file and restart the backend"
-        ]
+            "Save the file and restart the backend",
+        ],
     }
 
 
@@ -327,26 +311,20 @@ async def open_env_file(
     Makes it easy for non-technical users to edit configuration.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
     import platform
 
     # Find the .env file path (project root, one level above backend/)
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
     project_root = os.path.dirname(backend_dir)
     env_path = os.path.join(project_root, ".env")
 
     if not os.path.exists(env_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Configuration file not found at {env_path}"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Configuration file not found at {env_path}")
 
     try:
         # Open in default text editor based on platform
@@ -365,10 +343,7 @@ async def open_env_file(
 
     except Exception as e:
         logger.error(f"Failed to open .env file: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not open file: {str(e)}"
-        )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not open file: {str(e)}")
 
 
 @router.post("/remediate/update-secret-key")
@@ -383,26 +358,20 @@ async def update_secret_key(
     Generates a new key and updates the file automatically.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import secrets
     import re
 
     # Find the .env file path (project root, one level above backend/)
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
     project_root = os.path.dirname(backend_dir)
     env_path = os.path.join(project_root, ".env")
 
     if not os.path.exists(env_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Configuration file not found at {env_path}"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Configuration file not found at {env_path}")
 
     try:
         # Read current .env content
@@ -413,8 +382,8 @@ async def update_secret_key(
         new_key = secrets.token_urlsafe(64)
 
         # Replace SECRET_KEY line
-        pattern = r'^SECRET_KEY=.*$'
-        new_line = f'SECRET_KEY={new_key}'
+        pattern = r"^SECRET_KEY=.*$"
+        new_line = f"SECRET_KEY={new_key}"
 
         if re.search(pattern, content, re.MULTILINE):
             new_content = re.sub(pattern, new_line, content, flags=re.MULTILINE)
@@ -432,14 +401,13 @@ async def update_secret_key(
             "success": True,
             "message": "SECRET_KEY has been updated! Please restart the backend.",
             "new_key_preview": f"{new_key[:20]}...",
-            "requires_restart": True
+            "requires_restart": True,
         }
 
     except Exception as e:
         logger.error(f"Failed to update SECRET_KEY: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not update configuration: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not update configuration: {str(e)}"
         )
 
 
@@ -454,18 +422,15 @@ async def open_restart_terminal(
     Makes it easy for non-technical users who may not have a terminal open.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
     import platform
 
     # Find the project root
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
     project_root = os.path.dirname(backend_dir)
 
     try:
@@ -490,21 +455,24 @@ async def open_restart_terminal(
             subprocess.Popen(
                 f'start powershell -NoExit -Command "{ps_script}"',
                 shell=True,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
             )
         elif platform.system() == "Darwin":
             # macOS - open Terminal
-            script = f'''tell application "Terminal"
+            script = f"""tell application "Terminal"
                 do script "cd '{project_root}' && echo '' && echo '=== RESTART THE BACKEND ===' && echo 'Run: ./start-backend.sh'"
                 activate
-            end tell'''
+            end tell"""
             subprocess.Popen(["osascript", "-e", script])
         else:
             # Linux - try common terminals
-            subprocess.Popen([
-                "x-terminal-emulator", "-e",
-                f"bash -c 'cd {project_root} && echo \"=== RESTART THE BACKEND ===\"; echo \"Run: ./start-backend.sh\"; exec bash'"
-            ])
+            subprocess.Popen(
+                [
+                    "x-terminal-emulator",
+                    "-e",
+                    f'bash -c \'cd {project_root} && echo "=== RESTART THE BACKEND ==="; echo "Run: ./start-backend.sh"; exec bash\'',
+                ]
+            )
 
         logger.info(f"Opened restart terminal for {current_user.email}")
         return {"success": True, "message": "Terminal opened with restart instructions"}
@@ -512,8 +480,7 @@ async def open_restart_terminal(
     except Exception as e:
         logger.error(f"Failed to open terminal: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not open terminal: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not open terminal: {str(e)}"
         )
 
 
@@ -529,20 +496,18 @@ async def fix_dependencies(
     Non-technical users don't need to know about venvs or pip.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
 
     # Find the venv path (backend/venv)
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
 
     # Determine pip and python paths based on OS
     import platform
+
     if platform.system() == "Windows":
         pip_path = os.path.join(backend_dir, "venv", "Scripts", "pip.exe")
         python_path = os.path.join(backend_dir, "venv", "Scripts", "python.exe")
@@ -553,7 +518,7 @@ async def fix_dependencies(
     if not os.path.exists(pip_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Virtual environment not found at {os.path.dirname(pip_path)}"
+            detail=f"Virtual environment not found at {os.path.dirname(pip_path)}",
         )
 
     results = {
@@ -561,33 +526,26 @@ async def fix_dependencies(
         "vulnerabilities_found": 0,
         "packages_upgraded": [],
         "errors": [],
-        "requires_restart": False
+        "requires_restart": False,
     }
 
     try:
         # Step 1: Ensure pip-audit is installed
         logger.info("Checking pip-audit installation...")
         check_audit = subprocess.run(
-            [python_path, "-m", "pip_audit", "--version"],
-            capture_output=True,
-            text=True,
-            timeout=30
+            [python_path, "-m", "pip_audit", "--version"], capture_output=True, text=True, timeout=30
         )
 
         if check_audit.returncode != 0:
             # Install pip-audit
             logger.info("Installing pip-audit...")
             install_result = subprocess.run(
-                [pip_path, "install", "pip-audit"],
-                capture_output=True,
-                text=True,
-                timeout=120
+                [pip_path, "install", "pip-audit"], capture_output=True, text=True, timeout=120
             )
             if install_result.returncode != 0:
                 results["errors"].append(f"Failed to install pip-audit: {install_result.stderr}")
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="Could not install pip-audit"
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not install pip-audit"
                 )
 
         results["pip_audit_installed"] = True
@@ -595,16 +553,14 @@ async def fix_dependencies(
         # Step 2: Run pip-audit to check for vulnerabilities
         logger.info("Running pip-audit scan...")
         audit_result = subprocess.run(
-            [python_path, "-m", "pip_audit", "--format", "json"],
-            capture_output=True,
-            text=True,
-            timeout=120
+            [python_path, "-m", "pip_audit", "--format", "json"], capture_output=True, text=True, timeout=120
         )
 
         vulnerable_packages = []
         if audit_result.stdout:
             try:
                 import json
+
                 audit_data = json.loads(audit_result.stdout)
                 # pip-audit format: {"dependencies": [{"name": "pkg", "vulns": [...]}], "fixes": []}
                 dependencies = audit_data.get("dependencies", [])
@@ -618,11 +574,7 @@ async def fix_dependencies(
 
         if not vulnerable_packages:
             logger.info("No vulnerabilities found!")
-            return {
-                "success": True,
-                "message": "No known vulnerabilities found in your dependencies!",
-                **results
-            }
+            return {"success": True, "message": "No known vulnerabilities found in your dependencies!", **results}
 
         # Step 3: Upgrade vulnerable packages
         logger.info(f"Found {len(vulnerable_packages)} vulnerable packages, upgrading...")
@@ -636,14 +588,11 @@ async def fix_dependencies(
                     [python_path, "-m", "pip", "install", "--upgrade", "pip"],
                     capture_output=True,
                     text=True,
-                    timeout=120
+                    timeout=120,
                 )
             else:
                 upgrade_result = subprocess.run(
-                    [pip_path, "install", "--upgrade", package],
-                    capture_output=True,
-                    text=True,
-                    timeout=120
+                    [pip_path, "install", "--upgrade", package], capture_output=True, text=True, timeout=120
                 )
             if upgrade_result.returncode == 0:
                 results["packages_upgraded"].append(package)
@@ -658,26 +607,24 @@ async def fix_dependencies(
             return {
                 "success": True,
                 "message": f"Upgraded {len(results['packages_upgraded'])} package(s). Please restart the backend.",
-                **results
+                **results,
             }
         else:
             return {
                 "success": False,
                 "message": "Could not upgrade vulnerable packages. See errors for details.",
-                **results
+                **results,
             }
 
     except subprocess.TimeoutExpired:
         logger.error("Dependency fix timed out")
         raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Operation timed out. Try running pip-audit manually."
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Operation timed out. Try running pip-audit manually."
         )
     except Exception as e:
         logger.error(f"Failed to fix dependencies: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not fix dependencies: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not fix dependencies: {str(e)}"
         )
 
 
@@ -692,19 +639,17 @@ async def fix_rate_limiting(
     FilaOps auto-detects slowapi on startup and enables rate limiting.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
 
     # Find the venv pip path
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
 
     import platform
+
     if platform.system() == "Windows":
         pip_path = os.path.join(backend_dir, "venv", "Scripts", "pip.exe")
     else:
@@ -713,48 +658,42 @@ async def fix_rate_limiting(
     if not os.path.exists(pip_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Virtual environment not found at {os.path.dirname(pip_path)}"
+            detail=f"Virtual environment not found at {os.path.dirname(pip_path)}",
         )
 
     try:
         logger.info("Installing slowapi for rate limiting...")
-        result = subprocess.run(
-            [pip_path, "install", "slowapi"],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
+        result = subprocess.run([pip_path, "install", "slowapi"], capture_output=True, text=True, timeout=120)
 
         if result.returncode == 0:
             logger.info(f"Rate limiting installed by {current_user.email}")
             return {
                 "success": True,
                 "message": "SlowAPI installed! Restart the backend to enable rate limiting.",
-                "requires_restart": True
+                "requires_restart": True,
             }
         else:
             logger.error(f"Failed to install slowapi: {result.stderr}")
             raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Installation failed: {result.stderr[:200]}"
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Installation failed: {result.stderr[:200]}"
             )
 
     except subprocess.TimeoutExpired:
         logger.error("Rate limiting installation timed out")
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail="Installation timed out. Try running: pip install slowapi"
+            detail="Installation timed out. Try running: pip install slowapi",
         )
     except Exception as e:
         logger.error(f"Failed to install rate limiting: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not install rate limiting: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not install rate limiting: {str(e)}"
         )
 
 
 class SetupHTTPSRequest(BaseModel):
     """Request body for HTTPS setup"""
+
     domain: str
 
 
@@ -774,25 +713,19 @@ async def setup_https(
     4. Start Caddy
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
     import platform
 
     domain = request.domain.strip()
     if not domain:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Domain is required"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Domain is required")
 
     # Find the project root
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
     project_root = os.path.dirname(backend_dir)
 
     results = {
@@ -801,18 +734,13 @@ async def setup_https(
         "caddyfile_created": False,
         "caddy_started": False,
         "domain": domain,
-        "errors": []
+        "errors": [],
     }
 
     try:
         # Step 1: Check if Caddy is installed
         logger.info("Checking if Caddy is installed...")
-        caddy_check = subprocess.run(
-            ["caddy", "version"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        caddy_check = subprocess.run(["caddy", "version"], capture_output=True, text=True, timeout=10)
 
         if caddy_check.returncode == 0:
             results["caddy_installed"] = True
@@ -830,7 +758,7 @@ async def setup_https(
             try:
                 # Download Caddy from GitHub releases using PowerShell
                 # This is more reliable than winget
-                download_script = f'''
+                download_script = f"""
 $ErrorActionPreference = "Stop"
 $caddyPath = "{caddy_exe_path}"
 
@@ -866,13 +794,13 @@ if ($caddyExe) {{
 # Cleanup
 Remove-Item $zipPath -Force
 Remove-Item $extractPath -Recurse -Force
-'''
+"""
                 # Run PowerShell to download Caddy
                 ps_result = subprocess.run(
                     ["powershell", "-ExecutionPolicy", "Bypass", "-Command", download_script],
                     capture_output=True,
                     text=True,
-                    timeout=120
+                    timeout=120,
                 )
 
                 if ps_result.returncode == 0 and os.path.exists(caddy_exe_path):
@@ -928,8 +856,7 @@ Remove-Item $extractPath -Recurse -Force
     except Exception as e:
         results["errors"].append(f"Failed to create Caddyfile: {str(e)}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not create Caddyfile: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not create Caddyfile: {str(e)}"
         )
 
     # Step 4: Create desktop shortcut
@@ -973,7 +900,7 @@ Remove-Item $extractPath -Recurse -Force
             # Create a batch file launcher
             frontend_path = os.path.join(project_root, "frontend")
             launcher_path = os.path.join(desktop, "Start FilaOps.bat")
-            launcher_content = f'''@echo off
+            launcher_content = f"""@echo off
 title FilaOps Server
 color 0A
 echo.
@@ -1037,7 +964,7 @@ taskkill /FI "WINDOWTITLE eq FilaOps Backend*" > nul 2>&1
 taskkill /FI "WINDOWTITLE eq FilaOps Frontend*" > nul 2>&1
 taskkill /FI "WINDOWTITLE eq Caddy HTTPS*" > nul 2>&1
 echo  Servers stopped.
-'''
+"""
             with open(launcher_path, "w") as f:
                 f.write(launcher_content)
 
@@ -1064,7 +991,7 @@ echo  Servers stopped.
                     f"""export default defineConfig({{
   server: {{
     allowedHosts: ['localhost', '{domain}'],
-  }},"""
+  }},""",
                 )
                 with open(vite_config_path, "w") as f:
                     f.write(vite_content)
@@ -1073,6 +1000,7 @@ echo  Servers stopped.
             elif domain not in vite_content:
                 # Add domain to existing allowedHosts
                 import re
+
                 pattern = r"allowedHosts:\s*\[([^\]]*)\]"
                 match = re.search(pattern, vite_content)
                 if match:
@@ -1098,14 +1026,14 @@ echo  Servers stopped.
                     f'start "Caddy Server" "{caddy_exe}" run --config "{caddyfile_path}"',
                     shell=True,
                     cwd=project_root,
-                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                    creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
                 )
             else:
                 subprocess.Popen(
                     ["caddy", "run", "--config", caddyfile_path],
                     cwd=project_root,
                     stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
+                    stderr=subprocess.DEVNULL,
                 )
 
             results["caddy_started"] = True
@@ -1130,11 +1058,7 @@ echo  Servers stopped.
     else:
         message = f"HTTPS configured for {domain}! Start Caddy manually with: caddy run"
 
-    return {
-        "success": True,
-        "message": message,
-        **results
-    }
+    return {"success": True, "message": message, **results}
 
 
 @router.get("/remediate/check-caddy")
@@ -1144,26 +1068,15 @@ async def check_caddy_status(
 ):
     """Check if Caddy is installed and get its version."""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
 
     try:
-        result = subprocess.run(
-            ["caddy", "version"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
+        result = subprocess.run(["caddy", "version"], capture_output=True, text=True, timeout=10)
 
         if result.returncode == 0:
-            return {
-                "installed": True,
-                "version": result.stdout.strip()
-            }
+            return {"installed": True, "version": result.stdout.strip()}
         else:
             return {"installed": False, "version": None}
 
@@ -1182,32 +1095,24 @@ async def fix_dotfile_blocking(
     This prevents sensitive files from being exposed through the web server.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     import subprocess
 
     # Find the project root and Caddyfile
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )))
+    backend_dir = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+    )
     project_root = os.path.dirname(backend_dir)
     caddyfile_path = os.path.join(project_root, "Caddyfile")
 
-    results = {
-        "caddyfile_found": False,
-        "caddyfile_updated": False,
-        "caddy_reloaded": False,
-        "errors": []
-    }
+    results = {"caddyfile_found": False, "caddyfile_updated": False, "caddy_reloaded": False, "errors": []}
 
     # Check if Caddyfile exists
     if not os.path.exists(caddyfile_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Caddyfile not found at {caddyfile_path}. Set up HTTPS first."
+            detail=f"Caddyfile not found at {caddyfile_path}. Set up HTTPS first.",
         )
 
     results["caddyfile_found"] = True
@@ -1224,7 +1129,7 @@ async def fix_dotfile_blocking(
                 "success": True,
                 "message": "Dotfile blocking is already configured!",
                 "already_configured": True,
-                **results
+                **results,
             }
 
         # Add dotfile blocking rules using explicit handle blocks
@@ -1278,6 +1183,7 @@ async def fix_dotfile_blocking(
         try:
             # Check if caddy is running and reload it
             import platform
+
             if platform.system() == "Windows":
                 # Try to reload Caddy (it will pick up the new config)
                 # First check if caddy is in the project root
@@ -1288,7 +1194,7 @@ async def fix_dotfile_blocking(
                         capture_output=True,
                         text=True,
                         timeout=10,
-                        cwd=project_root
+                        cwd=project_root,
                     )
                 else:
                     reload_result = subprocess.run(
@@ -1296,7 +1202,7 @@ async def fix_dotfile_blocking(
                         capture_output=True,
                         text=True,
                         timeout=10,
-                        cwd=project_root
+                        cwd=project_root,
                     )
 
                 if reload_result.returncode == 0:
@@ -1311,7 +1217,7 @@ async def fix_dotfile_blocking(
                     capture_output=True,
                     text=True,
                     timeout=10,
-                    cwd=project_root
+                    cwd=project_root,
                 )
                 if reload_result.returncode == 0:
                     results["caddy_reloaded"] = True
@@ -1327,18 +1233,12 @@ async def fix_dotfile_blocking(
         else:
             message = "Dotfile blocking configured! Restart Caddy to apply changes."
 
-        return {
-            "success": True,
-            "message": message,
-            "requires_restart": not results["caddy_reloaded"],
-            **results
-        }
+        return {"success": True, "message": message, "requires_restart": not results["caddy_reloaded"], **results}
 
     except Exception as e:
         logger.error(f"Failed to configure dotfile blocking: {e}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not update Caddyfile: {str(e)}"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Could not update Caddyfile: {str(e)}"
         )
 
 
@@ -1354,10 +1254,7 @@ async def get_remediation_steps(
     Returns step-by-step instructions, code snippets, and file paths.
     """
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     # Remediation guides for each check
     remediation_guides = {
@@ -1371,7 +1268,7 @@ async def get_remediation_steps(
                     "step": 1,
                     "title": "Generate a Secure Key",
                     "description": "Click the button below to generate a cryptographically secure key.",
-                    "action": "generate_key"
+                    "action": "generate_key",
                 },
                 {
                     "step": 2,
@@ -1379,15 +1276,15 @@ async def get_remediation_steps(
                     "description": "Open your backend configuration file and replace the SECRET_KEY value.",
                     "file_path": "backend/.env",
                     "code_before": "SECRET_KEY=change-this-to-a-random-secret-key-in-production",
-                    "code_after": "SECRET_KEY=<your-generated-key>"
+                    "code_after": "SECRET_KEY=<your-generated-key>",
                 },
                 {
                     "step": 3,
                     "title": "Restart the Backend",
                     "description": "The new key takes effect after restarting the server.",
-                    "command": "Ctrl+C then run start-backend.ps1 again"
-                }
-            ]
+                    "command": "Ctrl+C then run start-backend.ps1 again",
+                },
+            ],
         },
         "secret_key_entropy": {
             "title": "Fix: SECRET_KEY Too Short",
@@ -1399,20 +1296,16 @@ async def get_remediation_steps(
                     "step": 1,
                     "title": "Generate a Longer Key",
                     "description": "Generate a new key with at least 64 characters.",
-                    "action": "generate_key"
+                    "action": "generate_key",
                 },
                 {
                     "step": 2,
                     "title": "Update Your .env File",
                     "description": "Replace the existing SECRET_KEY with the longer one.",
-                    "file_path": "backend/.env"
+                    "file_path": "backend/.env",
                 },
-                {
-                    "step": 3,
-                    "title": "Restart the Backend",
-                    "description": "Restart to apply the new key."
-                }
-            ]
+                {"step": 3, "title": "Restart the Backend", "description": "Restart to apply the new key."},
+            ],
         },
         "https_enabled": {
             "title": "Fix: Enable HTTPS",
@@ -1423,24 +1316,24 @@ async def get_remediation_steps(
                 {
                     "step": 1,
                     "title": "Enter Your Domain",
-                    "description": "Tell us what domain you want to use (e.g., filaops.local, mycompany.com)."
+                    "description": "Tell us what domain you want to use (e.g., filaops.local, mycompany.com).",
                 },
                 {
                     "step": 2,
                     "title": "We'll Install Caddy",
-                    "description": "We'll automatically install Caddy (a secure web server) if it's not already installed."
+                    "description": "We'll automatically install Caddy (a secure web server) if it's not already installed.",
                 },
                 {
                     "step": 3,
                     "title": "Configure & Start",
-                    "description": "We'll create the configuration and start the HTTPS server for you."
+                    "description": "We'll create the configuration and start the HTTPS server for you.",
                 },
                 {
                     "step": 4,
                     "title": "Desktop Shortcut",
-                    "description": "We'll create a 'Start FilaOps' shortcut on your desktop to launch everything with one click."
-                }
-            ]
+                    "description": "We'll create a 'Start FilaOps' shortcut on your desktop to launch everything with one click.",
+                },
+            ],
         },
         "cors_not_wildcard": {
             "title": "Fix: CORS Configuration",
@@ -1452,21 +1345,17 @@ async def get_remediation_steps(
                     "step": 1,
                     "title": "Open Your .env File",
                     "description": "Find the ALLOWED_ORIGINS setting.",
-                    "file_path": "backend/.env"
+                    "file_path": "backend/.env",
                 },
                 {
                     "step": 2,
                     "title": "Update Allowed Origins",
                     "description": "Replace localhost with your production domain(s):",
                     "code_before": 'ALLOWED_ORIGINS=["http://localhost:5173"]',
-                    "code_after": 'ALLOWED_ORIGINS=["https://yourdomain.com"]'
+                    "code_after": 'ALLOWED_ORIGINS=["https://yourdomain.com"]',
                 },
-                {
-                    "step": 3,
-                    "title": "Restart the Backend",
-                    "description": "Restart to apply the new CORS settings."
-                }
-            ]
+                {"step": 3, "title": "Restart the Backend", "description": "Restart to apply the new CORS settings."},
+            ],
         },
         "admin_password_changed": {
             "title": "Fix: Change Admin Password",
@@ -1479,19 +1368,15 @@ async def get_remediation_steps(
                     "title": "Go to Team Members",
                     "description": "Navigate to Admin > Team Members in the sidebar.",
                     "action": "navigate",
-                    "navigate_to": "/admin/users"
+                    "navigate_to": "/admin/users",
                 },
-                {
-                    "step": 2,
-                    "title": "Edit Admin User",
-                    "description": "Find the admin user and click Edit."
-                },
+                {"step": 2, "title": "Edit Admin User", "description": "Find the admin user and click Edit."},
                 {
                     "step": 3,
                     "title": "Set a Strong Password",
-                    "description": "Use a password with at least 12 characters, including uppercase, lowercase, numbers, and symbols."
-                }
-            ]
+                    "description": "Use a password with at least 12 characters, including uppercase, lowercase, numbers, and symbols.",
+                },
+            ],
         },
         "dependencies_secure": {
             "title": "Fix: Check Dependencies for Vulnerabilities",
@@ -1502,19 +1387,15 @@ async def get_remediation_steps(
                 {
                     "step": 1,
                     "title": "Scan for Vulnerabilities",
-                    "description": "We'll scan all installed packages for known security issues."
+                    "description": "We'll scan all installed packages for known security issues.",
                 },
                 {
                     "step": 2,
                     "title": "Upgrade Vulnerable Packages",
-                    "description": "Automatically upgrade any packages with known vulnerabilities."
+                    "description": "Automatically upgrade any packages with known vulnerabilities.",
                 },
-                {
-                    "step": 3,
-                    "title": "Restart the Backend",
-                    "description": "Restart to apply the updated packages."
-                }
-            ]
+                {"step": 3, "title": "Restart the Backend", "description": "Restart to apply the updated packages."},
+            ],
         },
         "rate_limiting_enabled": {
             "title": "Fix: Enable Rate Limiting",
@@ -1525,14 +1406,14 @@ async def get_remediation_steps(
                 {
                     "step": 1,
                     "title": "Install SlowAPI",
-                    "description": "We'll install the rate limiting library for you."
+                    "description": "We'll install the rate limiting library for you.",
                 },
                 {
                     "step": 2,
                     "title": "Restart the Backend",
-                    "description": "FilaOps will automatically detect and enable rate limiting."
-                }
-            ]
+                    "description": "FilaOps will automatically detect and enable rate limiting.",
+                },
+            ],
         },
         "backup_configured": {
             "title": "Fix: Configure Database Backups",
@@ -1548,15 +1429,15 @@ async def get_remediation_steps(
 set BACKUP_DIR=C:\\backups\\filaops
 set TIMESTAMP=%date:~-4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%
 pg_dump -U postgres -d filaops > "%BACKUP_DIR%\\filaops_%TIMESTAMP%.sql"
-"""
+""",
                 },
                 {
                     "step": 2,
                     "title": "Schedule Daily Backups",
                     "description": "Use Windows Task Scheduler to run the script daily.",
-                    "docs_url": "https://www.postgresql.org/docs/current/backup-dump.html"
-                }
-            ]
+                    "docs_url": "https://www.postgresql.org/docs/current/backup-dump.html",
+                },
+            ],
         },
         "env_file_not_exposed": {
             "title": "Fix: Block .env File Access",
@@ -1567,21 +1448,20 @@ pg_dump -U postgres -d filaops > "%BACKUP_DIR%\\filaops_%TIMESTAMP%.sql"
                 {
                     "step": 1,
                     "title": "Update Caddy Configuration",
-                    "description": "We'll add a rule to your Caddyfile that blocks access to sensitive files like .env and .git folders."
+                    "description": "We'll add a rule to your Caddyfile that blocks access to sensitive files like .env and .git folders.",
                 },
                 {
                     "step": 2,
                     "title": "Reload Caddy",
-                    "description": "We'll automatically reload Caddy to apply the changes."
-                }
-            ]
-        }
+                    "description": "We'll automatically reload Caddy to apply the changes.",
+                },
+            ],
+        },
     }
 
     if check_id not in remediation_guides:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"No remediation guide found for check: {check_id}"
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"No remediation guide found for check: {check_id}"
         )
 
     return remediation_guides[check_id]

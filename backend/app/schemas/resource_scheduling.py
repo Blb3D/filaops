@@ -1,6 +1,7 @@
 """
 Schemas for resource scheduling.
 """
+
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 
 class ScheduleOperationRequest(BaseModel):
     """Request to schedule an operation."""
+
     resource_id: int
     scheduled_start: datetime
     scheduled_end: datetime
@@ -16,6 +18,7 @@ class ScheduleOperationRequest(BaseModel):
 
 class ScheduledOperationInfo(BaseModel):
     """Information about a scheduled operation."""
+
     operation_id: int
     production_order_id: int
     production_order_code: Optional[str] = None
@@ -31,6 +34,7 @@ class ScheduledOperationInfo(BaseModel):
 
 class ConflictInfo(BaseModel):
     """Information about a conflicting operation."""
+
     operation_id: int
     production_order_id: int
     production_order_code: Optional[str] = None
@@ -44,6 +48,7 @@ class ConflictInfo(BaseModel):
 
 class ResourceScheduleResponse(BaseModel):
     """Response with resource schedule."""
+
     resource_id: int
     resource_code: Optional[str] = None
     resource_name: Optional[str] = None
@@ -52,12 +57,14 @@ class ResourceScheduleResponse(BaseModel):
 
 class ConflictCheckResponse(BaseModel):
     """Response from conflict check."""
+
     has_conflicts: bool
     conflicts: List[ConflictInfo]
 
 
 class ScheduleOperationResponse(BaseModel):
     """Response from schedule operation."""
+
     success: bool
     message: Optional[str] = None
     operation_id: Optional[int] = None
@@ -66,6 +73,7 @@ class ScheduleOperationResponse(BaseModel):
 
 class NextAvailableSlotRequest(BaseModel):
     """Request to find next available time slot."""
+
     resource_id: int
     duration_minutes: int
     is_printer: bool = False
@@ -74,5 +82,6 @@ class NextAvailableSlotRequest(BaseModel):
 
 class NextAvailableSlotResponse(BaseModel):
     """Response with next available time slot."""
+
     next_available: datetime
     suggested_end: datetime  # Based on requested duration

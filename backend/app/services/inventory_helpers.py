@@ -6,6 +6,7 @@ Utilities for handling material vs. non-material items in the inventory system.
 IMPORTANT: This module uses the centralized UOM config. Do not hardcode
 material detection logic here - use the functions from uom_config.py
 """
+
 from decimal import Decimal
 from app.models.product import Product
 from app.core.uom_config import (
@@ -70,8 +71,8 @@ def convert_to_transaction_unit(quantity: float, from_unit: str, product: Produc
         return quantity
 
     # Materials: Convert to storage unit
-    from_unit_upper = (from_unit or '').upper().strip()
-    to_unit_upper = (product.unit or 'G').upper().strip()
+    from_unit_upper = (from_unit or "").upper().strip()
+    to_unit_upper = (product.unit or "G").upper().strip()
 
     # If same unit, no conversion
     if from_unit_upper == to_unit_upper:
@@ -79,25 +80,25 @@ def convert_to_transaction_unit(quantity: float, from_unit: str, product: Produc
 
     # Conversion factors to grams (for mass-based materials)
     conversion_to_grams = {
-        'G': 1.0,
-        'KG': 1000.0,
-        'LB': 453.592,
-        'OZ': 28.3495,
+        "G": 1.0,
+        "KG": 1000.0,
+        "LB": 453.592,
+        "OZ": 28.3495,
     }
 
     # Conversion factors to milliliters (for volume-based materials like resin)
     conversion_to_ml = {
-        'ML': 1.0,
-        'L': 1000.0,
-        'GAL': 3785.41,
+        "ML": 1.0,
+        "L": 1000.0,
+        "GAL": 3785.41,
     }
 
     # Conversion factors to inches (for linear materials)
     conversion_to_inches = {
-        'IN': 1.0,
-        'FT': 12.0,
-        'M': 39.3701,
-        'CM': 0.393701,
+        "IN": 1.0,
+        "FT": 12.0,
+        "M": 39.3701,
+        "CM": 0.393701,
     }
 
     # Try mass conversion (most common for filament)
@@ -120,6 +121,7 @@ def convert_to_transaction_unit(quantity: float, from_unit: str, product: Produc
 
     # Unknown unit - log warning and return original
     import logging
+
     logging.warning(
         f"Unknown unit conversion '{from_unit}' to '{product.unit}' "
         f"for product {product.sku}, returning original quantity"

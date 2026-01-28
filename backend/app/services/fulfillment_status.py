@@ -3,15 +3,14 @@ Fulfillment Status Service - API-301
 
 Calculates fulfillment status for sales orders.
 """
+
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import date
 
 from app.models.sales_order import SalesOrder
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
-from app.schemas.fulfillment_status import (
-    FulfillmentStatus, FulfillmentStatusSummary, LineStatus, FulfillmentState
-)
+from app.schemas.fulfillment_status import FulfillmentStatus, FulfillmentStatusSummary, LineStatus, FulfillmentState
 
 
 def get_fulfillment_status(db: Session, order_id: int) -> Optional[FulfillmentStatus]:
@@ -64,20 +63,22 @@ def get_fulfillment_status(db: Session, order_id: int) -> Optional[FulfillmentSt
         product_sku = line.product.sku if line.product else "UNKNOWN"
         product_name = line.product.name if line.product else "Unknown Product"
 
-        lines_status.append(LineStatus(
-            line_id=line.id,
-            line_number=idx,
-            product_id=line.product_id,
-            product_sku=product_sku,
-            product_name=product_name,
-            quantity_ordered=quantity_ordered,
-            quantity_allocated=allocated,
-            quantity_shipped=shipped,
-            quantity_remaining=remaining,
-            is_ready=is_ready,
-            shortage=shortage,
-            blocking_reason=f"Insufficient inventory (need {shortage:.1f} more)" if shortage > 0 else None
-        ))
+        lines_status.append(
+            LineStatus(
+                line_id=line.id,
+                line_number=idx,
+                product_id=line.product_id,
+                product_sku=product_sku,
+                product_name=product_name,
+                quantity_ordered=quantity_ordered,
+                quantity_allocated=allocated,
+                quantity_shipped=shipped,
+                quantity_remaining=remaining,
+                is_ready=is_ready,
+                shortage=shortage,
+                blocking_reason=f"Insufficient inventory (need {shortage:.1f} more)" if shortage > 0 else None,
+            )
+        )
 
     lines_total = len(lines_status)
 
@@ -122,9 +123,9 @@ def get_fulfillment_status(db: Session, order_id: int) -> Optional[FulfillmentSt
             fulfillment_percent=round(fulfillment_percent, 1),
             can_ship_partial=lines_ready > 0,
             can_ship_complete=lines_ready == lines_total and lines_total > 0,
-            estimated_complete_date=estimated_date
+            estimated_complete_date=estimated_date,
         ),
-        lines=lines_status
+        lines=lines_status,
     )
 
 
@@ -133,9 +134,7 @@ def _estimate_completion_date(db: Session, order: SalesOrder, lines_status: list
     Estimate when all lines could be fulfilled based on incoming POs.
     Returns None if no incoming supply found for blocked items.
     """
-    blocked_product_ids = [
-        line.product_id for line in lines_status if not line.is_ready
-    ]
+    blocked_product_ids = [line.product_id for line in lines_status if not line.is_ready]
 
     if not blocked_product_ids:
         return None  # All lines ready, no estimate needed
@@ -143,10 +142,15 @@ def _estimate_completion_date(db: Session, order: SalesOrder, lines_status: list
     # Find open PO lines for blocked products with expected dates
     latest_date = None
 
-    po_lines = db.query(PurchaseOrderLine).join(PurchaseOrder).filter(
-        PurchaseOrderLine.product_id.in_(blocked_product_ids),
-        PurchaseOrder.status.in_(["draft", "submitted", "approved", "ordered", "partial"])
-    ).all()
+    po_lines = (
+        db.query(PurchaseOrderLine)
+        .join(PurchaseOrder)
+        .filter(
+            PurchaseOrderLine.product_id.in_(blocked_product_ids),
+            PurchaseOrder.status.in_(["draft", "submitted", "approved", "ordered", "partial"]),
+        )
+        .all()
+    )
 
     for pol in po_lines:
         if pol.purchase_order and pol.purchase_order.expected_date:
@@ -169,25 +173,26 @@ def _build_shipped_status(db: Session, order: SalesOrder) -> FulfillmentStatus:
         product_sku = line.product.sku if line.product else "UNKNOWN"
         product_name = line.product.name if line.product else "Unknown Product"
 
-        lines_status.append(LineStatus(
-            line_id=line.id,
-            line_number=idx,
-            product_id=line.product_id,
-            product_sku=product_sku,
-            product_name=product_name,
-            quantity_ordered=quantity_ordered,
-            quantity_allocated=quantity_ordered,  # Fully allocated since shipped
-            quantity_shipped=shipped,
-            quantity_remaining=0,  # All shipped
-            is_ready=True,
-            shortage=0,
-            blocking_reason=None
-        ))
+        lines_status.append(
+            LineStatus(
+                line_id=line.id,
+                line_number=idx,
+                product_id=line.product_id,
+                product_sku=product_sku,
+                product_name=product_name,
+                quantity_ordered=quantity_ordered,
+                quantity_allocated=quantity_ordered,  # Fully allocated since shipped
+                quantity_shipped=shipped,
+                quantity_remaining=0,  # All shipped
+                is_ready=True,
+                shortage=0,
+                blocking_reason=None,
+            )
+        )
 
     order_date = order.created_at.date() if order.created_at else date.today()
     customer_name = order.customer_name or (
-        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip()
-        if order.customer else "Unknown"
+        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip() if order.customer else "Unknown"
     )
 
     return FulfillmentStatus(
@@ -204,9 +209,9 @@ def _build_shipped_status(db: Session, order: SalesOrder) -> FulfillmentStatus:
             fulfillment_percent=100.0,
             can_ship_partial=False,  # Already shipped
             can_ship_complete=False,  # Already shipped
-            estimated_complete_date=None
+            estimated_complete_date=None,
         ),
-        lines=lines_status
+        lines=lines_status,
     )
 
 
@@ -220,25 +225,26 @@ def _build_cancelled_status(db: Session, order: SalesOrder) -> FulfillmentStatus
         product_sku = line.product.sku if line.product else "UNKNOWN"
         product_name = line.product.name if line.product else "Unknown Product"
 
-        lines_status.append(LineStatus(
-            line_id=line.id,
-            line_number=idx,
-            product_id=line.product_id,
-            product_sku=product_sku,
-            product_name=product_name,
-            quantity_ordered=quantity_ordered,
-            quantity_allocated=0,
-            quantity_shipped=0,
-            quantity_remaining=0,
-            is_ready=False,
-            shortage=0,
-            blocking_reason="Order cancelled"
-        ))
+        lines_status.append(
+            LineStatus(
+                line_id=line.id,
+                line_number=idx,
+                product_id=line.product_id,
+                product_sku=product_sku,
+                product_name=product_name,
+                quantity_ordered=quantity_ordered,
+                quantity_allocated=0,
+                quantity_shipped=0,
+                quantity_remaining=0,
+                is_ready=False,
+                shortage=0,
+                blocking_reason="Order cancelled",
+            )
+        )
 
     order_date = order.created_at.date() if order.created_at else date.today()
     customer_name = order.customer_name or (
-        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip()
-        if order.customer else "Unknown"
+        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip() if order.customer else "Unknown"
     )
 
     return FulfillmentStatus(
@@ -255,7 +261,7 @@ def _build_cancelled_status(db: Session, order: SalesOrder) -> FulfillmentStatus
             fulfillment_percent=0.0,
             can_ship_partial=False,
             can_ship_complete=False,
-            estimated_complete_date=None
+            estimated_complete_date=None,
         ),
-        lines=lines_status
+        lines=lines_status,
     )

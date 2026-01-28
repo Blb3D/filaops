@@ -15,9 +15,9 @@ from datetime import datetime
 # Create database session
 db = SessionLocal()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("PHASE 1 ORDER STATUS WORKFLOW - QUICK TEST")
-print("="*60)
+print("=" * 60)
 
 # ========================================
 # TEST 1: Verify Models Have New Fields
@@ -80,7 +80,7 @@ test_so = SalesOrder(
     grand_total=10.00,
     status="draft",
     fulfillment_status="pending",
-    payment_status="pending"
+    payment_status="pending",
 )
 db.add(test_so)
 db.commit()
@@ -95,7 +95,7 @@ print("\n=== TEST 4: Update Status (Valid) ===")
 try:
     order_status_service.update_so_status(db, test_so, "pending_payment")
     print(f"✅ Updated to: {test_so.status}")
-    
+
     order_status_service.update_so_status(db, test_so, "confirmed")
     print(f"✅ Updated to: {test_so.status}")
     print(f"   confirmed_at: {test_so.confirmed_at}")
@@ -128,7 +128,7 @@ test_wo = ProductionOrder(
     quantity_ordered=1,
     status="draft",
     qc_status="pending",
-    source="sales_order"
+    source="sales_order",
 )
 db.add(test_wo)
 db.commit()
@@ -184,17 +184,14 @@ scrap_wo = ProductionOrder(
     quantity_ordered=5,
     status="completed",
     qc_status="failed",
-    source="sales_order"
+    source="sales_order",
 )
 db.add(scrap_wo)
 db.commit()
 db.refresh(scrap_wo)
 
 remake_wo = order_status_service.scrap_wo_and_create_remake(
-    db=db,
-    wo=scrap_wo,
-    scrap_reason="layer_shift",
-    scrap_quantity=5
+    db=db, wo=scrap_wo, scrap_reason="layer_shift", scrap_quantity=5
 )
 
 print(f"✅ Scrapped: {scrap_wo.code} (reason: {scrap_wo.scrap_reason})")
@@ -213,8 +210,8 @@ print("🧹 Test data cleaned up")
 
 db.close()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("🎉 ALL TESTS PASSED!")
-print("="*60)
+print("=" * 60)
 print("\nPhase 1 implementation validated successfully!")
 print("Ready to proceed to Phase 2 (API endpoint updates)")

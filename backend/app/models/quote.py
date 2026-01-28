@@ -3,10 +3,20 @@ SQLAlchemy models for customer quotes and uploaded files
 
 Handles quote requests, file uploads, and approval workflow
 """
+
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Numeric, BigInteger, Boolean,
-    DateTime, Date, ForeignKey, LargeBinary, func
+    Column,
+    Integer,
+    String,
+    Numeric,
+    BigInteger,
+    Boolean,
+    DateTime,
+    Date,
+    ForeignKey,
+    LargeBinary,
+    func,
 )
 from sqlalchemy.orm import relationship
 
@@ -19,6 +29,7 @@ class Quote(Base):
 
     Stores quote details, pricing, and approval workflow
     """
+
     __tablename__ = "quotes"
 
     # Primary Key
@@ -34,7 +45,7 @@ class Quote(Base):
     material_type = Column(String(50), nullable=True)  # PLA_BASIC, PLA_MATTE, PETG_HF, etc. (optional for admin quotes)
     color = Column(String(30), nullable=True)  # Color code: BLK, WHT, CHARCOAL, etc.
     finish = Column(String(50), default="standard")  # standard, smooth, painted
-    
+
     # G-code file path (for production)
     gcode_file_path = Column(String(500), nullable=True)
 
@@ -81,11 +92,11 @@ class Quote(Base):
     customer_notes = Column(String(1000), nullable=True)
     admin_notes = Column(String(1000), nullable=True)
     internal_notes = Column(String(1000), nullable=True)  # Internal processing notes
-    
+
     # Customer Contact (for portal quotes where user_id is generic)
     customer_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)  # Link to customer record
     customer_email = Column(String(255), nullable=True)  # Email for quote follow-up
-    customer_name = Column(String(200), nullable=True)   # Name if not logged in
+    customer_name = Column(String(200), nullable=True)  # Name if not logged in
 
     # Shipping Address (captured when quote is accepted)
     shipping_name = Column(String(200), nullable=True)
@@ -99,7 +110,7 @@ class Quote(Base):
 
     # Shipping Selection (from EasyPost)
     shipping_rate_id = Column(String(100), nullable=True)  # EasyPost rate ID
-    shipping_carrier = Column(String(50), nullable=True)   # USPS, UPS, FedEx
+    shipping_carrier = Column(String(50), nullable=True)  # USPS, UPS, FedEx
     shipping_service = Column(String(100), nullable=True)  # Priority, Ground, etc.
     shipping_cost = Column(Numeric(10, 2), nullable=True)  # Selected shipping cost
 
@@ -121,7 +132,9 @@ class Quote(Base):
     files = relationship("QuoteFile", back_populates="quote", cascade="all, delete-orphan")
     sales_order = relationship("SalesOrder", back_populates="quote", uselist=False)
     product = relationship("Product", back_populates="quotes")  # Auto-created custom product
-    materials = relationship("QuoteMaterial", back_populates="quote", cascade="all, delete-orphan")  # Multi-material breakdown
+    materials = relationship(
+        "QuoteMaterial", back_populates="quote", cascade="all, delete-orphan"
+    )  # Multi-material breakdown
 
     def __repr__(self):
         return f"<Quote(id={self.id}, number={self.quote_number}, status={self.status}, price=${self.total_price})>"
@@ -155,10 +168,12 @@ class Quote(Base):
             return False
 
         # ABS/ASA dimension check
-        if self.material_type in ['ABS', 'ASA']:
-            if (self.dimensions_x and self.dimensions_x > 200) or \
-               (self.dimensions_y and self.dimensions_y > 200) or \
-               (self.dimensions_z and self.dimensions_z > 100):
+        if self.material_type in ["ABS", "ASA"]:
+            if (
+                (self.dimensions_x and self.dimensions_x > 200)
+                or (self.dimensions_y and self.dimensions_y > 200)
+                or (self.dimensions_z and self.dimensions_z > 100)
+            ):
                 return False
 
         return True
@@ -188,6 +203,7 @@ class QuoteFile(Base):
 
     Stores file metadata and processing status
     """
+
     __tablename__ = "quote_files"
 
     # Primary Key
@@ -248,6 +264,7 @@ class QuoteMaterial(Base):
     For single-color quotes, there will be one QuoteMaterial row with
     the total weight.
     """
+
     __tablename__ = "quote_materials"
 
     # Primary Key

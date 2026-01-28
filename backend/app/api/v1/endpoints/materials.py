@@ -3,6 +3,7 @@ Material API Endpoints
 
 Provides material type and color options for the quote portal.
 """
+
 from typing import List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile, Query
@@ -37,8 +38,10 @@ router = APIRouter()
 # SCHEMAS
 # ============================================================================
 
+
 class ColorOption(BaseModel):
     """Color option for dropdown"""
+
     code: str
     name: str
     hex: str | None
@@ -49,6 +52,7 @@ class ColorOption(BaseModel):
 
 class MaterialTypeOption(BaseModel):
     """Material type with available colors"""
+
     code: str
     name: str
     description: str | None
@@ -61,11 +65,13 @@ class MaterialTypeOption(BaseModel):
 
 class MaterialOptionsResponse(BaseModel):
     """Response containing all material options for portal"""
+
     materials: List[MaterialTypeOption]
 
 
 class SimpleColorOption(BaseModel):
     """Simple color option"""
+
     code: str
     name: str
     hex: str | None
@@ -73,6 +79,7 @@ class SimpleColorOption(BaseModel):
 
 class ColorsResponse(BaseModel):
     """Response containing colors for a material type"""
+
     material_type: str
     colors: List[SimpleColorOption]
 
@@ -84,18 +91,16 @@ class ColorsResponse(BaseModel):
 # ENDPOINTS
 # ============================================================================
 
+
 @router.get("/options", response_model=MaterialOptionsResponse)
-def get_material_options(
-    in_stock_only: bool = True,
-    db: Session = Depends(get_db)
-):
+def get_material_options(in_stock_only: bool = True, db: Session = Depends(get_db)):
     """
     Get all material options for the quote portal.
-    
+
     Returns a hierarchical structure:
     - Material types (first dropdown)
     - Colors available for each material type (second dropdown)
-    
+
     Only returns materials that are:
     - Active
     - Customer visible
@@ -103,12 +108,12 @@ def get_material_options(
     """
     try:
         materials = get_portal_material_options(db)
-        
+
         # Filter based on in_stock_only
         if in_stock_only:
             # Already filtered by get_portal_material_options
             pass
-        
+
         return MaterialOptionsResponse(
             materials=[
                 MaterialTypeOption(
@@ -129,7 +134,7 @@ def get_material_options(
                             quantity_kg=c.get("quantity_kg", 0.0),
                         )
                         for c in m["colors"]
-                    ]
+                    ],
                 )
                 for m in materials
             ]
@@ -146,11 +151,11 @@ def get_material_options(
 # def create_material_inventory(...):
 #     """
 #     DEPRECATED: Use POST /api/v1/items/material instead.
-#     
+#
 #     This endpoint is deprecated as part of Phase 2.2 (Materials API cleanup).
 #     Material creation should now use the unified Items API:
 #     POST /api/v1/items/material
-#     
+#
 #     This endpoint will be removed in a future version.
 #     """
 #     raise HTTPException(
@@ -160,10 +165,7 @@ def get_material_options(
 
 
 @router.get("/types")
-def list_material_types(
-    customer_visible_only: bool = True,
-    db: Session = Depends(get_db)
-):
+def list_material_types(customer_visible_only: bool = True, db: Session = Depends(get_db)):
     """
     Get list of material types (for first dropdown).
 
@@ -171,7 +173,7 @@ def list_material_types(
     """
     try:
         materials = get_available_material_types(db, customer_visible_only=customer_visible_only)
-        
+
         return {
             "materials": [
                 {
@@ -195,7 +197,7 @@ def list_colors_for_material(
     material_type_code: str,
     in_stock_only: bool = True,
     customer_visible_only: bool = True,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     Get available colors for a specific material type (for second dropdown).
@@ -208,9 +210,9 @@ def list_colors_for_material(
             db,
             material_type_code=material_type_code,
             in_stock_only=in_stock_only,
-            customer_visible_only=customer_visible_only
+            customer_visible_only=customer_visible_only,
         )
-        
+
         return ColorsResponse(
             material_type=material_type_code,
             colors=[
@@ -220,19 +222,17 @@ def list_colors_for_material(
                     hex=c.hex_code,
                 )
                 for c in colors
-            ]
+            ],
         )
     except MaterialNotFoundError:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Material type not found: {material_type_code}"
-        )
+        raise HTTPException(status_code=404, detail=f"Material type not found: {material_type_code}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 class ColorCreate(BaseModel):
     """Schema for creating a new color"""
+
     name: str
     code: str | None = None  # Auto-generated if not provided
     hex_code: str | None = None
@@ -240,6 +240,7 @@ class ColorCreate(BaseModel):
 
 class ColorCreateResponse(BaseModel):
     """Response after creating a color"""
+
     id: int
     code: str
     name: str
@@ -253,7 +254,7 @@ def create_color_for_material(
     material_type_code: str,
     color_data: ColorCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
     Create a new color and link it to a material type.
@@ -267,21 +268,13 @@ def create_color_for_material(
     """
     # Check admin permission
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin access required to create colors"
-        )
+        raise HTTPException(status_code=403, detail="Admin access required to create colors")
 
     # Find material type
-    material_type = db.query(MaterialType).filter(
-        MaterialType.code == material_type_code
-    ).first()
+    material_type = db.query(MaterialType).filter(MaterialType.code == material_type_code).first()
 
     if not material_type:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Material type not found: {material_type_code}"
-        )
+        raise HTTPException(status_code=404, detail=f"Material type not found: {material_type_code}")
 
     # Generate code if not provided
     color_code = color_data.code
@@ -303,15 +296,15 @@ def create_color_for_material(
         color = existing_color
 
         # Check if already linked
-        existing_link = db.query(MaterialColor).filter(
-            MaterialColor.material_type_id == material_type.id,
-            MaterialColor.color_id == color.id
-        ).first()
+        existing_link = (
+            db.query(MaterialColor)
+            .filter(MaterialColor.material_type_id == material_type.id, MaterialColor.color_id == color.id)
+            .first()
+        )
 
         if existing_link:
             raise HTTPException(
-                status_code=400,
-                detail=f"Color '{color.name}' is already linked to {material_type.name}"
+                status_code=400, detail=f"Color '{color.name}' is already linked to {material_type.name}"
             )
     else:
         # Create new color
@@ -321,17 +314,14 @@ def create_color_for_material(
             hex_code=color_data.hex_code,
             active=True,
             is_customer_visible=True,
-            display_order=100
+            display_order=100,
         )
         db.add(color)
         db.flush()
 
     # Create MaterialColor link
     material_color = MaterialColor(
-        material_type_id=material_type.id,
-        color_id=color.id,
-        is_customer_visible=True,
-        active=True
+        material_type_id=material_type.id, color_id=color.id, is_customer_visible=True, active=True
     )
     db.add(material_color)
     db.commit()
@@ -343,14 +333,12 @@ def create_color_for_material(
         name=color.name,
         hex_code=color.hex_code,
         material_type_code=material_type_code,
-        message=f"Color '{color.name}' created and linked to {material_type.name}"
+        message=f"Color '{color.name}' created and linked to {material_type.name}",
     )
 
 
 @router.get("/for-bom")
-def get_materials_for_bom(
-    db: Session = Depends(get_db)
-):
+def get_materials_for_bom(db: Session = Depends(get_db)):
     """
     Get all materials formatted for BOM usage.
 
@@ -369,27 +357,20 @@ def get_materials_for_bom(
 
         for material in materials:
             colors = get_available_colors_for_material(
-                db,
-                material.code,
-                in_stock_only=False,
-                customer_visible_only=False
+                db, material.code, in_stock_only=False, customer_visible_only=False
             )
 
             for color in colors:
                 # Get or create the product (this ensures it exists in products table)
                 try:
                     product, _ = get_material_product_for_bom(
-                        db,
-                        material_type_code=material.code,
-                        color_code=color.code,
-                        require_in_stock=False
+                        db, material_type_code=material.code, color_code=color.code, require_in_stock=False
                     )
 
                     # Get inventory from unified Inventory table
                     from app.models.inventory import Inventory
-                    inventory = db.query(Inventory).filter(
-                        Inventory.product_id == product.id
-                    ).first()
+
+                    inventory = db.query(Inventory).filter(Inventory.product_id == product.id).first()
 
                     # Calculate available quantity
                     quantity_available = 0.0
@@ -398,21 +379,25 @@ def get_materials_for_bom(
                         quantity_available = float(inventory.on_hand_quantity or 0)
                         in_stock = quantity_available > 0
 
-                    result.append({
-                        "id": product.id,  # This is the key - actual product_id for BOM
-                        "sku": product.sku,
-                        "name": f"{material.name} - {color.name}",
-                        "description": material.description or f"{material.base_material} filament",
-                        "item_type": "supply",
-                        "procurement_type": "buy",
-                        "unit": "kg",
-                        "standard_cost": float(product.standard_cost) if product.standard_cost else float(material.base_price_per_kg),
-                        "in_stock": in_stock,
-                        "quantity_available": quantity_available,
-                        "material_code": material.code,
-                        "color_code": color.code,
-                        "color_hex": color.hex_code,
-                    })
+                    result.append(
+                        {
+                            "id": product.id,  # This is the key - actual product_id for BOM
+                            "sku": product.sku,
+                            "name": f"{material.name} - {color.name}",
+                            "description": material.description or f"{material.base_material} filament",
+                            "item_type": "supply",
+                            "procurement_type": "buy",
+                            "unit": "kg",
+                            "standard_cost": float(product.standard_cost)
+                            if product.standard_cost
+                            else float(material.base_price_per_kg),
+                            "in_stock": in_stock,
+                            "quantity_available": quantity_available,
+                            "material_code": material.code,
+                            "color_code": color.code,
+                            "color_hex": color.hex_code,
+                        }
+                    )
                 except Exception:
                     # Skip materials that can't be resolved
                     continue
@@ -423,25 +408,19 @@ def get_materials_for_bom(
 
 
 @router.get("/pricing/{material_type_code}")
-def get_material_pricing(
-    material_type_code: str,
-    db: Session = Depends(get_db)
-):
+def get_material_pricing(material_type_code: str, db: Session = Depends(get_db)):
     """
     Get pricing information for a material type.
-    
+
     Used by the quote engine to calculate prices.
     """
     try:
         materials = get_available_material_types(db, customer_visible_only=False)
         material = next((m for m in materials if m.code == material_type_code), None)
-        
+
         if not material:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Material type not found: {material_type_code}"
-            )
-        
+            raise HTTPException(status_code=404, detail=f"Material type not found: {material_type_code}")
+
         return {
             "code": material.code,
             "name": material.name,
@@ -466,8 +445,10 @@ def get_material_pricing(
 # CSV IMPORT
 # ============================================================================
 
+
 class MaterialCSVImportResult(BaseModel):
     """Result of material CSV import"""
+
     total_rows: int
     created: int
     updated: int
@@ -479,7 +460,7 @@ class MaterialCSVImportResult(BaseModel):
 async def download_material_import_template():
     """
     Download CSV template for material inventory import.
-    
+
     Template format matches the standard material inventory CSV:
     - Category (e.g., "PLA Matte", "PLA Basic")
     - SKU (e.g., "MAT-FDM-PLA-MATTE-CHAR")
@@ -496,11 +477,11 @@ async def download_material_import_template():
 PLA Matte,MAT-FDM-PLA-MATTE-CHAR,PLA Matte Charcoal,PLA_MATTE,Charcoal,#0C0C0C,kg,Active,19.99,0
 PLA Basic,MAT-FDM-PLA-BASIC-RED,PLA Basic Red,PLA_BASIC,Red,#FF0000,kg,Active,19.99,0
 PLA Silk,MAT-FDM-PLA-SILK-GOLD,PLA Silk Gold,PLA_SILK,Gold,#F4A925,kg,Active,22.99,0"""
-    
+
     return StreamingResponse(
-        io.BytesIO(template.encode('utf-8')),
-        media_type='text/csv',
-        headers={"Content-Disposition": "attachment; filename=material_inventory_template.csv"}
+        io.BytesIO(template.encode("utf-8")),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=material_inventory_template.csv"},
     )
 
 
@@ -514,7 +495,7 @@ async def import_materials_csv(
 ):
     """
     Import material inventory from CSV file.
-    
+
     Expected CSV format:
     - Category: Material category (e.g., "PLA Matte", "PLA Basic")
     - SKU: Product SKU (e.g., "MAT-FDM-PLA-MATTE-CHAR")
@@ -526,7 +507,7 @@ async def import_materials_csv(
     - Status: Active status (e.g., "Active")
     - Price: Price per kg (e.g., 19.99)
     - On Hand (g): Quantity in grams (will be converted to kg)
-    
+
     Creates:
     - MaterialType (if doesn't exist)
     - Color (if doesn't exist)
@@ -534,19 +515,19 @@ async def import_materials_csv(
     - Product with SKU
     - Inventory record with quantity
     """
-    if not file.filename or not file.filename.endswith('.csv'):
+    if not file.filename or not file.filename.endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a CSV")
-    
+
     content = await file.read()
     try:
-        text = content.decode('utf-8')
+        text = content.decode("utf-8")
     except UnicodeDecodeError:
-        text = content.decode('latin-1')
-    
+        text = content.decode("latin-1")
+
     # Handle BOM
-    if text.startswith('\ufeff'):
+    if text.startswith("\ufeff"):
         text = text[1:]
-    
+
     reader = csv.DictReader(io.StringIO(text))
 
     # Normalize column names (strip whitespace, handle encoding)
@@ -580,23 +561,16 @@ async def import_materials_csv(
                 if original_name in row and row[original_name] and row[original_name].strip():
                     return row[original_name].strip()
         return ""
-    
+
     # Get or create default inventory location
-    default_location = db.query(InventoryLocation).filter(
-        InventoryLocation.code == "MAIN"
-    ).first()
-    
+    default_location = db.query(InventoryLocation).filter(InventoryLocation.code == "MAIN").first()
+
     if not default_location:
-        default_location = InventoryLocation(
-            code="MAIN",
-            name="Main Warehouse",
-            type="warehouse",
-            active=True
-        )
+        default_location = InventoryLocation(code="MAIN", name="Main Warehouse", type="warehouse", active=True)
         db.add(default_location)
         db.commit()
         db.refresh(default_location)
-    
+
     # Column name variations
     SKU_COLS = ["sku", "SKU", "Sku"]
     NAME_COLS = ["name", "Name", "Product Name"]
@@ -610,9 +584,7 @@ async def import_materials_csv(
     # Get or create "Filament" root category for material imports
     filament_root_category = None
     if import_categories:
-        filament_root_category = db.query(ItemCategory).filter(
-            ItemCategory.code == "FILAMENT"
-        ).first()
+        filament_root_category = db.query(ItemCategory).filter(ItemCategory.code == "FILAMENT").first()
 
         if not filament_root_category:
             filament_root_category = ItemCategory(
@@ -620,11 +592,11 @@ async def import_materials_csv(
                 name="Filament",
                 description="Filament materials for 3D printing",
                 sort_order=0,
-                is_active=True
+                is_active=True,
             )
             db.add(filament_root_category)
             db.flush()
-    
+
     for row_num, row in enumerate(reader, start=2):
         result.total_rows += 1
         sku = ""  # Initialize sku at the start of each loop
@@ -634,11 +606,7 @@ async def import_materials_csv(
             sku = get_column_value(row, SKU_COLS)
 
             if not sku:
-                result.errors.append({
-                    "row": row_num,
-                    "error": "SKU is required",
-                    "sku": ""
-                })
+                result.errors.append({"row": row_num, "error": "SKU is required", "sku": ""})
                 result.skipped += 1
                 continue
 
@@ -646,11 +614,7 @@ async def import_materials_csv(
             material_type_code = get_column_value(row, MATERIAL_TYPE_COLS).upper()
 
             if not material_type_code:
-                result.errors.append({
-                    "row": row_num,
-                    "error": "Material Type is required",
-                    "sku": sku
-                })
+                result.errors.append({"row": row_num, "error": "Material Type is required", "sku": sku})
                 result.skipped += 1
                 continue
 
@@ -658,11 +622,7 @@ async def import_materials_csv(
             color_name = get_column_value(row, COLOR_NAME_COLS)
 
             if not color_name:
-                result.errors.append({
-                    "row": row_num,
-                    "error": "Material Color Name is required",
-                    "sku": sku
-                })
+                result.errors.append({"row": row_num, "error": "Material Color Name is required", "sku": sku})
                 result.skipped += 1
                 continue
 
@@ -700,10 +660,11 @@ async def import_materials_csv(
                         category_code = category_code[:50]
 
                     # Look for existing subcategory under Filament
-                    subcategory = db.query(ItemCategory).filter(
-                        ItemCategory.code == category_code,
-                        ItemCategory.parent_id == filament_root_category.id
-                    ).first()
+                    subcategory = (
+                        db.query(ItemCategory)
+                        .filter(ItemCategory.code == category_code, ItemCategory.parent_id == filament_root_category.id)
+                        .first()
+                    )
 
                     if not subcategory:
                         subcategory = ItemCategory(
@@ -712,7 +673,7 @@ async def import_materials_csv(
                             parent_id=filament_root_category.id,
                             description=f"Filament category: {category_name}",
                             sort_order=0,
-                            is_active=True
+                            is_active=True,
                         )
                         db.add(subcategory)
                         db.flush()
@@ -720,10 +681,8 @@ async def import_materials_csv(
                     category_id = subcategory.id
 
             # Get or create material type
-            material_type = db.query(MaterialType).filter(
-                MaterialType.code == material_type_code
-            ).first()
-            
+            material_type = db.query(MaterialType).filter(MaterialType.code == material_type_code).first()
+
             if not material_type:
                 # Try to infer base material from code
                 base_material = "PLA"
@@ -739,7 +698,7 @@ async def import_materials_csv(
                     base_material = "PAHT"
                 elif "PC" in material_type_code:
                     base_material = "PC"
-                
+
                 # Create material type with defaults
                 material_type = MaterialType(
                     code=material_type_code,
@@ -751,20 +710,20 @@ async def import_materials_csv(
                     active=True,
                     is_customer_visible=True,
                     created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
+                    updated_at=datetime.now(timezone.utc),
                 )
                 db.add(material_type)
                 db.flush()
-            
+
             # Generate color code from color name (uppercase, replace spaces with underscores)
             color_code = color_name.upper().replace(" ", "_").replace("-", "_")
             # Limit to 30 chars (Color.code max length)
             if len(color_code) > 30:
                 color_code = color_code[:30]
-            
+
             # Get or create color
             color = db.query(Color).filter(Color.code == color_code).first()
-            
+
             if not color:
                 color = Color(
                     code=color_code,
@@ -772,7 +731,7 @@ async def import_materials_csv(
                     hex_code=hex_code if hex_code else None,
                     active=True,
                     created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
+                    updated_at=datetime.now(timezone.utc),
                 )
                 db.add(color)
                 db.flush()
@@ -780,24 +739,21 @@ async def import_materials_csv(
                 # Update hex code if missing
                 color.hex_code = hex_code
                 color.updated_at = datetime.now(timezone.utc)
-            
+
             # Create MaterialColor link if doesn't exist
-            material_color = db.query(MaterialColor).filter(
-                MaterialColor.material_type_id == material_type.id,
-                MaterialColor.color_id == color.id
-            ).first()
-            
+            material_color = (
+                db.query(MaterialColor)
+                .filter(MaterialColor.material_type_id == material_type.id, MaterialColor.color_id == color.id)
+                .first()
+            )
+
             if not material_color:
-                material_color = MaterialColor(
-                    material_type_id=material_type.id,
-                    color_id=color.id,
-                    active=True
-                )
+                material_color = MaterialColor(material_type_id=material_type.id, color_id=color.id, active=True)
                 db.add(material_color)
-            
+
             # Get or create product
             product = db.query(Product).filter(Product.sku == sku).first()
-            
+
             if product:
                 if not update_existing:
                     result.skipped += 1
@@ -810,10 +766,10 @@ async def import_materials_csv(
                     if row.get(col, "").strip():
                         name = row.get(col, "").strip()
                         break
-                
+
                 if not name:
                     name = f"{material_type.name} - {color_name}"
-                
+
                 product = Product(
                     sku=sku,
                     name=name,
@@ -827,12 +783,12 @@ async def import_materials_csv(
                     category_id=category_id,  # From CSV Category column, nested under Filament
                     active=True,
                     created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
+                    updated_at=datetime.now(timezone.utc),
                 )
                 db.add(product)
                 db.flush()
                 result.created += 1
-            
+
             # Update product if needed
             if price and product.standard_cost != float(price):
                 product.standard_cost = float(price)
@@ -842,13 +798,14 @@ async def import_materials_csv(
             if import_categories and category_id and product.category_id != category_id:
                 product.category_id = category_id
                 product.updated_at = datetime.now(timezone.utc)
-            
+
             # Get or create inventory record
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == product.id,
-                Inventory.location_id == default_location.id
-            ).first()
-            
+            inventory = (
+                db.query(Inventory)
+                .filter(Inventory.product_id == product.id, Inventory.location_id == default_location.id)
+                .first()
+            )
+
             if not inventory:
                 inventory = Inventory(
                     product_id=product.id,
@@ -856,35 +813,27 @@ async def import_materials_csv(
                     on_hand_quantity=on_hand_kg,
                     allocated_quantity=Decimal("0.00"),
                     created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc)
+                    updated_at=datetime.now(timezone.utc),
                 )
                 db.add(inventory)
             else:
                 inventory.on_hand_quantity = on_hand_kg
                 # available_quantity is computed automatically (on_hand - allocated)
                 inventory.updated_at = datetime.now(timezone.utc)
-            
+
             # Commit after each row (for now - can optimize later)
             try:
                 db.commit()
             except Exception as commit_err:
                 db.rollback()
-                result.errors.append({
-                    "row": row_num,
-                    "error": f"Database error: {str(commit_err)}",
-                    "sku": sku
-                })
+                result.errors.append({"row": row_num, "error": f"Database error: {str(commit_err)}", "sku": sku})
                 result.skipped += 1
                 continue
-            
+
         except Exception as e:
             db.rollback()
-            sku_value = sku if 'sku' in locals() and sku else ""
-            result.errors.append({
-                "row": row_num,
-                "error": str(e),
-                "sku": sku_value
-            })
+            sku_value = sku if "sku" in locals() and sku else ""
+            result.errors.append({"row": row_num, "error": str(e), "sku": sku_value})
             result.skipped += 1
-    
+
     return result

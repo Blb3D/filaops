@@ -17,6 +17,7 @@ class MRPRun(Base):
     Audit trail for MRP calculation runs.
     Tracks what was processed and what was generated.
     """
+
     __tablename__ = "mrp_runs"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -57,6 +58,7 @@ class PlannedOrder(Base):
     - released: Converted to actual PO or MO
     - cancelled: No longer needed
     """
+
     __tablename__ = "planned_orders"
 
     id = Column(Integer, primary_key=True, index=True)

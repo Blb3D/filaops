@@ -4,6 +4,7 @@ Production Orders API Endpoints
 Manufacturing Orders (MOs) for tracking production of finished goods.
 Supports creation from sales orders, manual entry, and MRP planning.
 """
+
 import logging
 import math
 from typing import Annotated, List, Optional, Dict, Any
@@ -29,11 +30,15 @@ from app.models import (
 )
 from app.models.bom import BOMLine
 from app.models.inventory import Inventory
-from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial, Resource
+from app.models.manufacturing import Routing, RoutingOperation, Resource
 from app.models.production_order import ProductionOrderOperationMaterial
 from app.models.work_center import WorkCenter
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
-from app.services.inventory_service import process_production_completion, reserve_production_materials, release_production_reservations
+from app.services.inventory_service import (
+    process_production_completion,
+    reserve_production_materials,
+    release_production_reservations,
+)
 from app.services.uom_service import UOMConversionError
 from app.services.operation_generation import get_active_routing, generate_operations_from_routing
 from app.schemas.production_order import (
@@ -83,6 +88,7 @@ router = APIRouter()
 # Helper Functions
 # ============================================================================
 
+
 def generate_production_order_code(db: Session) -> str:
     """Generate sequential production order code: PO-YYYY-NNN"""
     year = datetime.utcnow().year
@@ -108,7 +114,11 @@ def build_production_order_response(order: ProductionOrder, db: Session) -> Prod
     product = db.query(Product).filter(Product.id == order.product_id).first()
     bom = db.query(BOM).filter(BOM.id == order.bom_id).first() if order.bom_id is not None else None
     routing = db.query(Routing).filter(Routing.id == order.routing_id).first() if order.routing_id is not None else None
-    sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first() if order.sales_order_id is not None else None
+    sales_order = (
+        db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
+        if order.sales_order_id is not None
+        else None
+    )
 
     qty_ordered = float(order.quantity_ordered or 0)  # type: ignore[arg-type]
     qty_completed = float(order.quantity_completed or 0)  # type: ignore[arg-type]
@@ -190,9 +200,13 @@ def build_production_order_response(order: ProductionOrder, db: Session) -> Prod
         else:
             # Look for scrap record on original order
             from app.models.production_order import ScrapRecord
-            scrap_record = db.query(ScrapRecord).filter(
-                ScrapRecord.production_order_id == order.remake_of_id
-            ).order_by(ScrapRecord.created_at.desc()).first()
+
+            scrap_record = (
+                db.query(ScrapRecord)
+                .filter(ScrapRecord.production_order_id == order.remake_of_id)
+                .order_by(ScrapRecord.created_at.desc())
+                .first()
+            )
             if scrap_record:
                 remake_reason = scrap_record.reason_code
 
@@ -304,6 +318,7 @@ def copy_routing_to_operations(db: Session, order: ProductionOrder, routing_id: 
 # CRUD Endpoints
 # ============================================================================
 
+
 @router.get("/", response_model=List[ProductionOrderListResponse])
 async def list_production_orders(
     pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
@@ -360,9 +375,13 @@ async def list_production_orders(
     result = []
     for order in orders:
         product = db.query(Product).filter(Product.id == order.product_id).first()
-        sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first() if order.sales_order_id else None  # type: ignore[truthy-function]
+        sales_order = (
+            db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first() if order.sales_order_id else None
+        )  # type: ignore[truthy-function]
 
-        op_count = db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == order.id).count()  # type: ignore[arg-type]
+        op_count = (
+            db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == order.id).count()
+        )  # type: ignore[arg-type]
         current_op = (
             db.query(ProductionOrderOperation)
             .filter(
@@ -421,20 +440,29 @@ async def create_production_order(
     # Find default BOM if not specified - use most recently created active BOM
     bom_id = request.bom_id
     if not bom_id:
-        default_bom = db.query(BOM).filter(
-            BOM.product_id == request.product_id,
-            BOM.active == True  # noqa: E712
-        ).order_by(desc(BOM.created_at)).first()
+        default_bom = (
+            db.query(BOM)
+            .filter(
+                BOM.product_id == request.product_id,
+                BOM.active == True,  # noqa: E712
+            )
+            .order_by(desc(BOM.created_at))
+            .first()
+        )
         if default_bom:
             bom_id = default_bom.id
 
     # Find default routing if not specified
     routing_id = request.routing_id
     if not routing_id:
-        default_routing = db.query(Routing).filter(
-            Routing.product_id == request.product_id,
-            Routing.is_active == True  # noqa: E712
-        ).first()
+        default_routing = (
+            db.query(Routing)
+            .filter(
+                Routing.product_id == request.product_id,
+                Routing.is_active == True,  # noqa: E712
+            )
+            .first()
+        )
         if default_routing:
             routing_id = default_routing.id
 
@@ -483,15 +511,21 @@ async def create_production_order(
 # NOTE: These routes MUST be defined BEFORE /{order_id} routes to avoid
 # FastAPI treating "scrap-reasons" as an order_id path parameter
 
+
 @router.get("/scrap-reasons", response_model=ScrapReasonsResponse)
 async def get_scrap_reasons(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> ScrapReasonsResponse:
     """Get list of active scrap reasons from database"""
-    reasons = db.query(ScrapReason).filter(
-        ScrapReason.active == True  # noqa: E712
-    ).order_by(ScrapReason.sequence, ScrapReason.name).all()
+    reasons = (
+        db.query(ScrapReason)
+        .filter(
+            ScrapReason.active == True  # noqa: E712
+        )
+        .order_by(ScrapReason.sequence, ScrapReason.name)
+        .all()
+    )
 
     return ScrapReasonsResponse(
         reasons=[r.code for r in reasons],  # type: ignore[arg-type]
@@ -505,7 +539,7 @@ async def get_scrap_reasons(
             )
             for r in reasons
         ],
-        descriptions={r.code: r.description or r.name for r in reasons}  # type: ignore[arg-type]
+        descriptions={r.code: r.description or r.name for r in reasons},  # type: ignore[arg-type]
     )
 
 
@@ -617,6 +651,7 @@ async def delete_scrap_reason(
 # Status Transitions
 # ============================================================================
 
+
 @router.get("/status-transitions")
 async def get_status_transitions(
     current_status: Optional[str] = Query(None, description="Get transitions for a specific status"),
@@ -636,8 +671,7 @@ async def get_status_transitions(
     if current_status:
         if current_status not in all_statuses:
             raise HTTPException(
-                status_code=400,
-                detail=f"Invalid status '{current_status}'. Must be one of: {', '.join(all_statuses)}"
+                status_code=400, detail=f"Invalid status '{current_status}'. Must be one of: {', '.join(all_statuses)}"
             )
         allowed = get_allowed_production_order_transitions(current_status)
         return {
@@ -658,7 +692,9 @@ async def get_status_transitions(
     return {
         "statuses": all_statuses,
         "transitions": transitions,
-        "terminal_statuses": [s.value for s in ProductionOrderStatus if len(get_allowed_production_order_transitions(s.value)) == 0],
+        "terminal_statuses": [
+            s.value for s in ProductionOrderStatus if len(get_allowed_production_order_transitions(s.value)) == 0
+        ],
     }
 
 
@@ -708,6 +744,7 @@ async def get_operation_statuses(
 # Order-specific endpoints (/{order_id} routes)
 # ============================================================================
 
+
 @router.get("/{order_id}", response_model=ProductionOrderResponse)
 async def get_production_order(
     order_id: int,
@@ -747,7 +784,7 @@ async def check_material_availability(
             "components": [],
             "shortages": [],
             "work_orders_needed": [],
-            "purchase_orders_needed": []
+            "purchase_orders_needed": [],
         }
 
     bom = db.query(BOM).filter(BOM.id == order.bom_id).first()
@@ -759,7 +796,7 @@ async def check_material_availability(
             "components": [],
             "shortages": [],
             "work_orders_needed": [],
-            "purchase_orders_needed": []
+            "purchase_orders_needed": [],
         }
 
     bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id).all()
@@ -787,9 +824,9 @@ async def check_material_availability(
         required_qty = qty_with_scrap * qty_multiplier
 
         # Get available inventory across all locations
-        inv_result = db.query(
-            func.sum(Inventory.available_quantity)
-        ).filter(Inventory.product_id == line.component_id).scalar()
+        inv_result = (
+            db.query(func.sum(Inventory.available_quantity)).filter(Inventory.product_id == line.component_id).scalar()
+        )
         available_qty = Decimal(str(inv_result or 0))
 
         is_available = available_qty >= required_qty
@@ -809,7 +846,7 @@ async def check_material_availability(
             "shortage_qty": float(shortage_qty),
             "is_available": is_available,
             "has_bom": has_bom,
-            "order_type": order_type
+            "order_type": order_type,
         }
         components.append(comp_data)
 
@@ -831,7 +868,7 @@ async def check_material_availability(
         "components": components,
         "shortages": shortages,
         "work_orders_needed": work_orders_needed,
-        "purchase_orders_needed": purchase_orders_needed
+        "purchase_orders_needed": purchase_orders_needed,
     }
 
 
@@ -862,10 +899,7 @@ async def get_po_blocking_issues(
     result = get_production_order_blocking_issues(db, order_id)
 
     if result is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Production order {order_id} not found"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Production order {order_id} not found")
 
     return result
 
@@ -895,7 +929,7 @@ async def get_required_orders(
     def explode_requirements(product_id: int, quantity: Decimal, level: int = 0, visited_boms: set | None = None):
         """
         Recursively explode BOM to find all requirements
-        
+
         Args:
             product_id: Product to explode BOM for
             quantity: Quantity required
@@ -907,10 +941,14 @@ async def get_required_orders(
             visited_boms = set()
 
         # Find active BOM for this product
-        bom = db.query(BOM).filter(
-            BOM.product_id == product_id,
-            BOM.active == True  # noqa: E712
-        ).first()
+        bom = (
+            db.query(BOM)
+            .filter(
+                BOM.product_id == product_id,
+                BOM.active == True,  # noqa: E712
+            )
+            .first()
+        )
 
         if not bom:
             return
@@ -938,9 +976,11 @@ async def get_required_orders(
             required_qty = base_qty * (Decimal("1") + scrap_factor) * quantity
 
             # Get available inventory
-            inv_result = db.query(
-                func.sum(Inventory.available_quantity)
-            ).filter(Inventory.product_id == line.component_id).scalar()
+            inv_result = (
+                db.query(func.sum(Inventory.available_quantity))
+                .filter(Inventory.product_id == line.component_id)
+                .scalar()
+            )
             available_qty = Decimal(str(inv_result or 0))
 
             shortage_qty = max(Decimal("0"), required_qty - available_qty)
@@ -957,7 +997,7 @@ async def get_required_orders(
                 "available_qty": float(available_qty),
                 "order_qty": float(shortage_qty),
                 "bom_level": level,
-                "has_bom": component.has_bom or False
+                "has_bom": component.has_bom or False,
             }
 
             if component.has_bom:  # type: ignore[truthy-function]
@@ -980,7 +1020,7 @@ async def get_required_orders(
         "work_orders_needed": work_orders_needed,
         "purchase_orders_needed": purchase_orders_needed,
         "total_work_orders": len(work_orders_needed),
-        "total_purchase_orders": len(purchase_orders_needed)
+        "total_purchase_orders": len(purchase_orders_needed),
     }
 
 
@@ -1091,6 +1131,7 @@ async def schedule_production_order(
 # Status Transitions
 # ============================================================================
 
+
 @router.post("/{order_id}/release")
 async def release_production_order(
     order_id: int,
@@ -1115,9 +1156,9 @@ async def release_production_order(
         raise HTTPException(status_code=400, detail=str(e))
 
     # Generate operations from routing if none exist (API-404)
-    existing_ops = db.query(ProductionOrderOperation).filter(
-        ProductionOrderOperation.production_order_id == order_id
-    ).count()
+    existing_ops = (
+        db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == order_id).count()
+    )
 
     operations_created = 0
     if existing_ops == 0:
@@ -1131,9 +1172,12 @@ async def release_production_order(
     order.updated_at = datetime.utcnow()  # type: ignore[assignment]
 
     # Queue the first operation
-    first_op = db.query(ProductionOrderOperation).filter(
-        ProductionOrderOperation.production_order_id == order_id
-    ).order_by(ProductionOrderOperation.sequence).first()
+    first_op = (
+        db.query(ProductionOrderOperation)
+        .filter(ProductionOrderOperation.production_order_id == order_id)
+        .order_by(ProductionOrderOperation.sequence)
+        .first()
+    )
     if first_op:
         first_op.status = "queued"  # type: ignore[assignment]
 
@@ -1147,7 +1191,7 @@ async def release_production_order(
         "status": order.status,
         "operations_created": operations_created,
         "message": f"Production order released with {operations_created} operations",
-        **build_production_order_response(order, db).model_dump()
+        **build_production_order_response(order, db).model_dump(),
     }
 
 
@@ -1239,9 +1283,9 @@ async def complete_production_order(
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot complete: order would be closed {shortfall} units short. "
-                       f"Ordered: {order.quantity_ordered}, Completing: {qty_completed}, "
-                       f"Scrapped: {qty_scrapped_total}. "
-                       f"Use force_close_short=true to close anyway, or scrap the remaining units first."
+                f"Ordered: {order.quantity_ordered}, Completing: {qty_completed}, "
+                f"Scrapped: {qty_scrapped_total}. "
+                f"Use force_close_short=true to close anyway, or scrap the remaining units first.",
             )
         # If force_close_short=True, add note and proceed
         close_short_note = f"\n[{datetime.utcnow().strftime('%Y-%m-%d %H:%M')}] CLOSED SHORT: {shortfall} units unaccounted (neither completed nor scrapped)"
@@ -1278,9 +1322,12 @@ async def complete_production_order(
         prefix = f"BLB-{date_str}-"
 
         # Find highest existing sequence for today
-        last_serial = db.query(SerialNumber).filter(
-            SerialNumber.serial_number.like(f"{prefix}%")
-        ).order_by(desc(SerialNumber.serial_number)).first()
+        last_serial = (
+            db.query(SerialNumber)
+            .filter(SerialNumber.serial_number.like(f"{prefix}%"))
+            .order_by(desc(SerialNumber.serial_number))
+            .first()
+        )
 
         seq = 0
         if last_serial:
@@ -1295,7 +1342,7 @@ async def complete_production_order(
                 serial_number=f"{prefix}{seq:04d}",
                 product_id=order.product_id,
                 production_order_id=order.id,
-                status='manufactured',
+                status="manufactured",
                 qc_passed=True,
                 manufactured_at=today,
             )
@@ -1313,10 +1360,7 @@ async def complete_production_order(
             created_by=current_user.email if current_user else None,  # type: ignore[arg-type]
         )
     except UOMConversionError as e:
-        raise HTTPException(
-            status_code=400,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
     # =========================================================================
     # Record spool consumption for material traceability
@@ -1332,19 +1376,27 @@ async def complete_production_order(
                 continue
 
             # Check if consumption already recorded - update if so
-            existing = db.query(ProductionOrderSpool).filter(
-                ProductionOrderSpool.production_order_id == order_id,
-                ProductionOrderSpool.spool_id == spool_usage.spool_id,
-            ).first()
+            existing = (
+                db.query(ProductionOrderSpool)
+                .filter(
+                    ProductionOrderSpool.production_order_id == order_id,
+                    ProductionOrderSpool.spool_id == spool_usage.spool_id,
+                )
+                .first()
+            )
 
             # Calculate weight consumed - use provided value or estimate from BOM
             weight_consumed_g = spool_usage.weight_consumed_g
             if weight_consumed_g is None:
                 # Estimate from BOM if not provided
-                bom_line = db.query(BOMLine).filter(
-                    BOMLine.bom_id == order.bom_id,
-                    BOMLine.component_id == spool_usage.product_id,
-                ).first()
+                bom_line = (
+                    db.query(BOMLine)
+                    .filter(
+                        BOMLine.bom_id == order.bom_id,
+                        BOMLine.component_id == spool_usage.product_id,
+                    )
+                    .first()
+                )
                 if bom_line:
                     # BOM quantity * units completed
                     weight_consumed_g = Decimal(str(bom_line.quantity)) * Decimal(str(qty_completed))
@@ -1379,6 +1431,7 @@ async def complete_production_order(
 
     # Sync fulfillment_status if all production orders are complete
     from app.services.status_sync_service import sync_on_production_complete
+
     sync_on_production_complete(db, order)
 
     db.commit()
@@ -1456,6 +1509,7 @@ async def hold_production_order(
 # QC Inspection
 # ============================================================================
 
+
 @router.post("/{order_id}/qc", response_model=QCInspectionResponse)
 async def perform_qc_inspection(
     order_id: int,
@@ -1485,22 +1539,18 @@ async def perform_qc_inspection(
     # Validate order can be inspected
     if order.status != "complete":  # type: ignore[comparison-overlap]
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot perform QC on order in '{order.status}' status. Order must be 'complete'."
+            status_code=400, detail=f"Cannot perform QC on order in '{order.status}' status. Order must be 'complete'."
         )
 
     if order.qc_status not in ("pending", "failed"):  # type: ignore[comparison-overlap]
         raise HTTPException(
             status_code=400,
-            detail=f"Order QC status is '{order.qc_status}'. Can only inspect orders with 'pending' or 'failed' QC status."
+            detail=f"Order QC status is '{order.qc_status}'. Can only inspect orders with 'pending' or 'failed' QC status.",
         )
 
     # Validate result is passed or failed (not 'pending' or 'not_required')
     if request.result.value not in ("passed", "failed"):
-        raise HTTPException(
-            status_code=400,
-            detail="QC result must be 'passed' or 'failed'"
-        )
+        raise HTTPException(status_code=400, detail="QC result must be 'passed' or 'failed'")
 
     # Update QC fields
     order.qc_status = request.result.value  # type: ignore[assignment]
@@ -1517,15 +1567,23 @@ async def perform_qc_inspection(
         sales_order = db.query(SalesOrder).filter(SalesOrder.id == order.sales_order_id).first()
         if sales_order and sales_order.status == "in_production":  # type: ignore[comparison-overlap]
             # Count production orders that have completed AND passed QC
-            passed_count = db.query(ProductionOrder).filter(
-                ProductionOrder.sales_order_id == order.sales_order_id,
-                ProductionOrder.status == "complete",
-                ProductionOrder.qc_status == "passed",
-            ).count()
+            passed_count = (
+                db.query(ProductionOrder)
+                .filter(
+                    ProductionOrder.sales_order_id == order.sales_order_id,
+                    ProductionOrder.status == "complete",
+                    ProductionOrder.qc_status == "passed",
+                )
+                .count()
+            )
 
-            total_count = db.query(ProductionOrder).filter(
-                ProductionOrder.sales_order_id == order.sales_order_id,
-            ).count()
+            total_count = (
+                db.query(ProductionOrder)
+                .filter(
+                    ProductionOrder.sales_order_id == order.sales_order_id,
+                )
+                .count()
+            )
 
             # Only advance if ALL production orders have passed QC
             if passed_count == total_count and total_count > 0:
@@ -1563,6 +1621,7 @@ async def perform_qc_inspection(
 # Split Order
 # ============================================================================
 
+
 @router.post("/{order_id}/split", response_model=ProductionOrderSplitResponse)
 async def split_production_order(
     order_id: int,
@@ -1588,8 +1647,7 @@ async def split_production_order(
     # Validate order can be split
     if order.status != "released":  # type: ignore[comparison-overlap]
         raise HTTPException(
-            status_code=400,
-            detail=f"Cannot split order in '{order.status}' status. Order must be 'released'."
+            status_code=400, detail=f"Cannot split order in '{order.status}' status. Order must be 'released'."
         )
 
     if order.parent_order_id:  # type: ignore[truthy-function]
@@ -1605,7 +1663,7 @@ async def split_production_order(
     if total_split_qty != original_qty:
         raise HTTPException(
             status_code=400,
-            detail=f"Split quantities ({total_split_qty}) must equal original quantity ({original_qty})"
+            detail=f"Split quantities ({total_split_qty}) must equal original quantity ({original_qty})",
         )
 
     # Create child orders
@@ -1673,7 +1731,9 @@ async def split_production_order(
 
     # Update parent order status to indicate it was split
     order.status = "split"  # type: ignore[assignment]
-    order.notes = (order.notes or "") + f"\n[Split into {len(request.splits)} orders on {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}]"  # type: ignore[assignment]
+    order.notes = (
+        order.notes or ""
+    ) + f"\n[Split into {len(request.splits)} orders on {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}]"  # type: ignore[assignment]
     order.updated_at = datetime.utcnow()  # type: ignore[assignment]
 
     db.commit()
@@ -1683,11 +1743,13 @@ async def split_production_order(
     for child in child_orders:
         db.refresh(child)
         product = db.query(Product).filter(Product.id == child.product_id).first()
-        sales_order = db.query(SalesOrder).filter(SalesOrder.id == child.sales_order_id).first() if child.sales_order_id else None
+        sales_order = (
+            db.query(SalesOrder).filter(SalesOrder.id == child.sales_order_id).first() if child.sales_order_id else None
+        )
 
-        op_count = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.production_order_id == child.id
-        ).count()
+        op_count = (
+            db.query(ProductionOrderOperation).filter(ProductionOrderOperation.production_order_id == child.id).count()
+        )
 
         child_responses.append(
             ProductionOrderListResponse(
@@ -1720,13 +1782,14 @@ async def split_production_order(
         parent_order_code=order.code,  # type: ignore[arg-type]
         parent_status="split",
         child_orders=child_responses,
-        message=f"Successfully split {order.code} into {len(child_orders)} orders"
+        message=f"Successfully split {order.code} into {len(child_orders)} orders",
     )
 
 
 # ============================================================================
 # Operation Management
 # ============================================================================
+
 
 @router.put("/{order_id}/operations/{operation_id}", response_model=ProductionOrderOperationResponse)
 async def update_operation(
@@ -1737,10 +1800,14 @@ async def update_operation(
     current_user: User = Depends(get_current_user),
 ) -> ProductionOrderOperationResponse:
     """Update an operation"""
-    op = db.query(ProductionOrderOperation).filter(
-        ProductionOrderOperation.id == operation_id,
-        ProductionOrderOperation.production_order_id == order_id,
-    ).first()
+    op = (
+        db.query(ProductionOrderOperation)
+        .filter(
+            ProductionOrderOperation.id == operation_id,
+            ProductionOrderOperation.production_order_id == order_id,
+        )
+        .first()
+    )
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
 
@@ -1802,6 +1869,7 @@ async def update_operation(
 # Schedule & Queue Views
 # ============================================================================
 
+
 @router.get("/schedule/summary", response_model=ProductionScheduleSummary)
 async def get_schedule_summary(
     db: Session = Depends(get_db),
@@ -1810,26 +1878,42 @@ async def get_schedule_summary(
     """Get production schedule summary stats"""
     today = date.today()
 
-    status_counts = db.query(ProductionOrder.status, func.count(ProductionOrder.id)).filter(
-        ProductionOrder.status.not_in(["cancelled"])
-    ).group_by(ProductionOrder.status).all()
+    status_counts = (
+        db.query(ProductionOrder.status, func.count(ProductionOrder.id))
+        .filter(ProductionOrder.status.not_in(["cancelled"]))
+        .group_by(ProductionOrder.status)
+        .all()
+    )
     orders_by_status = {status: count for status, count in status_counts}
 
-    due_today = db.query(func.count(ProductionOrder.id)).filter(
-        ProductionOrder.due_date == today,
-        ProductionOrder.status.not_in(["complete", "cancelled"]),
-    ).scalar() or 0
+    due_today = (
+        db.query(func.count(ProductionOrder.id))
+        .filter(
+            ProductionOrder.due_date == today,
+            ProductionOrder.status.not_in(["complete", "cancelled"]),
+        )
+        .scalar()
+        or 0
+    )
 
-    overdue = db.query(func.count(ProductionOrder.id)).filter(
-        ProductionOrder.due_date < today,
-        ProductionOrder.status.not_in(["complete", "cancelled"]),
-    ).scalar() or 0
+    overdue = (
+        db.query(func.count(ProductionOrder.id))
+        .filter(
+            ProductionOrder.due_date < today,
+            ProductionOrder.status.not_in(["complete", "cancelled"]),
+        )
+        .scalar()
+        or 0
+    )
 
     in_progress = orders_by_status.get("in_progress", 0)
 
-    total_qty = db.query(func.sum(ProductionOrder.quantity_ordered - ProductionOrder.quantity_completed)).filter(
-        ProductionOrder.status.not_in(["complete", "cancelled"])
-    ).scalar() or 0
+    total_qty = (
+        db.query(func.sum(ProductionOrder.quantity_ordered - ProductionOrder.quantity_completed))
+        .filter(ProductionOrder.status.not_in(["complete", "cancelled"]))
+        .scalar()
+        or 0
+    )
 
     total_orders = sum(orders_by_status.values())
 
@@ -1853,16 +1937,26 @@ async def get_queue_by_work_center(
 
     result = []
     for wc in work_centers:
-        queued_ops = db.query(ProductionOrderOperation).join(ProductionOrder).filter(
-            ProductionOrderOperation.work_center_id == wc.id,
-            ProductionOrderOperation.status == "queued",
-            ProductionOrder.status.in_(["released", "in_progress"]),
-        ).order_by(ProductionOrder.priority, ProductionOrder.due_date).all()
+        queued_ops = (
+            db.query(ProductionOrderOperation)
+            .join(ProductionOrder)
+            .filter(
+                ProductionOrderOperation.work_center_id == wc.id,
+                ProductionOrderOperation.status == "queued",
+                ProductionOrder.status.in_(["released", "in_progress"]),
+            )
+            .order_by(ProductionOrder.priority, ProductionOrder.due_date)
+            .all()
+        )
 
-        running_ops = db.query(ProductionOrderOperation).filter(
-            ProductionOrderOperation.work_center_id == wc.id,
-            ProductionOrderOperation.status == "running",
-        ).all()
+        running_ops = (
+            db.query(ProductionOrderOperation)
+            .filter(
+                ProductionOrderOperation.work_center_id == wc.id,
+                ProductionOrderOperation.status == "running",
+            )
+            .all()
+        )
 
         def build_op_response(op, is_running=False):
             res = db.query(Resource).filter(Resource.id == op.resource_id).first() if op.resource_id else None
@@ -1903,14 +1997,16 @@ async def get_queue_by_work_center(
 
         total_minutes = sum(float(op.planned_run_minutes or 0) for op in queued_ops)  # type: ignore[arg-type]
 
-        result.append(WorkCenterQueue(
-            work_center_id=wc.id,  # type: ignore[arg-type]
-            work_center_code=wc.code,  # type: ignore[arg-type]
-            work_center_name=wc.name,  # type: ignore[arg-type]
-            queued_operations=[build_op_response(op) for op in queued_ops],
-            running_operations=[build_op_response(op, True) for op in running_ops],
-            total_queued_minutes=total_minutes,
-        ))
+        result.append(
+            WorkCenterQueue(
+                work_center_id=wc.id,  # type: ignore[arg-type]
+                work_center_code=wc.code,  # type: ignore[arg-type]
+                work_center_name=wc.name,  # type: ignore[arg-type]
+                queued_operations=[build_op_response(op) for op in queued_ops],
+                running_operations=[build_op_response(op, True) for op in running_ops],
+                total_queued_minutes=total_minutes,
+            )
+        )
 
     return result
 
@@ -1949,37 +2045,48 @@ async def scrap_production_order(
         raise HTTPException(status_code=404, detail="Production order not found")
 
     # Validate scrap reason against database
-    valid_reason = db.query(ScrapReason).filter(
-        ScrapReason.code == scrap_reason,
-        ScrapReason.active == True  # noqa: E712
-    ).first()
+    valid_reason = (
+        db.query(ScrapReason)
+        .filter(
+            ScrapReason.code == scrap_reason,
+            ScrapReason.active == True,  # noqa: E712
+        )
+        .first()
+    )
     if not valid_reason:
         # Get list of valid codes for error message
-        valid_codes = db.query(ScrapReason.code).filter(
-            ScrapReason.active == True  # noqa: E712
-        ).all()
+        valid_codes = (
+            db.query(ScrapReason.code)
+            .filter(
+                ScrapReason.active == True  # noqa: E712
+            )
+            .all()
+        )
         valid_list = ", ".join([c[0] for c in valid_codes])
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid scrap reason '{scrap_reason}'. Must be one of: {valid_list}"
+            status_code=400, detail=f"Invalid scrap reason '{scrap_reason}'. Must be one of: {valid_list}"
         )
 
     # Can only scrap orders that are in progress or released
     if order.status not in ("released", "in_progress"):
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot scrap order in '{order.status}' status. Order must be 'released' or 'in_progress'."
+            detail=f"Cannot scrap order in '{order.status}' status. Order must be 'released' or 'in_progress'.",
         )
 
     # Default to full order quantity if not specified
     qty_to_scrap = quantity_scrapped if quantity_scrapped is not None else order.quantity_ordered  # type: ignore[arg-type]
 
     # Validate scrap quantity
-    remaining_qty = Decimal(str(order.quantity_ordered)) - Decimal(str(order.quantity_completed or 0)) - Decimal(str(order.quantity_scrapped or 0))  # type: ignore[arg-type]
+    remaining_qty = (
+        Decimal(str(order.quantity_ordered))
+        - Decimal(str(order.quantity_completed or 0))
+        - Decimal(str(order.quantity_scrapped or 0))
+    )  # type: ignore[arg-type]
     if qty_to_scrap > remaining_qty:  # type: ignore[operator]
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot scrap {qty_to_scrap} units. Only {remaining_qty} units remaining (ordered: {order.quantity_ordered}, completed: {order.quantity_completed or 0}, already scrapped: {order.quantity_scrapped or 0})"
+            detail=f"Cannot scrap {qty_to_scrap} units. Only {remaining_qty} units remaining (ordered: {order.quantity_ordered}, completed: {order.quantity_completed or 0}, already scrapped: {order.quantity_scrapped or 0})",
         )
 
     if qty_to_scrap <= 0:  # type: ignore[operator]
@@ -2015,10 +2122,7 @@ async def scrap_production_order(
         bom = db.query(BOM).filter(BOM.id == order.bom_id).first()
 
         if bom:
-            bom_lines = db.query(BOMLine).filter(
-                BOMLine.bom_id == bom.id,
-                BOMLine.consume_stage == "production"
-            ).all()
+            bom_lines = db.query(BOMLine).filter(BOMLine.bom_id == bom.id, BOMLine.consume_stage == "production").all()
 
             for line in bom_lines:
                 if line.is_cost_only:  # type: ignore[truthy-function]
@@ -2138,11 +2242,15 @@ async def get_order_cost_breakdown(
     def get_order_costs(wo: ProductionOrder):
         """Get material costs from inventory transactions for a WO"""
         # Get consumption and scrap transactions for this order
-        transactions = db.query(InventoryTransaction).filter(
-            InventoryTransaction.reference_type == "production_order",
-            InventoryTransaction.reference_id == wo.id,
-            InventoryTransaction.transaction_type.in_(["consumption", "scrap"])
-        ).all()
+        transactions = (
+            db.query(InventoryTransaction)
+            .filter(
+                InventoryTransaction.reference_type == "production_order",
+                InventoryTransaction.reference_id == wo.id,
+                InventoryTransaction.transaction_type.in_(["consumption", "scrap"]),
+            )
+            .all()
+        )
 
         material_cost = Decimal("0")
         for txn in transactions:
@@ -2222,7 +2330,9 @@ async def get_order_cost_breakdown(
             "total_material_cost": float(total_material_cost),
             "scrapped_material_cost": float(total_scrapped_cost),
             "successful_material_cost": float(completed_cost),
-            "scrap_percentage": float(total_scrapped_cost / total_material_cost * 100) if total_material_cost > 0 else 0,
+            "scrap_percentage": float(total_scrapped_cost / total_material_cost * 100)
+            if total_material_cost > 0
+            else 0,
         },
         "order_breakdown": breakdown,
     }
@@ -2231,6 +2341,7 @@ async def get_order_cost_breakdown(
 # ============================================================================
 # Operation-Level Scrap Endpoints
 # ============================================================================
+
 
 @router.get(
     "/{order_id}/operations/{operation_id}/scrap-cascade",
@@ -2272,10 +2383,7 @@ async def get_scrap_cascade(
         )
 
         # Convert to response model
-        materials = [
-            ScrapCascadeMaterial(**mat)
-            for mat in result["materials_consumed"]
-        ]
+        materials = [ScrapCascadeMaterial(**mat) for mat in result["materials_consumed"]]
 
         return ScrapCascadeResponse(
             production_order_id=result["production_order_id"],
@@ -2369,4 +2477,3 @@ async def scrap_at_operation(
         db.rollback()
         logger.error(f"Error processing operation scrap: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-

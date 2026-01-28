@@ -6,6 +6,7 @@ Provides endpoints for:
 - Finding available time slots
 - Auto-scheduling production orders
 """
+
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -36,12 +37,12 @@ router = APIRouter()
 def get_material_requirements(db: Session, production_order: ProductionOrder) -> dict:
     """
     Get material requirements for a production order.
-    
+
     KEY FEATURE: Material-Machine Compatibility Analysis
-    
+
     Analyzes the product and BOM to determine material compatibility needs.
     This ensures ABS/ASA materials are only scheduled on enclosed printers.
-    
+
     Returns:
         {
             'requires_enclosure': bool,
@@ -52,7 +53,7 @@ def get_material_requirements(db: Session, production_order: ProductionOrder) ->
     requires_enclosure = False
     material_types = []
     base_materials = set()
-    
+
     # Check if the product itself is a material
     product = db.query(Product).filter(Product.id == production_order.product_id).first()
     if product and product.material_type_id:
@@ -62,18 +63,15 @@ def get_material_requirements(db: Session, production_order: ProductionOrder) ->
                 requires_enclosure = True
             material_types.append(material_type.code)
             base_materials.add(material_type.base_material)
-    
+
     # Check BOM for material components
     bom = None
     if production_order.bom_id:
         bom = db.query(BOM).filter(BOM.id == production_order.bom_id).first()
     elif production_order.product_id:
         # Find active BOM for product
-        bom = db.query(BOM).filter(
-            BOM.product_id == production_order.product_id,
-            BOM.active.is_(True)
-        ).first()
-    
+        bom = db.query(BOM).filter(BOM.product_id == production_order.product_id, BOM.active.is_(True)).first()
+
     if bom and bom.lines:
         for line in bom.lines:
             component = db.query(Product).filter(Product.id == line.component_id).first()
@@ -84,38 +82,38 @@ def get_material_requirements(db: Session, production_order: ProductionOrder) ->
                         requires_enclosure = True
                     material_types.append(material_type.code)
                     base_materials.add(material_type.base_material)
-    
+
     return {
-        'requires_enclosure': requires_enclosure,
-        'material_types': list(set(material_types)),
-        'base_materials': list(base_materials),
+        "requires_enclosure": requires_enclosure,
+        "material_types": list(set(material_types)),
+        "base_materials": list(base_materials),
     }
 
 
 def machine_has_enclosure(resource: Resource) -> bool:
     """
     Check if a machine/resource has an enclosure.
-    
+
     KEY FEATURE: Material-Machine Compatibility
-    
+
     For BambuLab printers:
     - X1C, X1, P1S, P1P have enclosures (can print ABS/ASA)
     - A1, A1 MINI do NOT have enclosures (PLA/PETG only)
-    
+
     TODO: Add has_enclosure field to Resource model for explicit configuration
     """
     if not resource.machine_type:
         return False
-    
+
     machine_type_upper = resource.machine_type.upper()
     # BambuLab models with enclosures
-    if machine_type_upper in ['X1C', 'X1', 'P1S', 'P1P']:
+    if machine_type_upper in ["X1C", "X1", "P1S", "P1P"]:
         return True
-    
+
     # BambuLab models without enclosures
-    if machine_type_upper in ['A1', 'A1 MINI']:
+    if machine_type_upper in ["A1", "A1 MINI"]:
         return False
-    
+
     # Default: assume no enclosure for unknown models
     # This can be made configurable via a database field later
     return False
@@ -124,27 +122,32 @@ def machine_has_enclosure(resource: Resource) -> bool:
 def is_machine_compatible(db: Session, resource: Resource, production_order: ProductionOrder) -> tuple[bool, str]:
     """
     Check if a machine is compatible with a production order's material requirements.
-    
+
     KEY FEATURE: Material-Machine Compatibility Checking
-    
+
     Validates:
     - Enclosure requirements (ABS/ASA need enclosed printers)
     - Material type compatibility
     - Machine capabilities
-    
+
     This prevents scheduling incompatible materials on machines that can't handle them.
-    
+
     Returns:
         (is_compatible: bool, reason: str)
     """
     material_reqs = get_material_requirements(db, production_order)
-    
+
     # Check enclosure requirement (CRITICAL for ABS/ASA)
-    if material_reqs['requires_enclosure']:
+    if material_reqs["requires_enclosure"]:
         if not machine_has_enclosure(resource):
-            base_materials = ', '.join(material_reqs['base_materials']) if material_reqs['base_materials'] else 'material'
-            return False, f"{base_materials} requires enclosure but {resource.code} ({resource.machine_type or 'unknown model'}) does not have one"
-    
+            base_materials = (
+                ", ".join(material_reqs["base_materials"]) if material_reqs["base_materials"] else "material"
+            )
+            return (
+                False,
+                f"{base_materials} requires enclosure but {resource.code} ({resource.machine_type or 'unknown model'}) does not have one",
+            )
+
     return True, "Compatible"
 
 
@@ -156,7 +159,7 @@ async def check_capacity(
 ):
     """
     Check if a machine has capacity for a production order at a given time.
-    
+
     Returns conflicts if any exist.
     """
     resource = db.query(Resource).filter(Resource.id == request.resource_id).first()
@@ -168,37 +171,42 @@ async def check_capacity(
 
     # Get all scheduled orders for this resource
     # Find orders assigned to this resource via print_jobs or assigned_to
-    scheduled_orders = db.query(ProductionOrder).join(
-        PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True
-    ).filter(
-        and_(
-            or_(
-                PrintJob.printer_id == request.resource_id,
-                ProductionOrder.assigned_to == resource.code,
-            ),
-            ProductionOrder.status.in_(["released", "in_progress"]),
-            ProductionOrder.scheduled_start.isnot(None),
-            ProductionOrder.scheduled_end.isnot(None),
+    scheduled_orders = (
+        db.query(ProductionOrder)
+        .join(PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True)
+        .filter(
+            and_(
+                or_(
+                    PrintJob.printer_id == request.resource_id,
+                    ProductionOrder.assigned_to == resource.code,
+                ),
+                ProductionOrder.status.in_(["released", "in_progress"]),
+                ProductionOrder.scheduled_start.isnot(None),
+                ProductionOrder.scheduled_end.isnot(None),
+            )
         )
-    ).all()
+        .all()
+    )
 
     conflicts = []
     for order in scheduled_orders:
         if not order.scheduled_start or not order.scheduled_end:
             continue
-        
+
         order_start = order.scheduled_start
         order_end = order.scheduled_end
-        
+
         # Check for overlap
         if start_time < order_end and end_time > order_start:
-            conflicts.append({
-                "order_id": order.id,
-                "order_code": order.code,
-                "start_time": order_start.isoformat(),
-                "end_time": order_end.isoformat(),
-                "product_name": order.product.name if order.product else "N/A",
-            })
+            conflicts.append(
+                {
+                    "order_id": order.id,
+                    "order_code": order.code,
+                    "start_time": order_start.isoformat(),
+                    "end_time": order_end.isoformat(),
+                    "product_name": order.product.name if order.product else "N/A",
+                }
+            )
 
     return CapacityCheckResponse(
         resource_id=request.resource_id,
@@ -222,7 +230,7 @@ async def get_available_slots(
 ):
     """
     Find available time slots for a resource within a date range.
-    
+
     Returns list of available slots that can accommodate the required duration.
     """
     resource = db.query(Resource).filter(Resource.id == resource_id).first()
@@ -230,21 +238,25 @@ async def get_available_slots(
         raise HTTPException(status_code=404, detail="Resource not found")
 
     # Get all scheduled orders for this resource
-    scheduled_orders = db.query(ProductionOrder).join(
-        PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True
-    ).filter(
-        and_(
-            or_(
-                PrintJob.printer_id == resource_id,
-                ProductionOrder.assigned_to == resource.code,
-            ),
-            ProductionOrder.status.in_(["released", "in_progress"]),
-            ProductionOrder.scheduled_start.isnot(None),
-            ProductionOrder.scheduled_end.isnot(None),
-            ProductionOrder.scheduled_start >= start_date,
-            ProductionOrder.scheduled_start <= end_date,
+    scheduled_orders = (
+        db.query(ProductionOrder)
+        .join(PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True)
+        .filter(
+            and_(
+                or_(
+                    PrintJob.printer_id == resource_id,
+                    ProductionOrder.assigned_to == resource.code,
+                ),
+                ProductionOrder.status.in_(["released", "in_progress"]),
+                ProductionOrder.scheduled_start.isnot(None),
+                ProductionOrder.scheduled_end.isnot(None),
+                ProductionOrder.scheduled_start >= start_date,
+                ProductionOrder.scheduled_start <= end_date,
+            )
         )
-    ).order_by(ProductionOrder.scheduled_start).all()
+        .order_by(ProductionOrder.scheduled_start)
+        .all()
+    )
 
     # Build list of busy periods
     busy_periods = []
@@ -267,11 +279,13 @@ async def get_available_slots(
         if gap_end > gap_start:
             gap_duration = (gap_end - gap_start).total_seconds() / 3600
             if gap_duration >= duration_hours:
-                available_slots.append({
-                    "start_time": gap_start.isoformat(),
-                    "end_time": gap_end.isoformat(),
-                    "duration_hours": gap_duration,
-                })
+                available_slots.append(
+                    {
+                        "start_time": gap_start.isoformat(),
+                        "end_time": gap_end.isoformat(),
+                        "duration_hours": gap_duration,
+                    }
+                )
 
         # Move current time to after this busy period
         current_time = max(current_time, busy_end)
@@ -280,11 +294,13 @@ async def get_available_slots(
     if current_time < end_date:
         gap_duration = (end_date - current_time).total_seconds() / 3600
         if gap_duration >= duration_hours:
-            available_slots.append({
-                "start_time": current_time.isoformat(),
-                "end_time": end_date.isoformat(),
-                "duration_hours": gap_duration,
-            })
+            available_slots.append(
+                {
+                    "start_time": current_time.isoformat(),
+                    "end_time": end_date.isoformat(),
+                    "duration_hours": gap_duration,
+                }
+            )
 
     return available_slots
 
@@ -299,11 +315,11 @@ async def get_machine_availability(
 ):
     """
     Get availability status for all machines in a date range.
-    
+
     Shows capacity utilization and available time for each machine.
     """
     query = db.query(Resource).filter(Resource.is_active == True)  # noqa: E712
-    
+
     if work_center_id:
         query = query.filter(Resource.work_center_id == work_center_id)
     else:
@@ -315,21 +331,24 @@ async def get_machine_availability(
     result = []
     for resource in resources:
         # Get scheduled orders for this resource
-        scheduled_orders = db.query(ProductionOrder).join(
-            PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True
-        ).filter(
-            and_(
-                or_(
-                    PrintJob.printer_id == resource.id,
-                    ProductionOrder.assigned_to == resource.code,
-                ),
-                ProductionOrder.status.in_(["released", "in_progress"]),
-                ProductionOrder.scheduled_start.isnot(None),
-                ProductionOrder.scheduled_end.isnot(None),
-                ProductionOrder.scheduled_start >= start_date,
-                ProductionOrder.scheduled_start <= end_date,
+        scheduled_orders = (
+            db.query(ProductionOrder)
+            .join(PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True)
+            .filter(
+                and_(
+                    or_(
+                        PrintJob.printer_id == resource.id,
+                        ProductionOrder.assigned_to == resource.code,
+                    ),
+                    ProductionOrder.status.in_(["released", "in_progress"]),
+                    ProductionOrder.scheduled_start.isnot(None),
+                    ProductionOrder.scheduled_end.isnot(None),
+                    ProductionOrder.scheduled_start >= start_date,
+                    ProductionOrder.scheduled_start <= end_date,
+                )
             )
-        ).all()
+            .all()
+        )
 
         # Calculate total scheduled time
         total_scheduled_hours = 0
@@ -343,19 +362,21 @@ async def get_machine_availability(
         available_hours = total_hours - total_scheduled_hours
         utilization_percent = (total_scheduled_hours / total_hours * 100) if total_hours > 0 else 0
 
-        result.append({
-            "resource_id": resource.id,
-            "resource_code": resource.code,
-            "resource_name": resource.name,
-            "work_center_id": resource.work_center_id,
-            "work_center_code": resource.work_center.code if resource.work_center else None,
-            "status": resource.status,
-            "total_hours": total_hours,
-            "scheduled_hours": total_scheduled_hours,
-            "available_hours": max(0, available_hours),
-            "utilization_percent": round(utilization_percent, 1),
-            "scheduled_order_count": len(scheduled_orders),
-        })
+        result.append(
+            {
+                "resource_id": resource.id,
+                "resource_code": resource.code,
+                "resource_name": resource.name,
+                "work_center_id": resource.work_center_id,
+                "work_center_code": resource.work_center.code if resource.work_center else None,
+                "status": resource.status,
+                "total_hours": total_hours,
+                "scheduled_hours": total_scheduled_hours,
+                "available_hours": max(0, available_hours),
+                "utilization_percent": round(utilization_percent, 1),
+                "scheduled_order_count": len(scheduled_orders),
+            }
+        )
 
     return result
 
@@ -371,16 +392,16 @@ async def auto_schedule_order(
 ):
     """
     Automatically find the best available slot for a production order.
-    
+
     KEY FEATURE: Material-Machine Compatibility Aware Scheduling
-    
+
     Considers:
     - Material-machine compatibility (e.g., ABS/ASA only on enclosed printers)
     - Machine availability
     - Due dates
     - Priorities
     - Preferred start time
-    
+
     Automatically filters out incompatible machines before scheduling.
     """
     order = db.query(ProductionOrder).filter(ProductionOrder.id == order_id).first()
@@ -408,9 +429,7 @@ async def auto_schedule_order(
     else:
         query = query.join(WorkCenter).filter(WorkCenter.center_type == "machine")
 
-    resources = query.filter(
-        Resource.status.in_(["available", "idle"])
-    ).all()
+    resources = query.filter(Resource.status.in_(["available", "idle"])).all()
 
     best_slot = None
     best_resource = None
@@ -422,23 +441,27 @@ async def auto_schedule_order(
         if not is_compatible:
             # Skip incompatible machines (e.g., ABS/ASA on non-enclosed printers)
             continue
-        
+
         # Get scheduled orders for this resource
-        scheduled_orders = db.query(ProductionOrder).join(
-            PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True
-        ).filter(
-            and_(
-                or_(
-                    PrintJob.printer_id == resource.id,
-                    ProductionOrder.assigned_to == resource.code,
-                ),
-                ProductionOrder.status.in_(["released", "in_progress"]),
-                ProductionOrder.scheduled_start.isnot(None),
-                ProductionOrder.scheduled_end.isnot(None),
-                ProductionOrder.scheduled_start >= search_start,
-                ProductionOrder.scheduled_start <= search_end,
+        scheduled_orders = (
+            db.query(ProductionOrder)
+            .join(PrintJob, ProductionOrder.id == PrintJob.production_order_id, isouter=True)
+            .filter(
+                and_(
+                    or_(
+                        PrintJob.printer_id == resource.id,
+                        ProductionOrder.assigned_to == resource.code,
+                    ),
+                    ProductionOrder.status.in_(["released", "in_progress"]),
+                    ProductionOrder.scheduled_start.isnot(None),
+                    ProductionOrder.scheduled_end.isnot(None),
+                    ProductionOrder.scheduled_start >= search_start,
+                    ProductionOrder.scheduled_start <= search_end,
+                )
             )
-        ).order_by(ProductionOrder.scheduled_start).all()
+            .order_by(ProductionOrder.scheduled_start)
+            .all()
+        )
 
         # Build busy periods
         busy_periods = []
@@ -480,16 +503,13 @@ async def auto_schedule_order(
             is_compatible, reason = is_machine_compatible(db, resource, order)
             if not is_compatible:
                 incompatible_machines.append(f"{resource.code}: {reason}")
-        
+
         if incompatible_machines:
             detail = f"No compatible machines found. Material requirements: {', '.join(incompatible_machines)}"
         else:
             detail = "No available slots found. All compatible machines are fully scheduled."
-        
-        raise HTTPException(
-            status_code=404,
-            detail=detail
-        )
+
+        raise HTTPException(status_code=404, detail=detail)
 
     # Schedule the order
     scheduled_end = best_slot + timedelta(hours=estimated_hours)
@@ -509,4 +529,3 @@ async def auto_schedule_order(
         "scheduled_start": best_slot.isoformat(),
         "scheduled_end": scheduled_end.isoformat(),
     }
-

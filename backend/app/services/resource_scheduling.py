@@ -3,6 +3,7 @@ Resource scheduling service with conflict detection.
 
 Handles scheduling operations on resources and detecting time conflicts.
 """
+
 from datetime import datetime
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
@@ -10,14 +11,11 @@ from sqlalchemy.orm import Session
 from app.models.production_order import ProductionOrderOperation
 
 # Terminal statuses don't block scheduling
-TERMINAL_STATUSES = ['complete', 'skipped', 'cancelled']
+TERMINAL_STATUSES = ["complete", "skipped", "cancelled"]
 
 
 def get_resource_schedule(
-    db: Session,
-    resource_id: int,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
+    db: Session, resource_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None
 ) -> List[ProductionOrderOperation]:
     """
     Get scheduled operations for a resource within date range.
@@ -35,7 +33,7 @@ def get_resource_schedule(
         ProductionOrderOperation.resource_id == resource_id,
         ProductionOrderOperation.status.notin_(TERMINAL_STATUSES),
         ProductionOrderOperation.scheduled_start.isnot(None),
-        ProductionOrderOperation.scheduled_end.isnot(None)
+        ProductionOrderOperation.scheduled_end.isnot(None),
     )
 
     if start_date:
@@ -47,11 +45,7 @@ def get_resource_schedule(
 
 
 def find_conflicts(
-    db: Session,
-    resource_id: int,
-    start_time: datetime,
-    end_time: datetime,
-    exclude_operation_id: Optional[int] = None
+    db: Session, resource_id: int, start_time: datetime, end_time: datetime, exclude_operation_id: Optional[int] = None
 ) -> List[ProductionOrderOperation]:
     """
     Find operations that conflict with proposed time range.
@@ -78,7 +72,7 @@ def find_conflicts(
         ProductionOrderOperation.scheduled_end.isnot(None),
         # Overlap condition
         ProductionOrderOperation.scheduled_start < end_time,
-        ProductionOrderOperation.scheduled_end > start_time
+        ProductionOrderOperation.scheduled_end > start_time,
     )
 
     if exclude_operation_id:
@@ -88,9 +82,7 @@ def find_conflicts(
 
 
 def find_running_operations(
-    db: Session,
-    resource_id: int,
-    exclude_operation_id: Optional[int] = None
+    db: Session, resource_id: int, exclude_operation_id: Optional[int] = None
 ) -> List[ProductionOrderOperation]:
     """
     Find operations currently running on a resource.
@@ -104,8 +96,7 @@ def find_running_operations(
         List of running operations
     """
     query = db.query(ProductionOrderOperation).filter(
-        ProductionOrderOperation.resource_id == resource_id,
-        ProductionOrderOperation.status == 'running'
+        ProductionOrderOperation.resource_id == resource_id, ProductionOrderOperation.status == "running"
     )
 
     if exclude_operation_id:
@@ -114,10 +105,7 @@ def find_running_operations(
     return query.all()
 
 
-def check_resource_available_now(
-    db: Session,
-    resource_id: int
-) -> Tuple[bool, Optional[ProductionOrderOperation]]:
+def check_resource_available_now(db: Session, resource_id: int) -> Tuple[bool, Optional[ProductionOrderOperation]]:
     """
     Check if resource is available to start work now.
 
@@ -134,12 +122,7 @@ def check_resource_available_now(
     return True, None
 
 
-def find_next_available_slot(
-    db: Session,
-    resource_id: int,
-    duration_minutes: int,
-    after: datetime = None
-) -> datetime:
+def find_next_available_slot(db: Session, resource_id: int, duration_minutes: int, after: datetime = None) -> datetime:
     """
     Find the next available time slot on a resource.
 
@@ -160,12 +143,17 @@ def find_next_available_slot(
         after = datetime.utcnow()
 
     # Get all scheduled ops on this resource starting from 'after'
-    scheduled_ops = db.query(ProductionOrderOperation).filter(
-        ProductionOrderOperation.resource_id == resource_id,
-        ProductionOrderOperation.status.notin_(TERMINAL_STATUSES),
-        ProductionOrderOperation.scheduled_end.isnot(None),
-        ProductionOrderOperation.scheduled_end > after
-    ).order_by(ProductionOrderOperation.scheduled_start).all()
+    scheduled_ops = (
+        db.query(ProductionOrderOperation)
+        .filter(
+            ProductionOrderOperation.resource_id == resource_id,
+            ProductionOrderOperation.status.notin_(TERMINAL_STATUSES),
+            ProductionOrderOperation.scheduled_end.isnot(None),
+            ProductionOrderOperation.scheduled_end > after,
+        )
+        .order_by(ProductionOrderOperation.scheduled_start)
+        .all()
+    )
 
     if not scheduled_ops:
         # No scheduled ops - can start immediately
@@ -204,7 +192,7 @@ def schedule_operation(
     resource_id: int,
     scheduled_start: datetime,
     scheduled_end: datetime,
-    is_printer: bool = False
+    is_printer: bool = False,
 ) -> Tuple[bool, List[ProductionOrderOperation]]:
     """
     Schedule an operation on a resource with conflict validation.
@@ -228,8 +216,7 @@ def schedule_operation(
 
     # Check for conflicts using the stored ID format
     conflicts = find_conflicts(
-        db, stored_resource_id, scheduled_start, scheduled_end,
-        exclude_operation_id=operation.id
+        db, stored_resource_id, scheduled_start, scheduled_end, exclude_operation_id=operation.id
     )
 
     if conflicts:
@@ -239,7 +226,7 @@ def schedule_operation(
     operation.resource_id = stored_resource_id
     operation.scheduled_start = scheduled_start
     operation.scheduled_end = scheduled_end
-    operation.status = 'queued'  # Move from pending to queued
+    operation.status = "queued"  # Move from pending to queued
 
     db.flush()
 

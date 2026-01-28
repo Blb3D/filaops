@@ -9,6 +9,7 @@ Handles the complete quote-to-order conversion workflow:
 
 This is the canonical conversion flow - all quote acceptance paths should use this.
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -27,6 +28,7 @@ logger = get_logger(__name__)
 @dataclass
 class ShippingInfo:
     """Shipping information for order creation"""
+
     shipping_name: Optional[str] = None
     shipping_address_line1: Optional[str] = None
     shipping_address_line2: Optional[str] = None
@@ -43,6 +45,7 @@ class ShippingInfo:
 @dataclass
 class ConversionResult:
     """Result of quote conversion"""
+
     success: bool
     quote: Quote
     product: Optional[Product] = None
@@ -99,21 +102,21 @@ def convert_quote_to_order(
 ) -> ConversionResult:
     """
     Convert an accepted quote to a complete order.
-    
+
     This function handles the entire conversion flow:
     1. Validate quote data
     2. Create custom Product (if not exists)
     3. Create BOM with material and packaging
     4. Create Sales Order
     5. Create Production Order
-    
+
     Args:
         quote: The accepted Quote object
         db: Database session
         shipping: Optional shipping information (uses quote's shipping if not provided)
         payment_status: Initial payment status (default: "pending")
         auto_confirm: If True, set order status to "confirmed" instead of "pending"
-    
+
     Returns:
         ConversionResult with all created objects or error message
     """
@@ -122,51 +125,40 @@ def convert_quote_to_order(
         return ConversionResult(
             success=False,
             quote=quote,
-            error_message=f"Quote status must be 'accepted' or 'approved', got '{quote.status}'"
+            error_message=f"Quote status must be 'accepted' or 'approved', got '{quote.status}'",
         )
-    
+
     if quote.is_expired:
-        return ConversionResult(
-            success=False,
-            quote=quote,
-            error_message="Quote has expired"
-        )
-    
+        return ConversionResult(success=False, quote=quote, error_message="Quote has expired")
+
     if quote.sales_order_id is not None:
         return ConversionResult(
             success=False,
             quote=quote,
-            error_message=f"Quote already converted to Sales Order ID {quote.sales_order_id}"
+            error_message=f"Quote already converted to Sales Order ID {quote.sales_order_id}",
         )
-    
+
     # Validate quote has data needed for BOM
     is_valid, validation_msg = validate_quote_for_bom(quote, db)
     if not is_valid:
-        return ConversionResult(
-            success=False,
-            quote=quote,
-            error_message=f"Quote validation failed: {validation_msg}"
-        )
-    
+        return ConversionResult(success=False, quote=quote, error_message=f"Quote validation failed: {validation_msg}")
+
     try:
         # Step 2 & 3: Create Product and BOM (if not already created)
         product = None
         bom = None
-        
+
         if quote.product_id:
             # Product already exists (created during quote acceptance)
             product = db.query(Product).get(quote.product_id)
-            bom = db.query(BOM).filter(
-                BOM.product_id == product.id,
-                BOM.active.is_(True)
-            ).first()
+            bom = db.query(BOM).filter(BOM.product_id == product.id, BOM.active.is_(True)).first()
         else:
             # Create product and BOM now
             product, bom = auto_create_product_and_bom(quote, db)
-        
+
         # Step 4: Create Sales Order
         order_number = generate_sales_order_number(db)
-        
+
         # Use provided shipping or fall back to quote's shipping
         ship = shipping or ShippingInfo()
         shipping_line1 = ship.shipping_address_line1 or quote.shipping_address_line1
@@ -175,11 +167,11 @@ def convert_quote_to_order(
         shipping_state = ship.shipping_state or quote.shipping_state
         shipping_zip = ship.shipping_zip or quote.shipping_zip
         shipping_country = ship.shipping_country or quote.shipping_country or "USA"
-        shipping_cost = ship.shipping_cost or quote.shipping_cost or Decimal('0.00')
-        
+        shipping_cost = ship.shipping_cost or quote.shipping_cost or Decimal("0.00")
+
         # Calculate grand total
-        grand_total = quote.total_price + (shipping_cost or Decimal('0.00'))
-        
+        grand_total = quote.total_price + (shipping_cost or Decimal("0.00"))
+
         sales_order = SalesOrder(
             user_id=quote.user_id,
             quote_id=quote.id,
@@ -190,7 +182,7 @@ def convert_quote_to_order(
             finish=quote.finish or "standard",
             unit_price=quote.unit_price or (quote.total_price / quote.quantity),
             total_price=quote.total_price,
-            tax_amount=Decimal('0.00'),  # Tax calculated separately if needed
+            tax_amount=Decimal("0.00"),  # Tax calculated separately if needed
             shipping_cost=shipping_cost,
             grand_total=grand_total,
             status="confirmed" if auto_confirm else "pending",
@@ -208,21 +200,21 @@ def convert_quote_to_order(
             source="portal",
             source_order_id=quote.quote_number,
         )
-        
+
         if ship.shipping_carrier:
             sales_order.carrier = ship.shipping_carrier
-        
+
         db.add(sales_order)
         db.flush()  # Get sales_order.id
-        
+
         # Step 5: Create Production Order
         po_code = generate_production_order_code(db)
-        
+
         # Calculate estimated print time from quote
         estimated_time_minutes = None
         if quote.print_time_hours:
             estimated_time_minutes = int(float(quote.print_time_hours) * 60)
-        
+
         # Map rush level to priority (1=highest, 5=lowest)
         priority_map = {
             "standard": 3,
@@ -231,7 +223,7 @@ def convert_quote_to_order(
             "urgent": 1,
         }
         priority = priority_map.get(quote.rush_level, 3)
-        
+
         production_order = ProductionOrder(
             code=po_code,
             product_id=product.id,
@@ -243,20 +235,20 @@ def convert_quote_to_order(
             estimated_time_minutes=estimated_time_minutes,
             notes=f"Auto-created from Sales Order {order_number}. Quote: {quote.quote_number}",
         )
-        
+
         db.add(production_order)
-        
+
         # Update quote with conversion info
         quote.status = "converted"
         quote.sales_order_id = sales_order.id
         quote.converted_at = datetime.utcnow()
-        
+
         # Commit all changes
         db.commit()
         db.refresh(quote)
         db.refresh(sales_order)
         db.refresh(production_order)
-        
+
         logger.info(
             "Quote converted to sales order and production order",
             extra={
@@ -265,10 +257,10 @@ def convert_quote_to_order(
                 "production_order_code": po_code,
                 "product_id": product.id,
                 "product_sku": product.sku,
-                "bom_id": bom.id if bom else None
-            }
+                "bom_id": bom.id if bom else None,
+            },
         )
-        
+
         return ConversionResult(
             success=True,
             quote=quote,
@@ -277,28 +269,16 @@ def convert_quote_to_order(
             sales_order=sales_order,
             production_order=production_order,
         )
-        
+
     except ValueError as e:
         db.rollback()
-        return ConversionResult(
-            success=False,
-            quote=quote,
-            error_message=f"Validation error: {str(e)}"
-        )
+        return ConversionResult(success=False, quote=quote, error_message=f"Validation error: {str(e)}")
     except RuntimeError as e:
         db.rollback()
-        return ConversionResult(
-            success=False,
-            quote=quote,
-            error_message=f"Runtime error: {str(e)}"
-        )
+        return ConversionResult(success=False, quote=quote, error_message=f"Runtime error: {str(e)}")
     except Exception as e:
         db.rollback()
-        return ConversionResult(
-            success=False,
-            quote=quote,
-            error_message=f"Unexpected error: {str(e)}"
-        )
+        return ConversionResult(success=False, quote=quote, error_message=f"Unexpected error: {str(e)}")
 
 
 def convert_quote_after_payment(
@@ -309,40 +289,36 @@ def convert_quote_after_payment(
 ) -> ConversionResult:
     """
     Convenience function to convert a quote after successful payment.
-    
+
     This is called after Stripe webhook confirms payment.
     Sets payment_status to "paid" and auto-confirms the order.
-    
+
     Args:
         quote_id: ID of the quote to convert
         db: Database session
         payment_transaction_id: Stripe payment intent ID or similar
         payment_method: Payment method used (default: "stripe")
-    
+
     Returns:
         ConversionResult
     """
     quote = db.query(Quote).filter(Quote.id == quote_id).first()
-    
+
     if not quote:
-        return ConversionResult(
-            success=False,
-            quote=None,
-            error_message=f"Quote {quote_id} not found"
-        )
-    
+        return ConversionResult(success=False, quote=None, error_message=f"Quote {quote_id} not found")
+
     result = convert_quote_to_order(
         quote=quote,
         db=db,
         payment_status="paid",
         auto_confirm=True,
     )
-    
+
     # Update payment info on the sales order
     if result.success and result.sales_order:
         result.sales_order.payment_method = payment_method
         result.sales_order.payment_transaction_id = payment_transaction_id
         result.sales_order.paid_at = datetime.utcnow()
         db.commit()
-    
+
     return result

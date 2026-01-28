@@ -3,6 +3,7 @@ Schemas for Command Center dashboard.
 
 Provides action items and summary data for the "What do I need to do NOW?" view.
 """
+
 from datetime import datetime
 from typing import Optional, List, Dict
 from enum import Enum
@@ -11,23 +12,26 @@ from pydantic import BaseModel, Field
 
 class ActionItemType(str, Enum):
     """Types of action items for the command center."""
-    BLOCKED_PO = "blocked_po"           # Production blocked by material shortage
-    OVERDUE_SO = "overdue_so"           # Sales order past due date
-    DUE_TODAY_SO = "due_today_so"       # Sales order due today
-    OVERRUNNING_OP = "overrunning_op"   # Operation exceeding estimated time
-    IDLE_RESOURCE = "idle_resource"     # Resource with work waiting
+
+    BLOCKED_PO = "blocked_po"  # Production blocked by material shortage
+    OVERDUE_SO = "overdue_so"  # Sales order past due date
+    DUE_TODAY_SO = "due_today_so"  # Sales order due today
+    OVERRUNNING_OP = "overrunning_op"  # Operation exceeding estimated time
+    IDLE_RESOURCE = "idle_resource"  # Resource with work waiting
 
 
 class ActionItemPriority(int, Enum):
     """Priority levels for action items (lower = more urgent)."""
+
     CRITICAL = 1  # Blocked POs, overdue SOs
-    HIGH = 2      # Due today SOs
-    MEDIUM = 3    # Overrunning operations
-    LOW = 4       # Idle resources
+    HIGH = 2  # Due today SOs
+    MEDIUM = 3  # Overrunning operations
+    LOW = 4  # Idle resources
 
 
 class SuggestedAction(BaseModel):
     """A suggested action to resolve an issue."""
+
     label: str
     url: str
     action_type: Optional[str] = None  # 'navigate', 'api_call', etc.
@@ -35,6 +39,7 @@ class SuggestedAction(BaseModel):
 
 class ActionItem(BaseModel):
     """A single action item requiring attention."""
+
     id: str = Field(description="Unique ID for deduplication (type_entityId)")
     type: ActionItemType
     priority: int = Field(ge=1, le=4)
@@ -50,16 +55,17 @@ class ActionItem(BaseModel):
 
 class ActionItemsResponse(BaseModel):
     """Response containing prioritized action items."""
+
     items: List[ActionItem]
     total_count: int
     counts_by_type: Dict[str, int] = Field(
-        default_factory=dict,
-        description="Count of items by type: {'blocked_po': 2, 'overdue_so': 1}"
+        default_factory=dict, description="Count of items by type: {'blocked_po': 2, 'overdue_so': 1}"
     )
 
 
 class TodaySummary(BaseModel):
     """Summary statistics for today's operations."""
+
     # Sales Orders
     orders_due_today: int = 0
     orders_due_today_ready: int = 0
@@ -84,6 +90,7 @@ class TodaySummary(BaseModel):
 
 class OperationSummary(BaseModel):
     """Summary of a running operation for resource status."""
+
     operation_id: int
     production_order_id: int
     production_order_code: str
@@ -96,6 +103,7 @@ class OperationSummary(BaseModel):
 
 class ResourceStatus(BaseModel):
     """Status of a single resource/machine."""
+
     id: int
     code: str
     name: str
@@ -109,8 +117,6 @@ class ResourceStatus(BaseModel):
 
 class ResourcesResponse(BaseModel):
     """Response containing all resource statuses."""
+
     resources: List[ResourceStatus]
-    summary: Dict[str, int] = Field(
-        default_factory=dict,
-        description="Counts by status: {'running': 3, 'idle': 2}"
-    )
+    summary: Dict[str, int] = Field(default_factory=dict, description="Counts by status: {'running': 3, 'idle': 2}")

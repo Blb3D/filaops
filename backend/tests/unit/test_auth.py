@@ -4,6 +4,7 @@ Unit tests for authentication utilities
 Testing password hashing, JWT token generation, and validation
 Following TDD approach - write tests first, then implement
 """
+
 from datetime import datetime, timedelta, timezone
 
 
@@ -74,7 +75,7 @@ class TestJWTTokens:
 
         # JWT tokens have 3 parts separated by dots
         assert isinstance(token, str)
-        assert len(token.split('.')) == 3
+        assert len(token.split(".")) == 3
 
     def test_create_access_token_contains_user_id(self):
         """Test that access token payload contains user_id"""
@@ -126,7 +127,7 @@ class TestJWTTokens:
         token = create_refresh_token(user_id)
 
         assert isinstance(token, str)
-        assert len(token.split('.')) == 3
+        assert len(token.split(".")) == 3
 
     def test_create_refresh_token_longer_expiration(self):
         """Test that refresh tokens have longer expiration than access tokens"""
@@ -200,7 +201,7 @@ class TestJWTTokens:
 
         # Tamper with the token by corrupting the signature part
         # JWT format: header.payload.signature
-        parts = token.split('.')
+        parts = token.split(".")
         assert len(parts) == 3, "Token should have 3 parts"
 
         # Corrupt the signature by reversing it (guaranteed to be different)
@@ -260,7 +261,7 @@ class TestTokenHelpers:
         # Should return a hex string (SHA256 produces 64 hex characters)
         assert isinstance(hashed, str)
         assert len(hashed) == 64
-        assert all(c in '0123456789abcdef' for c in hashed)
+        assert all(c in "0123456789abcdef" for c in hashed)
 
     def test_hash_refresh_token_consistent(self):
         """Test that same token produces same hash"""

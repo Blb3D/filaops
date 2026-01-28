@@ -7,6 +7,7 @@ Provides admin interface for creating and managing inventory transactions:
 - Transfers (location-to-location)
 - Adjustments (cycle counts, corrections)
 """
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from pydantic import BaseModel
@@ -33,27 +34,28 @@ logger = get_logger(__name__)
 # HELPER FUNCTIONS
 # ============================================================================
 
+
 def normalize_unit(unit: Optional[str]) -> Optional[str]:
     """
     Normalize unit string to standard format.
-    
+
     Handles common variations:
     - "gram", "grams", "g" -> "G"
     - "kilogram", "kilograms", "kg" -> "KG"
     - "milligram", "milligrams", "mg" -> "MG"
     - Other units are uppercased and stripped
-    
+
     Args:
         unit: Unit string to normalize (can be None)
-        
+
     Returns:
         Normalized unit string (uppercase) or None if input is None/empty
     """
     if not unit:
         return None
-    
+
     unit = unit.strip().lower()
-    
+
     # Handle common mass unit variations
     if unit in ("gram", "grams", "g"):
         return "G"
@@ -61,56 +63,52 @@ def normalize_unit(unit: Optional[str]) -> Optional[str]:
         return "KG"
     elif unit in ("milligram", "milligrams", "mg"):
         return "MG"
-    
+
     # For other units, just uppercase
     return unit.upper()
 
 
 def convert_quantity_to_kg_for_cost(
-    db: Session,
-    quantity: Decimal,
-    product_unit: Optional[str],
-    product_id: int,
-    product_sku: Optional[str] = None
+    db: Session, quantity: Decimal, product_unit: Optional[str], product_id: int, product_sku: Optional[str] = None
 ) -> float:
     """
     Convert quantity to kilograms for cost calculation.
-    
+
     Cost per unit is stored per-KG for materials, so we need to convert
     the quantity to KG before multiplying by cost_per_unit.
-    
+
     Args:
         db: Database session
         quantity: Quantity in product's unit
         product_unit: Product's unit of measure (will be normalized)
         product_id: Product ID for error messages
         product_sku: Product SKU for error messages (optional)
-        
+
     Returns:
         Quantity in kilograms as float
-        
+
     Raises:
         ValueError: If unit conversion fails and unit is unknown
     """
     normalized_unit = normalize_unit(product_unit)
-    
+
     if not normalized_unit:
         # No unit specified - assume it's already in the correct unit for cost
         # Log a warning but proceed
         logger.warning(
             f"Product {product_id} ({product_sku or 'unknown'}) has no unit specified. "
             f"Assuming quantity {quantity} is already in cost unit (KG) for cost calculation.",
-            extra={"product_id": product_id, "product_sku": product_sku, "quantity": str(quantity)}
+            extra={"product_id": product_id, "product_sku": product_sku, "quantity": str(quantity)},
         )
         try:
             return float(quantity)
         except (ValueError, TypeError) as e:
             logger.error(
                 f"Failed to cast quantity {quantity} to float for product {product_id}: {e}",
-                extra={"product_id": product_id, "quantity": str(quantity)}
+                extra={"product_id": product_id, "quantity": str(quantity)},
             )
             raise ValueError(f"Cannot convert quantity {quantity} to float: {e}")
-    
+
     # If already in KG, no conversion needed
     if normalized_unit == "KG":
         try:
@@ -118,21 +116,21 @@ def convert_quantity_to_kg_for_cost(
         except (ValueError, TypeError) as e:
             logger.error(
                 f"Failed to cast quantity {quantity} to float for product {product_id}: {e}",
-                extra={"product_id": product_id, "quantity": str(quantity)}
+                extra={"product_id": product_id, "quantity": str(quantity)},
             )
             raise ValueError(f"Cannot convert quantity {quantity} to float: {e}")
-    
+
     # Convert from product unit to KG
     converted_qty, success = convert_quantity_safe(db, quantity, normalized_unit, "KG")
-    
+
     if not success:
         # Try local fallback conversion for common mass units not in the service
         # This handles cases where MG (milligrams) might not be in the database
         local_mass_conversions = {
             "MG": Decimal("0.000001"),  # 1 milligram = 0.000001 kg
-            "G": Decimal("0.001"),       # 1 gram = 0.001 kg (should be in service, but fallback)
+            "G": Decimal("0.001"),  # 1 gram = 0.001 kg (should be in service, but fallback)
         }
-        
+
         if normalized_unit in local_mass_conversions:
             # Use local conversion factor
             conversion_factor = local_mass_conversions[normalized_unit]
@@ -140,9 +138,9 @@ def convert_quantity_to_kg_for_cost(
             success = True
             logger.debug(
                 f"Used local conversion for {normalized_unit} -> KG for product {product_id}",
-                extra={"product_id": product_id, "unit": normalized_unit, "quantity": str(quantity)}
+                extra={"product_id": product_id, "unit": normalized_unit, "quantity": str(quantity)},
             )
-    
+
     if not success:
         # Conversion failed - this is a serious error for cost calculation
         error_msg = (
@@ -156,17 +154,17 @@ def convert_quantity_to_kg_for_cost(
                 "product_id": product_id,
                 "product_sku": product_sku,
                 "quantity": str(quantity),
-                "unit": normalized_unit
-            }
+                "unit": normalized_unit,
+            },
         )
         raise ValueError(error_msg)
-    
+
     try:
         return float(converted_qty)
     except (ValueError, TypeError) as e:
         logger.error(
             f"Failed to cast converted quantity {converted_qty} to float for product {product_id}: {e}",
-            extra={"product_id": product_id, "converted_quantity": str(converted_qty)}
+            extra={"product_id": product_id, "converted_quantity": str(converted_qty)},
         )
         raise ValueError(f"Cannot convert quantity {converted_qty} to float: {e}")
 
@@ -175,8 +173,10 @@ def convert_quantity_to_kg_for_cost(
 # SCHEMAS
 # ============================================================================
 
+
 class TransactionCreate(BaseModel):
     """Create inventory transaction request"""
+
     product_id: int
     location_id: Optional[int] = None
     transaction_type: str  # receipt, issue, transfer, adjustment
@@ -193,6 +193,7 @@ class TransactionCreate(BaseModel):
 
 class TransactionResponse(BaseModel):
     """Inventory transaction response"""
+
     id: int
     product_id: int
     product_sku: str
@@ -222,6 +223,7 @@ class TransactionResponse(BaseModel):
 # ENDPOINTS
 # ============================================================================
 
+
 @router.get("", response_model=List[TransactionResponse])
 async def list_transactions(
     product_id: Optional[int] = Query(None, description="Filter by product"),
@@ -236,12 +238,12 @@ async def list_transactions(
 ):
     """
     List inventory transactions with filters.
-    
+
     SINGLE SOURCE OF TRUTH: Returns stored total_cost and unit directly.
     See docs/AI_DIRECTIVE_UOM_COSTS.md - UI displays these values with NO client-side math.
     """
     query = db.query(InventoryTransaction).join(Product)
-    
+
     if product_id:
         query = query.filter(InventoryTransaction.product_id == product_id)
     if transaction_type:
@@ -252,20 +254,28 @@ async def list_transactions(
         query = query.filter(InventoryTransaction.reference_type == reference_type)
     if reference_id:
         query = query.filter(InventoryTransaction.reference_id == reference_id)
-    
+
     transactions = query.order_by(desc(InventoryTransaction.created_at)).offset(offset).limit(limit).all()
-    
+
     result = []
     for txn in transactions:
         product = db.query(Product).filter(Product.id == txn.product_id).first()
-        location = db.query(InventoryLocation).filter(InventoryLocation.id == txn.location_id).first() if txn.location_id else None
-        to_location = db.query(InventoryLocation).filter(InventoryLocation.id == txn.to_location_id).first() if hasattr(txn, 'to_location_id') and txn.to_location_id else None
-        
+        location = (
+            db.query(InventoryLocation).filter(InventoryLocation.id == txn.location_id).first()
+            if txn.location_id
+            else None
+        )
+        to_location = (
+            db.query(InventoryLocation).filter(InventoryLocation.id == txn.to_location_id).first()
+            if hasattr(txn, "to_location_id") and txn.to_location_id
+            else None
+        )
+
         # SINGLE SOURCE OF TRUTH: Use stored values from transaction
         # Fallback calculation only for legacy transactions created before migration 039
-        stored_total_cost = getattr(txn, 'total_cost', None)
-        stored_unit = getattr(txn, 'unit', None)
-        
+        stored_total_cost = getattr(txn, "total_cost", None)
+        stored_unit = getattr(txn, "unit", None)
+
         if stored_total_cost is not None:
             # New transaction with stored total_cost - use directly
             total_cost = stored_total_cost
@@ -288,40 +298,42 @@ async def list_transactions(
                 total_cost = None
         else:
             total_cost = None
-        
+
         # Use stored unit, fallback to inferred for legacy transactions
         if stored_unit:
             display_unit = stored_unit
         elif product:
-            display_unit = 'G' if is_material(product) else product.unit
+            display_unit = "G" if is_material(product) else product.unit
         else:
             display_unit = None
-        
-        result.append(TransactionResponse(
-            id=txn.id,
-            product_id=txn.product_id,
-            product_sku=product.sku if product else "",
-            product_name=product.name if product else "",
-            product_unit=product.unit if product else None,
-            material_type_id=product.material_type_id if product else None,
-            location_id=txn.location_id,
-            location_name=location.name if location else None,
-            transaction_type=txn.transaction_type,
-            quantity=txn.quantity,
-            unit=display_unit,  # STORED unit - UI displays directly
-            cost_per_unit=txn.cost_per_unit,
-            total_cost=total_cost,  # STORED total - UI displays directly
-            reference_type=txn.reference_type,
-            reference_id=txn.reference_id,
-            lot_number=txn.lot_number,
-            serial_number=txn.serial_number,
-            notes=txn.notes,
-            created_at=txn.created_at,
-            created_by=txn.created_by,
-            to_location_id=getattr(txn, 'to_location_id', None),
-            to_location_name=to_location.name if to_location else None,
-        ))
-    
+
+        result.append(
+            TransactionResponse(
+                id=txn.id,
+                product_id=txn.product_id,
+                product_sku=product.sku if product else "",
+                product_name=product.name if product else "",
+                product_unit=product.unit if product else None,
+                material_type_id=product.material_type_id if product else None,
+                location_id=txn.location_id,
+                location_name=location.name if location else None,
+                transaction_type=txn.transaction_type,
+                quantity=txn.quantity,
+                unit=display_unit,  # STORED unit - UI displays directly
+                cost_per_unit=txn.cost_per_unit,
+                total_cost=total_cost,  # STORED total - UI displays directly
+                reference_type=txn.reference_type,
+                reference_id=txn.reference_id,
+                lot_number=txn.lot_number,
+                serial_number=txn.serial_number,
+                notes=txn.notes,
+                created_at=txn.created_at,
+                created_by=txn.created_by,
+                to_location_id=getattr(txn, "to_location_id", None),
+                to_location_name=to_location.name if to_location else None,
+            )
+        )
+
     return result
 
 
@@ -336,7 +348,7 @@ async def create_transaction(
     product = db.query(Product).filter(Product.id == request.product_id).first()
     if not product:
         raise HTTPException(status_code=404, detail=f"Product {request.product_id} not found")
-    
+
     # Validate location
     location = None
     if request.location_id:
@@ -348,23 +360,17 @@ async def create_transaction(
         location = db.query(InventoryLocation).filter(InventoryLocation.type == "warehouse").first()
         if not location:
             # Create default warehouse
-            location = InventoryLocation(
-                name="Main Warehouse",
-                code="MAIN",
-                type="warehouse",
-                active=True
-            )
+            location = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse", active=True)
             db.add(location)
             db.flush()
-    
+
     # Validate transaction type
     valid_types = ["receipt", "issue", "transfer", "adjustment", "consumption", "scrap"]
     if request.transaction_type not in valid_types:
         raise HTTPException(
-            status_code=400,
-            detail=f"Invalid transaction_type. Must be one of: {', '.join(valid_types)}"
+            status_code=400, detail=f"Invalid transaction_type. Must be one of: {', '.join(valid_types)}"
         )
-    
+
     # For transfers, validate to_location
     to_location = None
     if request.transaction_type == "transfer":
@@ -375,32 +381,30 @@ async def create_transaction(
             raise HTTPException(status_code=404, detail=f"To location {request.to_location_id} not found")
         if request.to_location_id == location.id:
             raise HTTPException(status_code=400, detail="Cannot transfer to the same location")
-    
+
     # Get or create inventory record
-    inventory = db.query(Inventory).filter(
-        Inventory.product_id == request.product_id,
-        Inventory.location_id == location.id
-    ).first()
-    
+    inventory = (
+        db.query(Inventory)
+        .filter(Inventory.product_id == request.product_id, Inventory.location_id == location.id)
+        .first()
+    )
+
     if not inventory:
         inventory = Inventory(
-            product_id=request.product_id,
-            location_id=location.id,
-            on_hand_quantity=0,
-            allocated_quantity=0
+            product_id=request.product_id, location_id=location.id, on_hand_quantity=0, allocated_quantity=0
         )
         db.add(inventory)
         db.flush()
-    
+
     # Handle transfers specially (create two transactions)
     if request.transaction_type == "transfer":
         # Validate sufficient inventory
         if float(inventory.on_hand_quantity) < float(request.quantity):
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient inventory for transfer. On hand: {inventory.on_hand_quantity}, requested: {request.quantity}"
+                detail=f"Insufficient inventory for transfer. On hand: {inventory.on_hand_quantity}, requested: {request.quantity}",
             )
-        
+
         # Calculate total_cost if cost_per_unit provided
         total_cost = None
         if request.cost_per_unit is not None and request.quantity:
@@ -422,25 +426,26 @@ async def create_transaction(
             created_by=current_admin.email,
         )
         db.add(from_transaction)
-        
+
         # Decrease from source location
         inventory.on_hand_quantity = float(inventory.on_hand_quantity) - float(request.quantity)
-        
+
         # Get or create destination inventory
-        to_inventory = db.query(Inventory).filter(
-            Inventory.product_id == request.product_id,
-            Inventory.location_id == request.to_location_id
-        ).first()
-        
+        to_inventory = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == request.product_id, Inventory.location_id == request.to_location_id)
+            .first()
+        )
+
         if not to_inventory:
             to_inventory = Inventory(
                 product_id=request.product_id,
                 location_id=request.to_location_id,
                 on_hand_quantity=0,
-                allocated_quantity=0
+                allocated_quantity=0,
             )
             db.add(to_inventory)
-        
+
         # Create receipt transaction at destination (reuse total_cost calculated above)
         to_transaction = InventoryTransaction(
             product_id=request.product_id,
@@ -457,10 +462,10 @@ async def create_transaction(
             created_by=current_admin.email,
         )
         db.add(to_transaction)
-        
+
         # Increase at destination location
         to_inventory.on_hand_quantity = float(to_inventory.on_hand_quantity) + float(request.quantity)
-        
+
         # Return the from_transaction as the primary one
         transaction = from_transaction
     else:
@@ -485,7 +490,7 @@ async def create_transaction(
             created_by=current_admin.email,
         )
         db.add(transaction)
-        
+
         # Update inventory based on transaction type
         if request.transaction_type == "receipt":
             inventory.on_hand_quantity = float(inventory.on_hand_quantity) + float(request.quantity)
@@ -493,23 +498,23 @@ async def create_transaction(
             if float(inventory.on_hand_quantity) < float(request.quantity):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Insufficient inventory. On hand: {inventory.on_hand_quantity}, requested: {request.quantity}"
+                    detail=f"Insufficient inventory. On hand: {inventory.on_hand_quantity}, requested: {request.quantity}",
                 )
             inventory.on_hand_quantity = float(inventory.on_hand_quantity) - float(request.quantity)
         elif request.transaction_type == "adjustment":
             inventory.on_hand_quantity = float(request.quantity)
-    
+
     db.commit()
     db.refresh(transaction)
-    
+
     db.commit()
     db.refresh(transaction)
-    
+
     # Build response
     to_location = None
     if request.transaction_type == "transfer" and request.to_location_id:
         to_location = db.query(InventoryLocation).filter(InventoryLocation.id == request.to_location_id).first()
-    
+
     total_cost = None
     if transaction.cost_per_unit is not None and transaction.quantity is not None:
         try:
@@ -534,8 +539,8 @@ async def create_transaction(
                             "product_id": product.id,
                             "product_sku": product.sku,
                             "cost_per_unit": str(transaction.cost_per_unit),
-                            "quantity": str(transaction.quantity)
-                        }
+                            "quantity": str(transaction.quantity),
+                        },
                     )
                     total_cost = None
         except ValueError as e:
@@ -546,11 +551,11 @@ async def create_transaction(
                     "transaction_id": transaction.id,
                     "product_id": transaction.product_id,
                     "cost_per_unit": str(transaction.cost_per_unit),
-                    "quantity": str(transaction.quantity)
-                }
+                    "quantity": str(transaction.quantity),
+                },
             )
             total_cost = None
-    
+
     return TransactionResponse(
         id=transaction.id,
         product_id=transaction.product_id,
@@ -597,8 +602,10 @@ async def list_locations(
 # BATCH INVENTORY UPDATE (CYCLE COUNTING)
 # ============================================================================
 
+
 class BatchItemUpdate(BaseModel):
     """Single item in a batch update"""
+
     product_id: int
     counted_quantity: Decimal
     reason: str  # Required for accounting audit trail
@@ -606,6 +613,7 @@ class BatchItemUpdate(BaseModel):
 
 class BatchUpdateRequest(BaseModel):
     """Batch inventory update request for cycle counting"""
+
     items: List[BatchItemUpdate]
     location_id: Optional[int] = None
     count_reference: Optional[str] = None  # e.g., "Cycle Count 2025-01-20"
@@ -613,6 +621,7 @@ class BatchUpdateRequest(BaseModel):
 
 class BatchUpdateResult(BaseModel):
     """Result of a single item update in batch"""
+
     product_id: int
     product_sku: str
     product_name: str
@@ -627,6 +636,7 @@ class BatchUpdateResult(BaseModel):
 
 class BatchUpdateResponse(BaseModel):
     """Batch update response"""
+
     total_items: int
     successful: int
     failed: int
@@ -659,23 +669,14 @@ async def batch_update_inventory(
 
     # Get or create default location
     if request.location_id:
-        location = db.query(InventoryLocation).filter(
-            InventoryLocation.id == request.location_id
-        ).first()
+        location = db.query(InventoryLocation).filter(InventoryLocation.id == request.location_id).first()
         if not location:
             raise HTTPException(status_code=404, detail=f"Location {request.location_id} not found")
     else:
-        location = db.query(InventoryLocation).filter(
-            InventoryLocation.type == "warehouse"
-        ).first()
+        location = db.query(InventoryLocation).filter(InventoryLocation.type == "warehouse").first()
         if not location:
             # Create default warehouse
-            location = InventoryLocation(
-                name="Main Warehouse",
-                code="MAIN",
-                type="warehouse",
-                active=True
-            )
+            location = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse", active=True)
             db.add(location)
             db.flush()
 
@@ -689,31 +690,31 @@ async def batch_update_inventory(
             # Get product
             product = db.query(Product).filter(Product.id == item.product_id).first()
             if not product:
-                results.append(BatchUpdateResult(
-                    product_id=item.product_id,
-                    product_sku="UNKNOWN",
-                    product_name="Unknown Product",
-                    previous_quantity=Decimal(0),
-                    counted_quantity=item.counted_quantity,
-                    variance=Decimal(0),
-                    success=False,
-                    error=f"Product {item.product_id} not found"
-                ))
+                results.append(
+                    BatchUpdateResult(
+                        product_id=item.product_id,
+                        product_sku="UNKNOWN",
+                        product_name="Unknown Product",
+                        previous_quantity=Decimal(0),
+                        counted_quantity=item.counted_quantity,
+                        variance=Decimal(0),
+                        success=False,
+                        error=f"Product {item.product_id} not found",
+                    )
+                )
                 failed += 1
                 continue
 
             # Get or create inventory record
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == item.product_id,
-                Inventory.location_id == location.id
-            ).first()
+            inventory = (
+                db.query(Inventory)
+                .filter(Inventory.product_id == item.product_id, Inventory.location_id == location.id)
+                .first()
+            )
 
             if not inventory:
                 inventory = Inventory(
-                    product_id=item.product_id,
-                    location_id=location.id,
-                    on_hand_quantity=0,
-                    allocated_quantity=0
+                    product_id=item.product_id, location_id=location.id, on_hand_quantity=0, allocated_quantity=0
                 )
                 db.add(inventory)
                 db.flush()
@@ -723,16 +724,18 @@ async def batch_update_inventory(
 
             # Skip if no variance (count matches)
             if variance == 0:
-                results.append(BatchUpdateResult(
-                    product_id=item.product_id,
-                    product_sku=product.sku,
-                    product_name=product.name,
-                    previous_quantity=previous_qty,
-                    counted_quantity=item.counted_quantity,
-                    variance=Decimal(0),
-                    success=True,
-                    error=None
-                ))
+                results.append(
+                    BatchUpdateResult(
+                        product_id=item.product_id,
+                        product_sku=product.sku,
+                        product_name=product.name,
+                        previous_quantity=previous_qty,
+                        counted_quantity=item.counted_quantity,
+                        variance=Decimal(0),
+                        success=True,
+                        error=None,
+                    )
+                )
                 successful += 1
                 continue
 
@@ -758,57 +761,59 @@ async def batch_update_inventory(
 
             db.flush()
 
-            results.append(BatchUpdateResult(
-                product_id=item.product_id,
-                product_sku=product.sku,
-                product_name=product.name,
-                previous_quantity=previous_qty,
-                counted_quantity=item.counted_quantity,
-                variance=variance,
-                transaction_id=inv_txn.id,
-                journal_entry_id=journal_entry.id,
-                success=True,
-                error=None
-            ))
+            results.append(
+                BatchUpdateResult(
+                    product_id=item.product_id,
+                    product_sku=product.sku,
+                    product_name=product.name,
+                    previous_quantity=previous_qty,
+                    counted_quantity=item.counted_quantity,
+                    variance=variance,
+                    transaction_id=inv_txn.id,
+                    journal_entry_id=journal_entry.id,
+                    success=True,
+                    error=None,
+                )
+            )
             successful += 1
 
         except ValueError as e:
             # TransactionService raises ValueError for missing accounts, etc.
             logger.error(f"Accounting error for batch item {item.product_id}: {e}")
-            results.append(BatchUpdateResult(
-                product_id=item.product_id,
-                product_sku=product.sku if product else "ERROR",
-                product_name=product.name if product else "Error",
-                previous_quantity=previous_qty if 'previous_qty' in locals() else Decimal(0),
-                counted_quantity=item.counted_quantity,
-                variance=Decimal(0),
-                success=False,
-                error=f"Accounting error: {str(e)}"
-            ))
+            results.append(
+                BatchUpdateResult(
+                    product_id=item.product_id,
+                    product_sku=product.sku if product else "ERROR",
+                    product_name=product.name if product else "Error",
+                    previous_quantity=previous_qty if "previous_qty" in locals() else Decimal(0),
+                    counted_quantity=item.counted_quantity,
+                    variance=Decimal(0),
+                    success=False,
+                    error=f"Accounting error: {str(e)}",
+                )
+            )
             failed += 1
         except Exception as e:
             logger.error(f"Error processing batch item {item.product_id}: {e}")
-            results.append(BatchUpdateResult(
-                product_id=item.product_id,
-                product_sku="ERROR",
-                product_name="Error",
-                previous_quantity=Decimal(0),
-                counted_quantity=item.counted_quantity,
-                variance=Decimal(0),
-                success=False,
-                error=str(e)
-            ))
+            results.append(
+                BatchUpdateResult(
+                    product_id=item.product_id,
+                    product_sku="ERROR",
+                    product_name="Error",
+                    previous_quantity=Decimal(0),
+                    counted_quantity=item.counted_quantity,
+                    variance=Decimal(0),
+                    success=False,
+                    error=str(e),
+                )
+            )
             failed += 1
 
     # Commit all changes (inventory + GL entries atomically)
     db.commit()
 
     return BatchUpdateResponse(
-        total_items=len(request.items),
-        successful=successful,
-        failed=failed,
-        results=results,
-        count_reference=count_ref
+        total_items=len(request.items), successful=successful, failed=failed, results=results, count_reference=count_ref
     )
 
 
@@ -838,12 +843,7 @@ async def get_inventory_summary(
 
     if search:
         search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                Product.sku.ilike(search_term),
-                Product.name.ilike(search_term)
-            )
-        )
+        query = query.filter(or_(Product.sku.ilike(search_term), Product.name.ilike(search_term)))
 
     if not show_zero:
         query = query.filter(Inventory.on_hand_quantity > 0)
@@ -855,25 +855,23 @@ async def get_inventory_summary(
     for inv in items:
         product = inv.product
         location = inv.location
-        result.append({
-            "inventory_id": inv.id,
-            "product_id": product.id,
-            "product_sku": product.sku,
-            "product_name": product.name,
-            "category_name": product.item_category.name if product.item_category else None,
-            "unit": 'G' if is_material(product) else (product.unit or 'EA'),
-            "location_id": location.id if location else None,
-            "location_name": location.name if location else None,
-            "on_hand_quantity": float(inv.on_hand_quantity),
-            "allocated_quantity": float(inv.allocated_quantity),
-            "available_quantity": float(inv.available_quantity) if inv.available_quantity else float(inv.on_hand_quantity) - float(inv.allocated_quantity),
-            "last_counted": inv.last_counted.isoformat() if inv.last_counted else None,
-        })
+        result.append(
+            {
+                "inventory_id": inv.id,
+                "product_id": product.id,
+                "product_sku": product.sku,
+                "product_name": product.name,
+                "category_name": product.item_category.name if product.item_category else None,
+                "unit": "G" if is_material(product) else (product.unit or "EA"),
+                "location_id": location.id if location else None,
+                "location_name": location.name if location else None,
+                "on_hand_quantity": float(inv.on_hand_quantity),
+                "allocated_quantity": float(inv.allocated_quantity),
+                "available_quantity": float(inv.available_quantity)
+                if inv.available_quantity
+                else float(inv.on_hand_quantity) - float(inv.allocated_quantity),
+                "last_counted": inv.last_counted.isoformat() if inv.last_counted else None,
+            }
+        )
 
-    return {
-        "items": result,
-        "total": total,
-        "limit": limit,
-        "offset": offset
-    }
-
+    return {"items": result, "total": total, "limit": limit, "offset": offset}

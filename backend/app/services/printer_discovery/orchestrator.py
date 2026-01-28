@@ -49,17 +49,14 @@ class PrinterDiscoveryOrchestrator:
 
     def get_registered_brands(self) -> List[Dict[str, str]]:
         """Get list of registered brands with their display names"""
-        return [
-            {"code": adapter.brand_code, "name": adapter.brand_name}
-            for adapter in self._adapters.values()
-        ]
+        return [{"code": adapter.brand_code, "name": adapter.brand_name} for adapter in self._adapters.values()]
 
     async def discover_all(
         self,
         timeout_seconds: float = 5.0,
         include_cloud: bool = False,
         cloud_credentials: Optional[Dict[str, Dict[str, Any]]] = None,
-        brand_filter: Optional[List[str]] = None
+        brand_filter: Optional[List[str]] = None,
     ) -> List[DiscoveredPrinter]:
         """
         Discover printers from all registered adapters.
@@ -86,9 +83,7 @@ class PrinterDiscoveryOrchestrator:
 
             # Cloud discovery (if requested and credentials provided)
             if include_cloud and brand_code in cloud_credentials:
-                tasks.append(
-                    self._safe_discover_cloud(adapter, cloud_credentials[brand_code])
-                )
+                tasks.append(self._safe_discover_cloud(adapter, cloud_credentials[brand_code]))
 
         results = await asyncio.gather(*tasks)
 
@@ -108,11 +103,7 @@ class PrinterDiscoveryOrchestrator:
         logger.info(f"Discovery complete: found {len(all_printers)} printers")
         return all_printers
 
-    async def discover_brand(
-        self,
-        brand_code: str,
-        timeout_seconds: float = 5.0
-    ) -> List[DiscoveredPrinter]:
+    async def discover_brand(self, brand_code: str, timeout_seconds: float = 5.0) -> List[DiscoveredPrinter]:
         """Discover printers for a specific brand only"""
         adapter = self._adapters.get(brand_code)
         if not adapter:
@@ -121,11 +112,7 @@ class PrinterDiscoveryOrchestrator:
 
         return await self._safe_discover_local(adapter, timeout_seconds)
 
-    async def test_connection(
-        self,
-        brand_code: str,
-        config: PrinterConnectionConfig
-    ) -> tuple[bool, Optional[str]]:
+    async def test_connection(self, brand_code: str, config: PrinterConnectionConfig) -> tuple[bool, Optional[str]]:
         """
         Test connection to a printer.
 
@@ -146,11 +133,7 @@ class PrinterDiscoveryOrchestrator:
             logger.exception(f"Error testing connection for {brand_code}")
             return False, str(e)
 
-    async def get_status(
-        self,
-        brand_code: str,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterStatus]:
+    async def get_status(self, brand_code: str, config: PrinterConnectionConfig) -> Optional[PrinterStatus]:
         """Get current status of a printer"""
         adapter = self._adapters.get(brand_code)
         if not adapter:
@@ -177,9 +160,7 @@ class PrinterDiscoveryOrchestrator:
         return adapter.get_supported_models()
 
     async def _safe_discover_local(
-        self,
-        adapter: PrinterDiscoveryAdapter,
-        timeout_seconds: float
+        self, adapter: PrinterDiscoveryAdapter, timeout_seconds: float
     ) -> List[DiscoveredPrinter]:
         """Safely run local discovery with error handling"""
         try:
@@ -189,9 +170,7 @@ class PrinterDiscoveryOrchestrator:
             return []
 
     async def _safe_discover_cloud(
-        self,
-        adapter: PrinterDiscoveryAdapter,
-        credentials: Dict[str, Any]
+        self, adapter: PrinterDiscoveryAdapter, credentials: Dict[str, Any]
     ) -> List[DiscoveredPrinter]:
         """Safely run cloud discovery with error handling"""
         try:

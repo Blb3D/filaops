@@ -3,6 +3,7 @@ Purchasing Event Schemas
 
 Pydantic models for the Purchasing Event API endpoints
 """
+
 from datetime import datetime, date
 from enum import Enum
 from typing import Optional
@@ -11,6 +12,7 @@ from pydantic import BaseModel, Field
 
 class PurchasingEventType(str, Enum):
     """Types of purchasing events"""
+
     STATUS_CHANGE = "status_change"
     CREATED = "created"
     RECEIPT = "receipt"
@@ -28,6 +30,7 @@ class PurchasingEventType(str, Enum):
 
 class PurchasingEventCreate(BaseModel):
     """Schema for creating a purchasing event"""
+
     event_type: PurchasingEventType
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -40,6 +43,7 @@ class PurchasingEventCreate(BaseModel):
 
 class PurchasingEventResponse(BaseModel):
     """Schema for purchasing event response"""
+
     id: int
     purchase_order_id: int
     user_id: Optional[int] = None
@@ -60,5 +64,6 @@ class PurchasingEventResponse(BaseModel):
 
 class PurchasingEventListResponse(BaseModel):
     """Schema for list of purchasing events"""
+
     items: list[PurchasingEventResponse]
     total: int

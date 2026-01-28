@@ -3,6 +3,7 @@ Maintenance Pydantic Schemas
 
 Schemas for printer maintenance log operations.
 """
+
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
@@ -14,8 +15,10 @@ from decimal import Decimal
 # Enums
 # ============================================================================
 
+
 class MaintenanceType(str, Enum):
     """Types of maintenance activities"""
+
     ROUTINE = "routine"
     REPAIR = "repair"
     CALIBRATION = "calibration"
@@ -26,8 +29,10 @@ class MaintenanceType(str, Enum):
 # Maintenance CRUD Schemas
 # ============================================================================
 
+
 class MaintenanceLogBase(BaseModel):
     """Base maintenance log fields"""
+
     maintenance_type: MaintenanceType = Field(..., description="Type of maintenance performed")
     description: Optional[str] = Field(None, description="Description of maintenance performed")
     performed_by: Optional[str] = Field(None, max_length=100, description="Person who performed maintenance")
@@ -41,11 +46,13 @@ class MaintenanceLogBase(BaseModel):
 
 class MaintenanceLogCreate(MaintenanceLogBase):
     """Create a new maintenance log entry"""
+
     pass
 
 
 class MaintenanceLogUpdate(BaseModel):
     """Update an existing maintenance log entry"""
+
     maintenance_type: Optional[MaintenanceType] = None
     description: Optional[str] = None
     performed_by: Optional[str] = Field(None, max_length=100)
@@ -59,6 +66,7 @@ class MaintenanceLogUpdate(BaseModel):
 
 class MaintenanceLogResponse(MaintenanceLogBase):
     """Maintenance log response with printer info"""
+
     id: int
     printer_id: int
     created_at: datetime
@@ -69,12 +77,14 @@ class MaintenanceLogResponse(MaintenanceLogBase):
 
 class MaintenanceLogWithPrinter(MaintenanceLogResponse):
     """Maintenance log response with printer details"""
+
     printer_code: str
     printer_name: str
 
 
 class MaintenanceLogListResponse(BaseModel):
     """Paginated list of maintenance logs"""
+
     items: List[MaintenanceLogResponse]
     total: int
     page: int
@@ -86,8 +96,10 @@ class MaintenanceLogListResponse(BaseModel):
 # Maintenance Due Response
 # ============================================================================
 
+
 class PrinterMaintenanceDue(BaseModel):
     """Printer that is due for maintenance"""
+
     printer_id: int
     printer_code: str
     printer_name: str
@@ -99,6 +111,7 @@ class PrinterMaintenanceDue(BaseModel):
 
 class MaintenanceDueResponse(BaseModel):
     """List of printers due for maintenance"""
+
     printers: List[PrinterMaintenanceDue]
     total_overdue: int
     total_due_soon: int = Field(..., description="Due within next 7 days")

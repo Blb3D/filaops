@@ -4,6 +4,7 @@ Order Event Model
 Tracks activity history for sales orders - status changes, notes, payments, etc.
 Provides an audit trail and activity timeline for the OrderDetail page.
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -13,26 +14,17 @@ from app.db.base import Base
 
 class OrderEvent(Base):
     """Order Event - Activity log entry for a sales order"""
+
     __tablename__ = "order_events"
 
     # Primary Key
     id = Column(Integer, primary_key=True, index=True)
 
     # Foreign Keys
-    sales_order_id = Column(
-        Integer,
-        ForeignKey("sales_orders.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
+    sales_order_id = Column(Integer, ForeignKey("sales_orders.id", ondelete="CASCADE"), nullable=False, index=True)
     # Note: ondelete=NO ACTION to avoid multiple cascade paths
     # (sales_order->user and order_event->user)
-    user_id = Column(
-        Integer,
-        ForeignKey("users.id", ondelete="NO ACTION"),
-        nullable=True,
-        index=True
-    )
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="NO ACTION"), nullable=True, index=True)
 
     # Event Type
     # status_change, note_added, payment_received, payment_refunded,

@@ -7,6 +7,7 @@ Manage company-wide settings including:
 - Tax configuration
 - Quote settings
 """
+
 from datetime import datetime
 from decimal import Decimal
 from typing import Optional
@@ -31,8 +32,10 @@ router = APIRouter(prefix="/settings", tags=["Settings"])
 # SCHEMAS
 # ============================================================================
 
+
 class CompanySettingsResponse(BaseModel):
     """Company settings response"""
+
     id: int
     company_name: Optional[str] = None
     company_address_line1: Optional[str] = None
@@ -77,6 +80,7 @@ class CompanySettingsResponse(BaseModel):
 
 class CompanySettingsUpdate(BaseModel):
     """Update company settings"""
+
     company_name: Optional[str] = Field(None, max_length=255)
     company_address_line1: Optional[str] = Field(None, max_length=255)
     company_address_line2: Optional[str] = Field(None, max_length=255)
@@ -112,6 +116,7 @@ class CompanySettingsUpdate(BaseModel):
 # ============================================================================
 # HELPER: Get or Create Settings
 # ============================================================================
+
 
 def get_or_create_settings(db: Session) -> CompanySettings:
     """Get existing settings or create default (handles race condition)"""
@@ -170,6 +175,7 @@ def settings_to_response(settings: CompanySettings) -> CompanySettingsResponse:
 # ENDPOINTS
 # ============================================================================
 
+
 @router.get("/company", response_model=CompanySettingsResponse)
 async def get_company_settings(
     current_user: User = Depends(get_current_user),
@@ -189,10 +195,7 @@ async def update_company_settings(
     """Update company settings"""
     # Require admin role
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     settings = get_or_create_settings(db)
 
@@ -227,27 +230,20 @@ async def upload_company_logo(
     """Upload company logo"""
     # Require admin role
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     # Validate file type
     allowed_types = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"]
     if file.content_type not in allowed_types:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type. Allowed: PNG, JPEG, GIF, WebP"
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid file type. Allowed: PNG, JPEG, GIF, WebP"
         )
 
     # Limit file size (2MB)
     max_size = 2 * 1024 * 1024
     content = await file.read()
     if len(content) > max_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File too large. Maximum size: 2MB"
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File too large. Maximum size: 2MB")
 
     settings = get_or_create_settings(db)
     settings.logo_data = content
@@ -269,17 +265,12 @@ async def get_company_logo(
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
 
     if not settings or not settings.logo_data:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No logo uploaded"
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No logo uploaded")
 
     return Response(
         content=settings.logo_data,
         media_type=settings.logo_mime_type or "image/png",
-        headers={
-            "Content-Disposition": f'inline; filename="{settings.logo_filename or "logo.png"}"'
-        }
+        headers={"Content-Disposition": f'inline; filename="{settings.logo_filename or "logo.png"}"'},
     )
 
 
@@ -290,10 +281,7 @@ async def delete_company_logo(
 ):
     """Delete company logo"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     settings = get_or_create_settings(db)
     settings.logo_data = None
@@ -311,8 +299,10 @@ async def delete_company_logo(
 # AI SETTINGS
 # ============================================================================
 
+
 class AISettingsResponse(BaseModel):
     """AI settings response (API key masked)"""
+
     ai_provider: Optional[str] = None  # 'anthropic', 'ollama', or None
     ai_api_key_set: bool = False  # True if key is configured (don't expose actual key)
     ai_api_key_masked: Optional[str] = None  # e.g., "sk-...XYZ"
@@ -326,6 +316,7 @@ class AISettingsResponse(BaseModel):
 
 class AISettingsUpdate(BaseModel):
     """Update AI settings"""
+
     ai_provider: Optional[str] = Field(None, pattern="^(anthropic|ollama)?$")
     ai_api_key: Optional[str] = Field(None, max_length=500)
     ai_anthropic_model: Optional[str] = Field(None, max_length=100)
@@ -336,12 +327,14 @@ class AISettingsUpdate(BaseModel):
 
 class AnthropicStatusResponse(BaseModel):
     """Response for Anthropic package installation status"""
+
     installed: bool
     version: Optional[str] = None
 
 
 class PackageInstallResponse(BaseModel):
     """Response for package installation operations"""
+
     success: bool
     message: str
 
@@ -357,6 +350,7 @@ def _test_anthropic_connection(api_key: str) -> tuple[bool, str]:
     """Test Anthropic API connection"""
     try:
         import anthropic
+
         # Verify the anthropic module is importable (validates package is installed)
         _ = anthropic.Anthropic  # Check class exists without instantiating
         # Validate the key format
@@ -372,6 +366,7 @@ def _test_anthropic_connection(api_key: str) -> tuple[bool, str]:
 def _test_ollama_connection(url: str, model: str) -> tuple[bool, str]:
     """Test Ollama connection"""
     import requests
+
     try:
         # Check if Ollama is running
         response = requests.get(f"{url}/api/tags", timeout=5)
@@ -434,10 +429,7 @@ async def update_ai_settings(
 ):
     """Update AI configuration settings"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     settings = get_or_create_settings(db)
 
@@ -451,7 +443,7 @@ async def update_ai_settings(
     if new_provider == "anthropic" and is_blocked:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot use Anthropic while external AI is blocked. Disable the block first or use Ollama."
+            detail="Cannot use Anthropic while external AI is blocked. Disable the block first or use Ollama.",
         )
 
     # If enabling the block, clear Anthropic settings
@@ -484,10 +476,7 @@ async def test_ai_connection(
 ):
     """Test the configured AI connection"""
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     settings = get_or_create_settings(db)
 
@@ -495,38 +484,22 @@ async def test_ai_connection(
         return {
             "success": False,
             "provider": None,
-            "message": "No AI provider configured. Select 'anthropic' or 'ollama' first."
+            "message": "No AI provider configured. Select 'anthropic' or 'ollama' first.",
         }
 
     if settings.ai_provider == "anthropic":
         if not settings.ai_api_key:
-            return {
-                "success": False,
-                "provider": "anthropic",
-                "message": "Anthropic API key not set"
-            }
+            return {"success": False, "provider": "anthropic", "message": "Anthropic API key not set"}
         success, message = _test_anthropic_connection(settings.ai_api_key)
-        return {
-            "success": success,
-            "provider": "anthropic",
-            "message": message
-        }
+        return {"success": success, "provider": "anthropic", "message": message}
 
     elif settings.ai_provider == "ollama":
         url = settings.ai_ollama_url or "http://localhost:11434"
         model = settings.ai_ollama_model or "llama3.2"
         success, message = _test_ollama_connection(url, model)
-        return {
-            "success": success,
-            "provider": "ollama",
-            "message": message
-        }
+        return {"success": success, "provider": "ollama", "message": message}
 
-    return {
-        "success": False,
-        "provider": settings.ai_provider,
-        "message": f"Unknown provider: {settings.ai_provider}"
-    }
+    return {"success": False, "provider": settings.ai_provider, "message": f"Unknown provider: {settings.ai_provider}"}
 
 
 @router.post("/ai/start-ollama")
@@ -539,23 +512,18 @@ async def start_ollama(
     import platform
 
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     settings = get_or_create_settings(db)
     ollama_url = settings.ai_ollama_url or "http://localhost:11434"
 
     # First check if already running
     import requests
+
     try:
         response = requests.get(f"{ollama_url}/api/tags", timeout=2)
         if response.status_code == 200:
-            return {
-                "success": True,
-                "message": "Ollama is already running!"
-            }
+            return {"success": True, "message": "Ollama is already running!"}
     except Exception:
         pass  # Not running, continue to start it
 
@@ -582,34 +550,26 @@ async def start_ollama(
 
         # Wait a moment and check if it started
         import time
+
         time.sleep(2)
 
         try:
             response = requests.get(f"{ollama_url}/api/tags", timeout=3)
             if response.status_code == 200:
-                return {
-                    "success": True,
-                    "message": "Ollama started successfully!"
-                }
+                return {"success": True, "message": "Ollama started successfully!"}
         except Exception:
             pass
 
         return {
             "success": False,
-            "message": "Ollama is starting... Please try 'Test Connection' again in a few seconds."
+            "message": "Ollama is starting... Please try 'Test Connection' again in a few seconds.",
         }
 
     except FileNotFoundError:
-        return {
-            "success": False,
-            "message": "Ollama is not installed. Download it from ollama.com"
-        }
+        return {"success": False, "message": "Ollama is not installed. Download it from ollama.com"}
     except Exception as e:
         logger.error(f"Failed to start Ollama: {e}")
-        return {
-            "success": False,
-            "message": f"Could not start Ollama: {str(e)}"
-        }
+        return {"success": False, "message": f"Could not start Ollama: {str(e)}"}
 
 
 @router.get("/ai/anthropic-status", response_model=AnthropicStatusResponse)
@@ -619,15 +579,10 @@ async def check_anthropic_status(
     """Check if the anthropic package is installed."""
     try:
         import anthropic
-        return AnthropicStatusResponse(
-            installed=True,
-            version=getattr(anthropic, "__version__", "unknown")
-        )
+
+        return AnthropicStatusResponse(installed=True, version=getattr(anthropic, "__version__", "unknown"))
     except ImportError:
-        return AnthropicStatusResponse(
-            installed=False,
-            version=None
-        )
+        return AnthropicStatusResponse(installed=False, version=None)
 
 
 @router.post("/ai/install-anthropic", response_model=PackageInstallResponse)
@@ -639,17 +594,15 @@ async def install_anthropic_package(
     import sys
 
     if not current_user.is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin role required"
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
 
     # Check if already installed
     try:
         import anthropic
+
         return PackageInstallResponse(
             success=True,
-            message=f"Anthropic package already installed (v{getattr(anthropic, '__version__', 'unknown')})"
+            message=f"Anthropic package already installed (v{getattr(anthropic, '__version__', 'unknown')})",
         )
     except ImportError:
         pass
@@ -659,10 +612,7 @@ async def install_anthropic_package(
         # Get the pip executable from the same environment as the running Python
         python_executable = sys.executable
         result = subprocess.run(
-            [python_executable, "-m", "pip", "install", "anthropic"],
-            capture_output=True,
-            text=True,
-            timeout=120
+            [python_executable, "-m", "pip", "install", "anthropic"], capture_output=True, text=True, timeout=120
         )
 
         if result.returncode == 0:
@@ -670,32 +620,25 @@ async def install_anthropic_package(
             try:
                 # Force reimport
                 import importlib
+
                 anthropic = importlib.import_module("anthropic")
                 version = getattr(anthropic, "__version__", "unknown")
                 return PackageInstallResponse(
                     success=True,
-                    message=f"Anthropic package installed successfully (v{version}). Please refresh the page."
+                    message=f"Anthropic package installed successfully (v{version}). Please refresh the page.",
                 )
             except ImportError:
                 return PackageInstallResponse(
-                    success=True,
-                    message="Package installed. Please restart the application to use it."
+                    success=True, message="Package installed. Please restart the application to use it."
                 )
         else:
             logger.error(f"pip install failed: {result.stderr}")
-            return PackageInstallResponse(
-                success=False,
-                message=f"Installation failed: {result.stderr[:200]}"
-            )
+            return PackageInstallResponse(success=False, message=f"Installation failed: {result.stderr[:200]}")
 
     except subprocess.TimeoutExpired:
         return PackageInstallResponse(
-            success=False,
-            message="Installation timed out. Please try again or install manually."
+            success=False, message="Installation timed out. Please try again or install manually."
         )
     except Exception as e:
         logger.error(f"Failed to install anthropic: {e}")
-        return PackageInstallResponse(
-            success=False,
-            message=f"Installation error: {str(e)}"
-        )
+        return PackageInstallResponse(success=False, message=f"Installation error: {str(e)}")

@@ -5,6 +5,7 @@ Controls access to features based on subscription tier.
 Set LICENSING_ENABLED = False to give everyone all features (current mode).
 Set LICENSING_ENABLED = True to enforce license checking.
 """
+
 from enum import Enum
 from typing import Dict, List, Callable
 from functools import wraps
@@ -22,34 +23,37 @@ LICENSING_ENABLED = False  # Everyone gets all features for now!
 # -1 means unlimited
 TIER_LIMITS: Dict[str, Dict[str, int]] = {
     "community": {
-        "users": 1,           # Single user (the admin)
-        "printers": 4,        # Up to 4 printers
-        "sites": 1,           # Single location
+        "users": 1,  # Single user (the admin)
+        "printers": 4,  # Up to 4 printers
+        "sites": 1,  # Single location
         "api_rate_limit": 100,  # Requests per minute
     },
     "professional": {
-        "users": -1,          # Unlimited users
-        "printers": -1,       # Unlimited printers
-        "sites": 1,           # Single location (multi-site is Enterprise)
-        "min_seats": 2,       # Minimum 2 seats to purchase
+        "users": -1,  # Unlimited users
+        "printers": -1,  # Unlimited printers
+        "sites": 1,  # Single location (multi-site is Enterprise)
+        "min_seats": 2,  # Minimum 2 seats to purchase
         "api_rate_limit": 1000,
     },
     "enterprise": {
-        "users": -1,          # Unlimited
-        "printers": -1,       # Unlimited
-        "sites": -1,          # Unlimited locations
-        "api_rate_limit": -1, # Unlimited
+        "users": -1,  # Unlimited
+        "printers": -1,  # Unlimited
+        "sites": -1,  # Unlimited locations
+        "api_rate_limit": -1,  # Unlimited
     },
 }
 
+
 class FeatureTier(str, Enum):
     """Subscription tiers"""
+
     COMMUNITY = "community"
     PROFESSIONAL = "professional"
     ENTERPRISE = "enterprise"
-    
+
     # Aliases for backward compatibility
     PRO = "professional"  # Same as PROFESSIONAL
+
 
 # ============================================================================
 # Feature Definitions
@@ -86,7 +90,6 @@ FEATURE_FLAGS: Dict[str, Dict] = {
         "description": "Track all quality-related changes",
         "category": "quality",
     },
-    
     # ========================================================================
     # Quality - Advanced (Future: Professional Tier)
     # ========================================================================
@@ -115,7 +118,6 @@ FEATURE_FLAGS: Dict[str, Dict] = {
         "description": "Custom quality reports and analytics",
         "category": "quality",
     },
-    
     # ========================================================================
     # Quality - Enterprise (Future: Enterprise Tier)
     # ========================================================================
@@ -144,13 +146,11 @@ FEATURE_FLAGS: Dict[str, Dict] = {
 # Convenience Lists
 # ============================================================================
 
-COMMUNITY_FEATURES = [
-    code for code, feature in FEATURE_FLAGS.items() 
-    if feature["tier"] == FeatureTier.COMMUNITY
-]
+COMMUNITY_FEATURES = [code for code, feature in FEATURE_FLAGS.items() if feature["tier"] == FeatureTier.COMMUNITY]
 
 PROFESSIONAL_FEATURES = [
-    code for code, feature in FEATURE_FLAGS.items() 
+    code
+    for code, feature in FEATURE_FLAGS.items()
     if feature["tier"] in [FeatureTier.COMMUNITY, FeatureTier.PROFESSIONAL]
 ]
 
@@ -160,43 +160,45 @@ ENTERPRISE_FEATURES = list(FEATURE_FLAGS.keys())  # All features
 # Feature Access Functions
 # ============================================================================
 
+
 def has_feature(feature_code: str, user_tier: str = "community") -> bool:
     """
     Check if a user's tier has access to a feature.
-    
+
     If LICENSING_ENABLED = False, always returns True (everyone gets everything).
     If LICENSING_ENABLED = True, checks tier hierarchy.
-    
+
     Args:
         feature_code: Feature identifier (e.g., "traceability_forward")
         user_tier: User's subscription tier
-    
+
     Returns:
         True if user has access, False otherwise
     """
     # If licensing is disabled, everyone gets everything!
     if not LICENSING_ENABLED:
         return True
-    
+
     # Check if feature exists
     if feature_code not in FEATURE_FLAGS:
         return False
-    
+
     feature = FEATURE_FLAGS[feature_code]
     tier_order = ["community", "professional", "enterprise"]
-    
+
     required_tier_index = tier_order.index(feature["tier"])
     user_tier_index = tier_order.index(user_tier.lower())
-    
+
     return user_tier_index >= required_tier_index
+
 
 def get_features_for_tier(tier: str) -> List[str]:
     """
     Get all feature codes available for a tier.
-    
+
     Args:
         tier: Subscription tier
-    
+
     Returns:
         List of feature codes
     """
@@ -208,21 +210,19 @@ def get_features_for_tier(tier: str) -> List[str]:
         return ENTERPRISE_FEATURES
     return COMMUNITY_FEATURES
 
+
 def get_features_by_category(category: str) -> Dict[str, Dict]:
     """
     Get all features in a category.
-    
+
     Args:
         category: Category name (e.g., "quality")
-    
+
     Returns:
         Dict of feature_code -> feature_info
     """
-    return {
-        code: feature 
-        for code, feature in FEATURE_FLAGS.items() 
-        if feature.get("category") == category
-    }
+    return {code: feature for code, feature in FEATURE_FLAGS.items() if feature.get("category") == category}
+
 
 # ============================================================================
 # Backward Compatibility (Legacy API)
@@ -231,92 +231,94 @@ def get_features_by_category(category: str) -> Dict[str, Dict]:
 # Alias for backward compatibility
 Tier = FeatureTier
 
+
 def get_current_tier(db: Session, user) -> FeatureTier:
     """
     Get the current user's subscription tier.
-    
+
     Args:
         db: Database session
         user: Current user object
-    
+
     Returns:
         User's tier (defaults to COMMUNITY if licensing disabled)
     """
     # If licensing is disabled, everyone is enterprise (all features)
     if not LICENSING_ENABLED:
         return FeatureTier.ENTERPRISE
-    
+
     # TODO: When licensing is enabled, check organization's license key
     # For now, default to community
     return FeatureTier.COMMUNITY
 
+
 def get_available_features(tier: FeatureTier) -> List[str]:
     """
     Get list of feature codes available for a tier.
-    
+
     Args:
         tier: Subscription tier
-    
+
     Returns:
         List of feature codes
     """
     return get_features_for_tier(tier.value)
 
+
 def require_tier(minimum_tier: FeatureTier) -> Callable:
     """
     Decorator to require a minimum subscription tier.
-    
+
     Usage:
         @router.get("/advanced-analytics")
         @require_tier(Tier.PROFESSIONAL)
         async def advanced_analytics(...):
             ...
-    
+
     Args:
         minimum_tier: Minimum tier required
-    
+
     Returns:
         Decorator function
     """
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # If licensing is disabled, allow everything
             if not LICENSING_ENABLED:
                 return await func(*args, **kwargs)
-            
+
             # Extract user and db from kwargs (injected by FastAPI)
             user = kwargs.get("current_user")
             db = kwargs.get("db")
-            
+
             if not user or not db:
-                raise HTTPException(
-                    status_code=500,
-                    detail="Missing authentication dependencies"
-                )
-            
+                raise HTTPException(status_code=500, detail="Missing authentication dependencies")
+
             # Check user's tier
             user_tier = get_current_tier(db, user)
             tier_order = ["community", "professional", "enterprise"]
-            
+
             required_index = tier_order.index(minimum_tier.value)
             user_index = tier_order.index(user_tier.value)
-            
+
             if user_index < required_index:
                 raise HTTPException(
-                    status_code=403,
-                    detail=f"This feature requires {minimum_tier.value.title()} tier or higher"
+                    status_code=403, detail=f"This feature requires {minimum_tier.value.title()} tier or higher"
                 )
-            
+
             return await func(*args, **kwargs)
 
         return wrapper
+
     return decorator
 
 
 # ============================================================================
 # Resource Limit Checking
 # ============================================================================
+
 
 def get_tier_limit(tier: str, resource: str) -> int:
     """
@@ -335,12 +337,7 @@ def get_tier_limit(tier: str, resource: str) -> int:
     return TIER_LIMITS[tier_lower].get(resource, -1)
 
 
-def check_resource_limit(
-    db: Session,
-    resource: str,
-    current_count: int,
-    tier: str = "community"
-) -> dict:
+def check_resource_limit(db: Session, resource: str, current_count: int, tier: str = "community") -> dict:
     """
     Check if a resource limit would be exceeded.
 
@@ -390,12 +387,7 @@ def check_resource_limit(
     }
 
 
-def enforce_resource_limit(
-    db: Session,
-    resource: str,
-    current_count: int,
-    tier: str = "community"
-) -> None:
+def enforce_resource_limit(db: Session, resource: str, current_count: int, tier: str = "community") -> None:
     """
     Enforce a resource limit - raises HTTPException if limit exceeded.
 
@@ -424,7 +416,7 @@ def enforce_resource_limit(
                 "limit": result["limit"],
                 "current": result["current"],
                 "tier": tier,
-            }
+            },
         )
 
 
@@ -446,14 +438,9 @@ def get_usage_summary(db: Session, tier: str = "community") -> dict:
     from app.models.printer import Printer
 
     # Count current resources
-    user_count = db.query(User).filter(
-        User.account_type.in_(["admin", "operator"]),
-        User.status == "active"
-    ).count()
+    user_count = db.query(User).filter(User.account_type.in_(["admin", "operator"]), User.status == "active").count()
 
-    printer_count = db.query(Printer).filter(
-        Printer.active.is_(True)
-    ).count()
+    printer_count = db.query(Printer).filter(Printer.active.is_(True)).count()
 
     return {
         "tier": tier,

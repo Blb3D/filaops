@@ -14,6 +14,7 @@ This script creates a complete test scenario:
 
 Run with: python -m scripts.test_order_to_ship_workflow
 """
+
 import sys
 from pathlib import Path
 
@@ -37,8 +38,9 @@ from app.models.production_order import ProductionOrder
 from app.models.inventory import Inventory, InventoryTransaction
 from app.models.inventory import InventoryLocation
 from app.models.payment import Payment
-from app.models.work_center import WorkCenter, Machine
+from app.models.work_center import WorkCenter
 from app.models.manufacturing import Resource
+
 # Note: Routing imports moved to function to avoid table redefinition error
 from app.models.scrap_reason import ScrapReason
 from app.models.company_settings import CompanySettings
@@ -50,11 +52,7 @@ def get_or_create_category(db: Session, code: str, name: str) -> ItemCategory:
     cat = db.query(ItemCategory).filter(ItemCategory.code == code).first()
     if not cat:
         cat = ItemCategory(
-            code=code,
-            name=name,
-            is_active=True,
-            created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            code=code, name=name, is_active=True, created_at=datetime.utcnow(), updated_at=datetime.utcnow()
         )
         db.add(cat)
         db.commit()
@@ -66,11 +64,7 @@ def get_or_create_location(db: Session, code: str, name: str) -> InventoryLocati
     """Get or create location"""
     loc = db.query(InventoryLocation).filter(InventoryLocation.code == code).first()
     if not loc:
-        loc = InventoryLocation(
-            code=code,
-            name=name,
-            active=True
-        )
+        loc = InventoryLocation(code=code, name=name, active=True)
         db.add(loc)
         db.commit()
         db.refresh(loc)
@@ -79,14 +73,14 @@ def get_or_create_location(db: Session, code: str, name: str) -> InventoryLocati
 
 def create_test_items(db: Session):
     """Create test items: 1 finished good + 2 materials"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 1: Creating Test Items")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Get categories
     finished_cat = get_or_create_category(db, "FINISHED_GOODS", "Finished Goods")
     material_cat = get_or_create_category(db, "FILAMENT", "Filament")
-    
+
     # Check if finished good exists
     finished_good = db.query(Product).filter(Product.sku == "TEST-WIDGET-001").first()
     if finished_good:
@@ -105,12 +99,12 @@ def create_test_items(db: Session):
             active=True,
             has_bom=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(finished_good)
         db.flush()
         print(f"  [OK] Created finished good: {finished_good.sku} - {finished_good.name}")
-    
+
     # Check if material1 exists
     material1 = db.query(Product).filter(Product.sku == "TEST-PLA-BLACK").first()
     if material1:
@@ -128,12 +122,12 @@ def create_test_items(db: Session):
             unit="KG",
             active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(material1)
         db.flush()
         print(f"  [OK] Created material: {material1.sku} - {material1.name}")
-    
+
     # Check if material2 exists
     material2 = db.query(Product).filter(Product.sku == "TEST-PACKAGING-BOX").first()
     if material2:
@@ -151,28 +145,25 @@ def create_test_items(db: Session):
             unit="EA",
             active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(material2)
         db.flush()
         print(f"  [OK] Created material: {material2.sku} - {material2.name}")
-    
+
     db.commit()
     return finished_good, material1, material2
 
 
 def create_bom(db: Session, finished_good: Product, material1: Product, material2: Product):
     """Create BOM for finished good"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 2: Creating BOM")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Check if BOM already exists
-    bom = db.query(BOM).filter(
-        BOM.product_id == finished_good.id,
-        BOM.active == True
-    ).first()
-    
+    bom = db.query(BOM).filter(BOM.product_id == finished_good.id, BOM.active == True).first()
+
     if bom:
         print(f"  [SKIP] BOM already exists for {finished_good.sku}")
         # Check if lines exist
@@ -187,16 +178,13 @@ def create_bom(db: Session, finished_good: Product, material1: Product, material
             active=True,
             name="Test BOM",
             notes="Test BOM for workflow",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
         db.add(bom)
         db.flush()
-    
+
     # Check/add components
-    comp1 = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom.id,
-        BOMLine.component_id == material1.id
-    ).first()
+    comp1 = db.query(BOMLine).filter(BOMLine.bom_id == bom.id, BOMLine.component_id == material1.id).first()
     if not comp1:
         comp1 = BOMLine(
             bom_id=bom.id,
@@ -205,17 +193,14 @@ def create_bom(db: Session, finished_good: Product, material1: Product, material
             unit="G",  # Use grams, not KG (more realistic for 3D printing)
             sequence=1,
             scrap_factor=Decimal("0.05"),  # 5% scrap
-            consume_stage="production"
+            consume_stage="production",
         )
         db.add(comp1)
         print(f"  [OK] Added BOM line: {comp1.quantity} {comp1.unit} of {material1.sku}")
     else:
         print(f"  [SKIP] BOM line already exists: {comp1.quantity} {comp1.unit} of {material1.sku}")
-    
-    comp2 = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom.id,
-        BOMLine.component_id == material2.id
-    ).first()
+
+    comp2 = db.query(BOMLine).filter(BOMLine.bom_id == bom.id, BOMLine.component_id == material2.id).first()
     if not comp2:
         comp2 = BOMLine(
             bom_id=bom.id,
@@ -224,26 +209,26 @@ def create_bom(db: Session, finished_good: Product, material1: Product, material
             unit="EA",
             sequence=2,
             scrap_factor=Decimal("0"),
-            consume_stage="shipping"  # Packaging consumed at shipping
+            consume_stage="shipping",  # Packaging consumed at shipping
         )
         db.add(comp2)
         print(f"  [OK] Added BOM line: {comp2.quantity} {comp2.unit} of {material2.sku}")
     else:
         print(f"  [SKIP] BOM line already exists: {comp2.quantity} {comp2.unit} of {material2.sku}")
-    
+
     db.commit()
     if bom.id:  # Refresh to get ID if new
         db.refresh(bom)
-    
+
     return bom
 
 
 def create_vendor(db: Session):
     """Create test vendor"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 3: Creating Vendor")
-    print("="*60)
-    
+    print("=" * 60)
+
     vendor = db.query(Vendor).filter(Vendor.code == "TEST-SUPPLIER").first()
     if vendor:
         print(f"  [SKIP] Vendor already exists: {vendor.name} ({vendor.code})")
@@ -261,22 +246,22 @@ def create_vendor(db: Session):
             payment_terms="Net 30",
             is_active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(vendor)
         db.commit()
         db.refresh(vendor)
         print(f"  [OK] Created vendor: {vendor.name} ({vendor.code})")
-    
+
     return vendor
 
 
 def create_purchase_order(db: Session, vendor: Vendor, material1: Product, material2: Product):
     """Create purchase order for materials"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 4: Creating Purchase Order")
-    print("="*60)
-    
+    print("=" * 60)
+
     po = PurchaseOrder(
         po_number=f"PO-TEST-{datetime.now().strftime('%Y%m%d-%H%M%S')}",
         vendor_id=vendor.id,
@@ -285,11 +270,11 @@ def create_purchase_order(db: Session, vendor: Vendor, material1: Product, mater
         status="draft",
         total_amount=Decimal("0"),
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
     )
     db.add(po)
     db.flush()
-    
+
     # Add lines
     line1_qty = Decimal("10")  # 10 KG
     line1_price = Decimal("20.00")
@@ -299,10 +284,10 @@ def create_purchase_order(db: Session, vendor: Vendor, material1: Product, mater
         quantity_ordered=line1_qty,
         unit_cost=line1_price,
         line_total=line1_qty * line1_price,
-        line_number=1
+        line_number=1,
     )
     db.add(line1)
-    
+
     line2_qty = Decimal("5")  # 5 boxes
     line2_price = Decimal("2.00")
     line2 = PurchaseOrderLine(
@@ -311,50 +296,47 @@ def create_purchase_order(db: Session, vendor: Vendor, material1: Product, mater
         quantity_ordered=line2_qty,
         unit_cost=line2_price,
         line_total=line2_qty * line2_price,
-        line_number=2
+        line_number=2,
     )
     db.add(line2)
-    
+
     po.total_amount = line1.line_total + line2.line_total
-    
+
     db.commit()
     db.refresh(po)
     print(f"  [OK] Created PO: {po.po_number}")
     print(f"       Status: {po.status}")
     print(f"       Total: ${po.total_amount}")
     print(f"       Lines: {len(po.lines)}")
-    
+
     return po
 
 
 def receive_purchase_order(db: Session, po: PurchaseOrder):
     """Receive purchase order (adds inventory)"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 5: Receiving Purchase Order")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Get default location
     location = db.query(InventoryLocation).filter(InventoryLocation.code == "MAIN").first()
     if not location:
-        location = InventoryLocation(
-            code="MAIN",
-            name="Main Warehouse",
-            active=True
-        )
+        location = InventoryLocation(code="MAIN", name="Main Warehouse", active=True)
         db.add(location)
         db.commit()
         db.refresh(location)
-    
+
     # Receive each line
     for line in po.lines:
         line.quantity_received = line.quantity_ordered
-        
+
         # Add inventory
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == line.product_id,
-            Inventory.location_id == location.id
-        ).first()
-        
+        inventory = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == line.product_id, Inventory.location_id == location.id)
+            .first()
+        )
+
         if inventory:
             inventory.on_hand_quantity += line.quantity_received
             inventory.updated_at = datetime.utcnow()
@@ -365,10 +347,10 @@ def receive_purchase_order(db: Session, po: PurchaseOrder):
                 on_hand_quantity=line.quantity_received,
                 allocated_quantity=Decimal("0"),
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(inventory)
-        
+
         # Create inventory transaction
         txn = InventoryTransaction(
             product_id=line.product_id,
@@ -380,32 +362,27 @@ def receive_purchase_order(db: Session, po: PurchaseOrder):
             cost_per_unit=line.unit_cost,
             notes=f"Received from PO {po.po_number}",
             created_by="system",
-            created_at=datetime.utcnow()
+            created_at=datetime.utcnow(),
         )
         db.add(txn)
-        
+
         print(f"  [OK] Received {line.quantity_received} {line.product.unit} of {line.product.sku}")
         print(f"       Inventory: {inventory.on_hand_quantity} {line.product.unit} on-hand")
         print(f"       Transaction: {txn.transaction_type} created")
-    
+
     po.status = "received"
     po.received_date = datetime.utcnow().date()
-    
+
     db.commit()
     print(f"\n  [OK] PO {po.po_number} fully received")
-    
+
     return location
 
 
 def generate_customer_number(db: Session) -> str:
     """Generate next customer number in format CUST-001"""
-    last_user = (
-        db.query(User)
-        .filter(User.customer_number.isnot(None))
-        .order_by(desc(User.customer_number))
-        .first()
-    )
-    
+    last_user = db.query(User).filter(User.customer_number.isnot(None)).order_by(desc(User.customer_number)).first()
+
     if last_user and last_user.customer_number:
         try:
             last_num = int(last_user.customer_number.split("-")[1])
@@ -414,7 +391,7 @@ def generate_customer_number(db: Session) -> str:
             next_num = 1
     else:
         next_num = 1
-    
+
     return f"CUST-{next_num:03d}"
 
 
@@ -445,14 +422,16 @@ def get_or_create_test_user(db: Session):
             shipping_country="USA",
             email_verified=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(user)
         db.commit()
         db.refresh(user)
         print(f"  [OK] Created test user: {user.email}")
         print(f"       Customer Number: {user.customer_number}")
-        print(f"       Address: {user.shipping_address_line1}, {user.shipping_city}, {user.shipping_state} {user.shipping_zip}")
+        print(
+            f"       Address: {user.shipping_address_line1}, {user.shipping_city}, {user.shipping_state} {user.shipping_zip}"
+        )
     else:
         print(f"  [SKIP] Test user already exists: {user.email}")
         if not user.customer_number:
@@ -464,19 +443,19 @@ def get_or_create_test_user(db: Session):
 
 def create_sales_order(db: Session, finished_good: Product):
     """Create sales order"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 6: Creating Sales Order")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Get or create test user
     user = get_or_create_test_user(db)
-    
+
     # Create sales order with line_item type
     order_number = f"SO-TEST-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
     line_qty = Decimal("3")
     line_price = Decimal("25.00")
     line_total = line_qty * line_price
-    
+
     so = SalesOrder(
         order_number=order_number,
         user_id=user.id,
@@ -498,37 +477,33 @@ def create_sales_order(db: Session, finished_good: Product):
         shipping_zip=user.shipping_zip or "12345",
         shipping_country=user.shipping_country or "USA",
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
     )
     db.add(so)
     db.flush()
-    
+
     # Add line
     line = SalesOrderLine(
-        sales_order_id=so.id,
-        product_id=finished_good.id,
-        quantity=line_qty,
-        unit_price=line_price,
-        total=line_total
+        sales_order_id=so.id, product_id=finished_good.id, quantity=line_qty, unit_price=line_price, total=line_total
     )
     db.add(line)
-    
+
     db.commit()
     db.refresh(so)
     print(f"  [OK] Created SO: {so.order_number}")
     print(f"       Status: {so.status}")
     print(f"       Quantity: {line.quantity} {finished_good.sku}")
     print(f"       Total: ${so.grand_total}")
-    
+
     return so
 
 
 def create_payment_record(db: Session, so: SalesOrder):
     """Create payment record for sales order"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 7: Creating Payment Record")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Generate payment number
     last_payment = db.query(Payment).order_by(desc(Payment.payment_number)).first()
     if last_payment and last_payment.payment_number:
@@ -548,9 +523,9 @@ def create_payment_record(db: Session, so: SalesOrder):
     else:
         year = datetime.now().strftime("%Y")
         next_num = 1
-    
+
     payment_number = f"PAY-{year}-{next_num:04d}"
-    
+
     payment = Payment(
         payment_number=payment_number,
         sales_order_id=so.id,
@@ -561,28 +536,28 @@ def create_payment_record(db: Session, so: SalesOrder):
         payment_date=datetime.utcnow(),
         notes="Test payment for workflow",
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
     )
     db.add(payment)
-    
+
     # Update sales order payment status
     so.payment_status = "paid"
     so.paid_at = datetime.utcnow()
-    
+
     db.commit()
     print(f"  [OK] Created payment: {payment.payment_number}")
     print(f"       Amount: ${payment.amount}")
     print(f"       Method: {payment.payment_method}")
-    
+
     return payment
 
 
 def create_work_centers_and_routings(db: Session, finished_good: Product):
     """Create work centers and routing for production"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 8: Creating Work Centers and Routing")
-    print("="*60)
-    
+    print("=" * 60)
+
     # Create work center
     wc = db.query(WorkCenter).filter(WorkCenter.code == "TEST-PRINTER-POOL").first()
     if not wc:
@@ -598,7 +573,7 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
             is_active=True,
             active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(wc)
         db.commit()
@@ -606,13 +581,10 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
         print(f"  [OK] Created work center: {wc.name}")
     else:
         print(f"  [SKIP] Work center already exists: {wc.name}")
-    
+
     # Create a test resource/machine for the work center
-    resource = db.query(Resource).filter(
-        Resource.work_center_id == wc.id,
-        Resource.code == "TEST-PRINTER-001"
-    ).first()
-    
+    resource = db.query(Resource).filter(Resource.work_center_id == wc.id, Resource.code == "TEST-PRINTER-001").first()
+
     if not resource:
         resource = Resource(
             work_center_id=wc.id,
@@ -622,26 +594,23 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
             status="available",
             is_active=True,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(resource)
         db.commit()
         print(f"  [OK] Created resource: {resource.name} ({resource.code})")
     else:
         print(f"  [SKIP] Resource already exists: {resource.name}")
-    
+
     # Try to create routing (may fail due to import issues, but that's OK)
     routing = None
     try:
         # Import Routing here to avoid table redefinition error
         from app.models.manufacturing import Routing, RoutingOperation
-        
+
         # Create routing for finished good
-        routing = db.query(Routing).filter(
-            Routing.product_id == finished_good.id,
-            Routing.active == True
-        ).first()
-        
+        routing = db.query(Routing).filter(Routing.product_id == finished_good.id, Routing.active == True).first()
+
         if not routing:
             routing = Routing(
                 product_id=finished_good.id,
@@ -649,11 +618,11 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
                 description="Test routing for widget production",
                 active=True,
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(routing)
             db.flush()
-            
+
             # Add operation
             operation = RoutingOperation(
                 routing_id=routing.id,
@@ -663,7 +632,7 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
                 setup_minutes=5,
                 run_minutes_per_unit=Decimal("30"),  # 30 minutes per widget
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(operation)
             db.commit()
@@ -673,27 +642,47 @@ def create_work_centers_and_routings(db: Session, finished_good: Product):
             print(f"  [SKIP] Routing already exists for {finished_good.sku}")
     except Exception as e:
         print(f"  [WARN] Could not create routing (this is OK): {e}")
-        print(f"         Routing is optional - production orders can still be created without it")
+        print("         Routing is optional - production orders can still be created without it")
         db.rollback()
-    
+
     return wc, routing
 
 
 def create_scrap_reasons(db: Session):
     """Create default scrap reason codes"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 9: Creating Scrap Reason Codes")
-    print("="*60)
-    
+    print("=" * 60)
+
     reasons = [
-        {"code": "adhesion", "name": "Bed Adhesion Failure", "description": "Print failed to adhere to build plate", "sequence": 1},
+        {
+            "code": "adhesion",
+            "name": "Bed Adhesion Failure",
+            "description": "Print failed to adhere to build plate",
+            "sequence": 1,
+        },
         {"code": "layer_shift", "name": "Layer Shift", "description": "Layer shift during print", "sequence": 2},
-        {"code": "spaghetti", "name": "Spaghetti Failure", "description": "Print detached from bed mid-print", "sequence": 3},
+        {
+            "code": "spaghetti",
+            "name": "Spaghetti Failure",
+            "description": "Print detached from bed mid-print",
+            "sequence": 3,
+        },
         {"code": "warping", "name": "Warping", "description": "Part warped during print", "sequence": 4},
-        {"code": "support_failure", "name": "Support Failure", "description": "Support structures failed", "sequence": 5},
-        {"code": "quality", "name": "Quality Issue", "description": "Print quality did not meet standards", "sequence": 6},
+        {
+            "code": "support_failure",
+            "name": "Support Failure",
+            "description": "Support structures failed",
+            "sequence": 5,
+        },
+        {
+            "code": "quality",
+            "name": "Quality Issue",
+            "description": "Print quality did not meet standards",
+            "sequence": 6,
+        },
     ]
-    
+
     created = 0
     for reason_data in reasons:
         existing = db.query(ScrapReason).filter(ScrapReason.code == reason_data["code"]).first()
@@ -705,26 +694,26 @@ def create_scrap_reasons(db: Session):
                 sequence=reason_data["sequence"],
                 active=True,
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(reason)
             created += 1
             print(f"  [OK] Created scrap reason: {reason.name}")
         else:
             print(f"  [SKIP] Scrap reason already exists: {reason_data['name']}")
-    
+
     db.commit()
     print(f"\n  [OK] Created {created} scrap reasons")
-    
+
     return created
 
 
 def create_company_settings(db: Session):
     """Create company settings for tax and business info"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 10: Creating Company Settings")
-    print("="*60)
-    
+    print("=" * 60)
+
     settings = db.query(CompanySettings).filter(CompanySettings.id == 1).first()
     if not settings:
         settings = CompanySettings(
@@ -744,57 +733,54 @@ def create_company_settings(db: Session):
             tax_registration_number="TAX-12345",
             default_quote_validity_days=30,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow()
+            updated_at=datetime.utcnow(),
         )
         db.add(settings)
         db.commit()
-        print(f"  [OK] Created company settings")
+        print("  [OK] Created company settings")
         print(f"       Company: {settings.company_name}")
         print(f"       Tax Rate: {float(settings.tax_rate) * 100:.2f}%")
     else:
-        print(f"  [SKIP] Company settings already exist")
+        print("  [SKIP] Company settings already exist")
         if not settings.company_name:
             settings.company_name = "Test Manufacturing Co"
             settings.tax_enabled = True
             settings.tax_rate = Decimal("0.0825")
             db.commit()
-            print(f"       Updated company settings")
-    
+            print("       Updated company settings")
+
     return settings
 
 
 def confirm_sales_order(db: Session, so: SalesOrder):
     """Confirm sales order (creates production orders)"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("STEP 11: Confirming Sales Order (Creates Production Orders)")
-    print("="*60)
-    
+    print("=" * 60)
+
     so.status = "confirmed"
     so.confirmed_at = datetime.utcnow()
-    
+
     # Create production orders for each line
     line_num = 1
     for line in so.lines:
         # Get active BOM
-        bom = db.query(BOM).filter(
-            BOM.product_id == line.product_id,
-            BOM.active == True
-        ).first()
-        
+        bom = db.query(BOM).filter(BOM.product_id == line.product_id, BOM.active == True).first()
+
         if bom:
             # Get routing if exists (try to import, but routing is optional)
             routing_id = None
             try:
                 from app.models.manufacturing import Routing
-                routing = db.query(Routing).filter(
-                    Routing.product_id == line.product_id,
-                    Routing.active == True
-                ).first()
+
+                routing = (
+                    db.query(Routing).filter(Routing.product_id == line.product_id, Routing.active == True).first()
+                )
                 routing_id = routing.id if routing else None
             except Exception:
                 # Routing import failed or doesn't exist - that's OK
                 pass
-            
+
             po = ProductionOrder(
                 code=f"WO-{so.order_number}-{line_num}",
                 product_id=line.product_id,
@@ -808,37 +794,37 @@ def confirm_sales_order(db: Session, so: SalesOrder):
                 source="sales_order",
                 status="released",
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow()
+                updated_at=datetime.utcnow(),
             )
             db.add(po)
             print(f"  [OK] Created Production Order: {po.code}")
             print(f"       Status: {po.status}")
             print(f"       Quantity: {po.quantity_ordered}")
             line_num += 1
-    
+
     db.commit()
     print(f"\n  [OK] Sales Order {so.order_number} confirmed")
-    print(f"       Production orders created and ready to schedule")
-    
+    print("       Production orders created and ready to schedule")
+
     return so
 
 
 def print_summary(db: Session):
     """Print workflow summary"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("WORKFLOW SUMMARY")
-    print("="*60)
-    
+    print("=" * 60)
+
     items = db.query(Product).filter(Product.sku.like("TEST-%")).all()
     print(f"\nItems Created: {len(items)}")
     for item in items:
         print(f"  - {item.sku}: {item.name} ({item.item_type})")
-    
+
     pos = db.query(PurchaseOrder).filter(PurchaseOrder.po_number.like("PO-TEST-%")).all()
     print(f"\nPurchase Orders: {len(pos)}")
     for po in pos:
         print(f"  - {po.po_number}: {po.status} (${po.total_amount})")
-    
+
     sos = db.query(SalesOrder).filter(SalesOrder.order_number.like("SO-TEST-%")).all()
     print(f"\nSales Orders: {len(sos)}")
     for so in sos:
@@ -847,10 +833,10 @@ def print_summary(db: Session):
         print(f"    Production Orders: {len(pos)}")
         for po in pos:
             print(f"      - {po.code}: {po.status}")
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("NEXT STEPS TO TEST:")
-    print("="*60)
+    print("=" * 60)
     print("1. Schedule Production Orders (assign to work center/resource)")
     print("2. Start Production (reserves materials, creates print jobs)")
     print("3. Complete Production (consumes materials, adds finished goods)")
@@ -860,9 +846,9 @@ def print_summary(db: Session):
 
 def main():
     """Run complete test workflow"""
-    print("\n" + "="*60)
+    print("\n" + "=" * 60)
     print("ORDER-TO-SHIP TEST WORKFLOW")
-    print("="*60)
+    print("=" * 60)
     print("\nThis script creates a complete test scenario:")
     print("  - Items (finished good + materials)")
     print("  - BOM")
@@ -872,35 +858,37 @@ def main():
     print("  - Sales Order")
     print("  - Confirm SO (creates production orders)")
     print("\nReady to start? (Press Enter to continue or Ctrl+C to cancel)")
-    
+
     try:
         input()
     except KeyboardInterrupt:
         print("\nCancelled.")
         return
-    
+
     db: Session = SessionLocal()
-    
+
     try:
         # Step 1: Create items
         finished_good, material1, material2 = create_test_items(db)
-        
+
         # Step 2: Create BOM
         bom = create_bom(db, finished_good, material1, material2)
-        
+
         # Step 3: Create vendor
         vendor = create_vendor(db)
-        
+
         # Step 4: Create purchase order
         po = create_purchase_order(db, vendor, material1, material2)
-        
+
         # Step 5: Receive PO (only receive the latest one, skip if others already received)
         # Check if there are other draft POs - only receive the latest one
-        draft_pos = db.query(PurchaseOrder).filter(
-            PurchaseOrder.po_number.like("PO-TEST-%"),
-            PurchaseOrder.status == "draft"
-        ).order_by(desc(PurchaseOrder.created_at)).all()
-        
+        draft_pos = (
+            db.query(PurchaseOrder)
+            .filter(PurchaseOrder.po_number.like("PO-TEST-%"), PurchaseOrder.status == "draft")
+            .order_by(desc(PurchaseOrder.created_at))
+            .all()
+        )
+
         if len(draft_pos) > 1:
             print(f"\n  [INFO] Found {len(draft_pos)} draft POs. Only receiving the latest one.")
             # Only receive the most recent one
@@ -908,42 +896,43 @@ def main():
             location = receive_purchase_order(db, po_to_receive)
         else:
             location = receive_purchase_order(db, po)
-        
+
         # Step 6: Create sales order
         so = create_sales_order(db, finished_good)
-        
+
         # Step 7: Create payment record
         payment = create_payment_record(db, so)
-        
+
         # Step 8: Create work centers and routings
         wc, routing = create_work_centers_and_routings(db, finished_good)
-        
+
         # Step 9: Create scrap reasons
         create_scrap_reasons(db)
-        
+
         # Step 10: Create company settings
         create_company_settings(db)
-        
+
         # Step 11: Confirm SO (creates production orders)
         so = confirm_sales_order(db, so)
-        
+
         # Print summary
         print_summary(db)
-        
-        print("\n" + "="*60)
+
+        print("\n" + "=" * 60)
         print("[OK] Test workflow setup complete!")
-        print("="*60)
+        print("=" * 60)
         print("\nYou can now test:")
         print("  - Scheduling production orders")
         print("  - Starting production")
         print("  - Completing production")
         print("  - Shipping orders")
         print("\nCheck the frontend or use API endpoints to continue!")
-        
+
     except Exception as e:
         db.rollback()
         print(f"\n[ERROR] Workflow failed: {e}")
         import traceback
+
         traceback.print_exc()
         raise
     finally:
@@ -952,4 +941,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

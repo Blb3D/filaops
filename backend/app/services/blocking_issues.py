@@ -7,6 +7,7 @@ Provides functions to analyze what's blocking sales order fulfillment:
 - Material shortages
 - Pending purchase orders
 """
+
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional, List, Tuple
@@ -21,67 +22,73 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.inventory import Inventory
 from app.models.user import User
 from app.schemas.blocking_issues import (
-    SalesOrderBlockingIssues, StatusSummary, LineIssues,
-    BlockingIssue, ResolutionAction, IssueSeverity, IssueType,
-    ProductionOrderBlockingIssues, POStatusSummary, MaterialIssue,
-    IncomingSupply, LinkedSalesOrderInfo
+    SalesOrderBlockingIssues,
+    StatusSummary,
+    LineIssues,
+    BlockingIssue,
+    ResolutionAction,
+    IssueSeverity,
+    IssueType,
+    ProductionOrderBlockingIssues,
+    POStatusSummary,
+    MaterialIssue,
+    IncomingSupply,
+    LinkedSalesOrderInfo,
 )
 from app.models.vendor import Vendor
 
 
 def get_finished_goods_available(db: Session, product_id: int) -> Decimal:
     """Get available finished goods inventory for a product."""
-    result = db.query(
-        func.coalesce(func.sum(Inventory.on_hand_quantity), Decimal("0"))
-    ).filter(
-        Inventory.product_id == product_id
-    ).scalar()
+    result = (
+        db.query(func.coalesce(func.sum(Inventory.on_hand_quantity), Decimal("0")))
+        .filter(Inventory.product_id == product_id)
+        .scalar()
+    )
     return Decimal(str(result or 0))
 
 
 def get_allocated_quantity(db: Session, product_id: int) -> Decimal:
     """Get quantity allocated from inventory."""
-    result = db.query(
-        func.coalesce(func.sum(Inventory.allocated_quantity), Decimal("0"))
-    ).filter(
-        Inventory.product_id == product_id
-    ).scalar()
+    result = (
+        db.query(func.coalesce(func.sum(Inventory.allocated_quantity), Decimal("0")))
+        .filter(Inventory.product_id == product_id)
+        .scalar()
+    )
     return Decimal(str(result or 0))
 
 
-def get_production_orders_for_so(
-    db: Session,
-    sales_order_id: int,
-    product_id: int
-) -> List[ProductionOrder]:
+def get_production_orders_for_so(db: Session, sales_order_id: int, product_id: int) -> List[ProductionOrder]:
     """Get production orders linked to a sales order for a specific product."""
-    return db.query(ProductionOrder).filter(
-        ProductionOrder.sales_order_id == sales_order_id,
-        ProductionOrder.product_id == product_id
-    ).all()
+    return (
+        db.query(ProductionOrder)
+        .filter(ProductionOrder.sales_order_id == sales_order_id, ProductionOrder.product_id == product_id)
+        .all()
+    )
 
 
-def get_material_requirements(
-    db: Session,
-    product_id: int,
-    qty: Decimal
-) -> List[Tuple[Product, Decimal]]:
+def get_material_requirements(db: Session, product_id: int, qty: Decimal) -> List[Tuple[Product, Decimal]]:
     """Get materials required for producing a quantity of product."""
     # Get active BOM for this product
-    bom = db.query(BOM).filter(
-        BOM.product_id == product_id,
-        BOM.active == True  # noqa: E712
-    ).first()
+    bom = (
+        db.query(BOM)
+        .filter(
+            BOM.product_id == product_id,
+            BOM.active == True,  # noqa: E712
+        )
+        .first()
+    )
 
     if not bom:
         return []
 
     # Get BOM lines with their component products
-    bom_lines = db.query(BOMLine, Product).join(
-        Product, BOMLine.component_id == Product.id
-    ).filter(
-        BOMLine.bom_id == bom.id
-    ).all()
+    bom_lines = (
+        db.query(BOMLine, Product)
+        .join(Product, BOMLine.component_id == Product.id)
+        .filter(BOMLine.bom_id == bom.id)
+        .all()
+    )
 
     return [(component, bom_line.quantity * qty) for bom_line, component in bom_lines]
 
@@ -93,20 +100,16 @@ def get_material_available(db: Session, product_id: int) -> Decimal:
     return on_hand - allocated
 
 
-def get_pending_purchase_orders(
-    db: Session,
-    product_id: int
-) -> List[Tuple[PurchaseOrder, Decimal]]:
+def get_pending_purchase_orders(db: Session, product_id: int) -> List[Tuple[PurchaseOrder, Decimal]]:
     """Get pending purchase orders for a product with remaining quantities."""
-    active_statuses = ['draft', 'ordered', 'shipped']
+    active_statuses = ["draft", "ordered", "shipped"]
 
-    results = db.query(PurchaseOrder, PurchaseOrderLine).join(
-        PurchaseOrderLine,
-        PurchaseOrder.id == PurchaseOrderLine.purchase_order_id
-    ).filter(
-        PurchaseOrderLine.product_id == product_id,
-        PurchaseOrder.status.in_(active_statuses)
-    ).all()
+    results = (
+        db.query(PurchaseOrder, PurchaseOrderLine)
+        .join(PurchaseOrderLine, PurchaseOrder.id == PurchaseOrderLine.purchase_order_id)
+        .filter(PurchaseOrderLine.product_id == product_id, PurchaseOrder.status.in_(active_statuses))
+        .all()
+    )
 
     pos = []
     for po, pol in results:
@@ -117,12 +120,7 @@ def get_pending_purchase_orders(
     return pos
 
 
-def analyze_line_issues(
-    db: Session,
-    so: SalesOrder,
-    line: SalesOrderLine,
-    line_number: int
-) -> LineIssues:
+def analyze_line_issues(db: Session, so: SalesOrder, line: SalesOrderLine, line_number: int) -> LineIssues:
     """Analyze blocking issues for a single sales order line."""
     product = db.query(Product).filter(Product.id == line.product_id).first()
     if not product:
@@ -133,7 +131,7 @@ def analyze_line_issues(
             quantity_ordered=line.quantity or Decimal("0"),
             quantity_available=Decimal("0"),
             quantity_short=line.quantity or Decimal("0"),
-            blocking_issues=[]
+            blocking_issues=[],
         )
 
     issues: List[BlockingIssue] = []
@@ -150,17 +148,17 @@ def analyze_line_issues(
         if not production_orders:
             # No production order exists - check if product needs one
             if product.has_bom:
-                issues.append(BlockingIssue(
-                    type=IssueType.PRODUCTION_MISSING,
-                    severity=IssueSeverity.BLOCKING,
-                    message=f"No production order exists for {product.sku}",
-                    reference_type="make_product",  # Use make_product to distinguish from buy_product
-                    reference_id=product.id,
-                    reference_code=product.sku,
-                    details={
-                        "quantity_needed": float(qty_short)
-                    }
-                ))
+                issues.append(
+                    BlockingIssue(
+                        type=IssueType.PRODUCTION_MISSING,
+                        severity=IssueSeverity.BLOCKING,
+                        message=f"No production order exists for {product.sku}",
+                        reference_type="make_product",  # Use make_product to distinguish from buy_product
+                        reference_id=product.id,
+                        reference_code=product.sku,
+                        details={"quantity_needed": float(qty_short)},
+                    )
+                )
         else:
             for wo in production_orders:
                 qty_ordered_wo = wo.quantity_ordered or Decimal("0")
@@ -168,23 +166,25 @@ def analyze_line_issues(
                 qty_scrapped = wo.quantity_scrapped or Decimal("0")
                 remaining = qty_ordered_wo - qty_completed - qty_scrapped
 
-                if wo.status not in ['complete', 'completed', 'closed'] and remaining > 0:
+                if wo.status not in ["complete", "completed", "closed"] and remaining > 0:
                     # Production incomplete
-                    issues.append(BlockingIssue(
-                        type=IssueType.PRODUCTION_INCOMPLETE,
-                        severity=IssueSeverity.BLOCKING,
-                        message=f"Production order {wo.code} not complete",
-                        reference_type="production_order",
-                        reference_id=wo.id,
-                        reference_code=wo.code,
-                        details={
-                            "status": wo.status,
-                            "quantity_ordered": float(qty_ordered_wo),
-                            "quantity_completed": float(qty_completed),
-                            "quantity_remaining": float(remaining),
-                            "estimated_completion": wo.due_date.isoformat() if wo.due_date else None
-                        }
-                    ))
+                    issues.append(
+                        BlockingIssue(
+                            type=IssueType.PRODUCTION_INCOMPLETE,
+                            severity=IssueSeverity.BLOCKING,
+                            message=f"Production order {wo.code} not complete",
+                            reference_type="production_order",
+                            reference_id=wo.id,
+                            reference_code=wo.code,
+                            details={
+                                "status": wo.status,
+                                "quantity_ordered": float(qty_ordered_wo),
+                                "quantity_completed": float(qty_completed),
+                                "quantity_remaining": float(remaining),
+                                "estimated_completion": wo.due_date.isoformat() if wo.due_date else None,
+                            },
+                        )
+                    )
 
                     # Check material availability for this WO
                     material_reqs = get_material_requirements(db, wo.product_id, remaining)
@@ -198,38 +198,44 @@ def analyze_line_issues(
                             pending_pos = get_pending_purchase_orders(db, component.id)
                             incoming_po = pending_pos[0] if pending_pos else None
 
-                            issues.append(BlockingIssue(
-                                type=IssueType.MATERIAL_SHORTAGE,
-                                severity=IssueSeverity.BLOCKING,
-                                message=f"Material {component.sku} is {shortage:.0f} units short",
-                                reference_type="product",
-                                reference_id=component.id,
-                                reference_code=component.sku,
-                                details={
-                                    "required": float(qty_needed),
-                                    "available": float(available),
-                                    "shortage": float(shortage),
-                                    "incoming_po": incoming_po[0].po_number if incoming_po else None,
-                                    "incoming_date": incoming_po[0].expected_date.isoformat() if incoming_po and incoming_po[0].expected_date else None
-                                }
-                            ))
+                            issues.append(
+                                BlockingIssue(
+                                    type=IssueType.MATERIAL_SHORTAGE,
+                                    severity=IssueSeverity.BLOCKING,
+                                    message=f"Material {component.sku} is {shortage:.0f} units short",
+                                    reference_type="product",
+                                    reference_id=component.id,
+                                    reference_code=component.sku,
+                                    details={
+                                        "required": float(qty_needed),
+                                        "available": float(available),
+                                        "shortage": float(shortage),
+                                        "incoming_po": incoming_po[0].po_number if incoming_po else None,
+                                        "incoming_date": incoming_po[0].expected_date.isoformat()
+                                        if incoming_po and incoming_po[0].expected_date
+                                        else None,
+                                    },
+                                )
+                            )
 
                             # Add purchase pending warning if PO exists
                             if incoming_po:
                                 po, po_qty = incoming_po
-                                issues.append(BlockingIssue(
-                                    type=IssueType.PURCHASE_PENDING,
-                                    severity=IssueSeverity.WARNING,
-                                    message=f"Purchase order {po.po_number} pending receipt",
-                                    reference_type="purchase_order",
-                                    reference_id=po.id,
-                                    reference_code=po.po_number,
-                                    details={
-                                        "status": po.status,
-                                        "expected_date": po.expected_date.isoformat() if po.expected_date else None,
-                                        "quantity": float(po_qty)
-                                    }
-                                ))
+                                issues.append(
+                                    BlockingIssue(
+                                        type=IssueType.PURCHASE_PENDING,
+                                        severity=IssueSeverity.WARNING,
+                                        message=f"Purchase order {po.po_number} pending receipt",
+                                        reference_type="purchase_order",
+                                        reference_id=po.id,
+                                        reference_code=po.po_number,
+                                        details={
+                                            "status": po.status,
+                                            "expected_date": po.expected_date.isoformat() if po.expected_date else None,
+                                            "quantity": float(po_qty),
+                                        },
+                                    )
+                                )
 
     return LineIssues(
         line_number=line_number,
@@ -238,7 +244,7 @@ def analyze_line_issues(
         quantity_ordered=qty_ordered,
         quantity_available=fg_available,
         quantity_short=qty_short,
-        blocking_issues=issues
+        blocking_issues=issues,
     )
 
 
@@ -258,13 +264,15 @@ def generate_resolution_actions(line_issues: List[LineIssues]) -> List[Resolutio
     for issue in po_issues:
         ref_key = (issue.reference_type, issue.reference_id)
         if ref_key not in seen_refs:
-            actions.append(ResolutionAction(
-                priority=priority,
-                action=f"Expedite PO {issue.reference_code}",
-                impact=f"Resolves material shortage, expected {issue.details.get('expected_date', 'TBD')}",
-                reference_type=issue.reference_type,
-                reference_id=issue.reference_id
-            ))
+            actions.append(
+                ResolutionAction(
+                    priority=priority,
+                    action=f"Expedite PO {issue.reference_code}",
+                    impact=f"Resolves material shortage, expected {issue.details.get('expected_date', 'TBD')}",
+                    reference_type=issue.reference_type,
+                    reference_id=issue.reference_id,
+                )
+            )
             seen_refs.add(ref_key)
             priority += 1
 
@@ -272,14 +280,16 @@ def generate_resolution_actions(line_issues: List[LineIssues]) -> List[Resolutio
     mat_issues = [i for i in all_issues if i.type == IssueType.MATERIAL_SHORTAGE]
     for issue in mat_issues:
         ref_key = (issue.reference_type, issue.reference_id)
-        if ref_key not in seen_refs and not issue.details.get('incoming_po'):
-            actions.append(ResolutionAction(
-                priority=priority,
-                action=f"Create PO for {issue.reference_code}",
-                impact=f"Need {issue.details.get('shortage', 0):.0f} units",
-                reference_type=issue.reference_type,
-                reference_id=issue.reference_id
-            ))
+        if ref_key not in seen_refs and not issue.details.get("incoming_po"):
+            actions.append(
+                ResolutionAction(
+                    priority=priority,
+                    action=f"Create PO for {issue.reference_code}",
+                    impact=f"Need {issue.details.get('shortage', 0):.0f} units",
+                    reference_type=issue.reference_type,
+                    reference_id=issue.reference_id,
+                )
+            )
             seen_refs.add(ref_key)
             priority += 1
 
@@ -288,13 +298,15 @@ def generate_resolution_actions(line_issues: List[LineIssues]) -> List[Resolutio
     for issue in prod_issues:
         ref_key = (issue.reference_type, issue.reference_id)
         if ref_key not in seen_refs:
-            actions.append(ResolutionAction(
-                priority=priority,
-                action=f"Complete production {issue.reference_code}",
-                impact=f"{issue.details.get('quantity_remaining', 0):.0f} units remaining",
-                reference_type=issue.reference_type,
-                reference_id=issue.reference_id
-            ))
+            actions.append(
+                ResolutionAction(
+                    priority=priority,
+                    action=f"Complete production {issue.reference_code}",
+                    impact=f"{issue.details.get('quantity_remaining', 0):.0f} units remaining",
+                    reference_type=issue.reference_type,
+                    reference_id=issue.reference_id,
+                )
+            )
             seen_refs.add(ref_key)
             priority += 1
 
@@ -303,13 +315,15 @@ def generate_resolution_actions(line_issues: List[LineIssues]) -> List[Resolutio
     for issue in missing_issues:
         ref_key = (issue.reference_type, issue.reference_id)
         if ref_key not in seen_refs:
-            actions.append(ResolutionAction(
-                priority=priority,
-                action=f"Create production order for {issue.reference_code}",
-                impact=f"Need {issue.details.get('quantity_needed', 0):.0f} units",
-                reference_type=issue.reference_type,
-                reference_id=issue.reference_id
-            ))
+            actions.append(
+                ResolutionAction(
+                    priority=priority,
+                    action=f"Create production order for {issue.reference_code}",
+                    impact=f"Need {issue.details.get('quantity_needed', 0):.0f} units",
+                    reference_type=issue.reference_type,
+                    reference_id=issue.reference_id,
+                )
+            )
             seen_refs.add(ref_key)
             priority += 1
 
@@ -323,7 +337,7 @@ def estimate_ready_date(line_issues: List[LineIssues]) -> Optional[date]:
     for line in line_issues:
         for issue in line.blocking_issues:
             if issue.type == IssueType.PURCHASE_PENDING:
-                po_date_str = issue.details.get('expected_date')
+                po_date_str = issue.details.get("expected_date")
                 if po_date_str:
                     try:
                         po_date = date.fromisoformat(po_date_str)
@@ -333,7 +347,7 @@ def estimate_ready_date(line_issues: List[LineIssues]) -> Optional[date]:
                         pass
 
             elif issue.type == IssueType.PRODUCTION_INCOMPLETE:
-                wo_date_str = issue.details.get('estimated_completion')
+                wo_date_str = issue.details.get("estimated_completion")
                 if wo_date_str:
                     try:
                         wo_date = date.fromisoformat(wo_date_str)
@@ -350,10 +364,7 @@ def estimate_ready_date(line_issues: List[LineIssues]) -> Optional[date]:
     return None
 
 
-def get_sales_order_blocking_issues(
-    db: Session,
-    sales_order_id: int
-) -> Optional[SalesOrderBlockingIssues]:
+def get_sales_order_blocking_issues(db: Session, sales_order_id: int) -> Optional[SalesOrderBlockingIssues]:
     """
     Get complete blocking issues analysis for a sales order.
 
@@ -397,8 +408,7 @@ def get_sales_order_blocking_issues(
 
     # Calculate summary
     blocking_count = sum(
-        len([i for i in line.blocking_issues if i.severity == IssueSeverity.BLOCKING])
-        for line in line_issues
+        len([i for i in line.blocking_issues if i.severity == IssueSeverity.BLOCKING]) for line in line_issues
     )
     can_fulfill = blocking_count == 0
 
@@ -413,6 +423,7 @@ def get_sales_order_blocking_issues(
     if so.estimated_completion_date:
         # Convert datetime to date (check datetime first since datetime is subclass of date)
         from datetime import datetime
+
         if isinstance(so.estimated_completion_date, datetime):
             requested_date = so.estimated_completion_date.date()
         elif isinstance(so.estimated_completion_date, date):
@@ -421,7 +432,7 @@ def get_sales_order_blocking_issues(
     # Get order date
     order_date = date.today()
     if so.created_at:
-        order_date = so.created_at.date() if hasattr(so.created_at, 'date') else so.created_at
+        order_date = so.created_at.date() if hasattr(so.created_at, "date") else so.created_at
 
     return SalesOrderBlockingIssues(
         sales_order_id=so.id,
@@ -433,10 +444,10 @@ def get_sales_order_blocking_issues(
             can_fulfill=can_fulfill,
             blocking_count=blocking_count,
             estimated_ready_date=estimated_ready,
-            days_until_ready=days_until_ready
+            days_until_ready=days_until_ready,
         ),
         line_issues=line_issues,
-        resolution_actions=resolution_actions
+        resolution_actions=resolution_actions,
     )
 
 
@@ -444,9 +455,9 @@ def get_sales_order_blocking_issues(
 # Production Order Blocking Issues (API-202)
 # =============================================================================
 
+
 def get_production_order_blocking_issues(
-    db: Session,
-    production_order_id: int
+    db: Session, production_order_id: int
 ) -> Optional[ProductionOrderBlockingIssues]:
     """
     Get complete blocking issues analysis for a production order.
@@ -481,16 +492,14 @@ def get_production_order_blocking_issues(
             requested_date = None
             if so.estimated_completion_date:
                 from datetime import datetime as dt
+
                 if isinstance(so.estimated_completion_date, dt):
                     requested_date = so.estimated_completion_date.date()
                 elif isinstance(so.estimated_completion_date, date):
                     requested_date = so.estimated_completion_date
 
             linked_so = LinkedSalesOrderInfo(
-                id=so.id,
-                code=so.order_number,
-                customer=customer_name,
-                requested_date=requested_date
+                id=so.id, code=so.order_number, customer=customer_name, requested_date=requested_date
             )
 
     # Calculate remaining quantity
@@ -505,17 +514,22 @@ def get_production_order_blocking_issues(
     latest_incoming_date = None
 
     # Get BOM for this product
-    bom = db.query(BOM).filter(
-        BOM.product_id == wo.product_id,
-        BOM.active == True  # noqa: E712
-    ).first()
+    bom = (
+        db.query(BOM)
+        .filter(
+            BOM.product_id == wo.product_id,
+            BOM.active == True,  # noqa: E712
+        )
+        .first()
+    )
 
     if bom:
-        bom_lines = db.query(BOMLine, Product).join(
-            Product, BOMLine.component_id == Product.id
-        ).filter(
-            BOMLine.bom_id == bom.id
-        ).all()
+        bom_lines = (
+            db.query(BOMLine, Product)
+            .join(Product, BOMLine.component_id == Product.id)
+            .filter(BOMLine.bom_id == bom.id)
+            .all()
+        )
 
         for bom_line, component in bom_lines:
             qty_required = bom_line.quantity * qty_remaining
@@ -538,22 +552,24 @@ def get_production_order_blocking_issues(
                     purchase_order_code=po.po_number,
                     quantity=po_qty,
                     expected_date=po.expected_date,
-                    vendor=vendor.name if vendor else "Unknown"
+                    vendor=vendor.name if vendor else "Unknown",
                 )
 
                 if po.expected_date and (latest_incoming_date is None or po.expected_date > latest_incoming_date):
                     latest_incoming_date = po.expected_date
 
-            material_issues.append(MaterialIssue(
-                product_id=component.id,
-                product_sku=component.sku,
-                product_name=component.name,
-                quantity_required=qty_required,
-                quantity_available=max(Decimal("0"), qty_available),
-                quantity_short=qty_short,
-                status=status,
-                incoming_supply=incoming
-            ))
+            material_issues.append(
+                MaterialIssue(
+                    product_id=component.id,
+                    product_sku=component.sku,
+                    product_name=component.name,
+                    quantity_required=qty_required,
+                    quantity_available=max(Decimal("0"), qty_available),
+                    quantity_short=qty_short,
+                    status=status,
+                    incoming_supply=incoming,
+                )
+            )
 
     # Determine if can produce
     can_produce = blocking_count == 0
@@ -580,12 +596,12 @@ def get_production_order_blocking_issues(
             can_produce=can_produce,
             blocking_count=blocking_count,
             estimated_ready_date=estimated_ready,
-            days_until_ready=days_until_ready
+            days_until_ready=days_until_ready,
         ),
         linked_sales_order=linked_so,
         material_issues=material_issues,
         other_issues=[],  # Future: machine status, quality holds
-        resolution_actions=resolution_actions
+        resolution_actions=resolution_actions,
     )
 
 
@@ -601,13 +617,15 @@ def generate_po_resolution_actions(material_issues: List[MaterialIssue]) -> List
             ref_key = ("purchase_order", mat.incoming_supply.purchase_order_id)
             if ref_key not in seen_refs:
                 expected = mat.incoming_supply.expected_date.isoformat() if mat.incoming_supply.expected_date else "TBD"
-                actions.append(ResolutionAction(
-                    priority=priority,
-                    action=f"Expedite PO {mat.incoming_supply.purchase_order_code}",
-                    impact=f"Resolves {mat.product_sku} shortage, expected {expected}",
-                    reference_type="purchase_order",
-                    reference_id=mat.incoming_supply.purchase_order_id
-                ))
+                actions.append(
+                    ResolutionAction(
+                        priority=priority,
+                        action=f"Expedite PO {mat.incoming_supply.purchase_order_code}",
+                        impact=f"Resolves {mat.product_sku} shortage, expected {expected}",
+                        reference_type="purchase_order",
+                        reference_id=mat.incoming_supply.purchase_order_id,
+                    )
+                )
                 seen_refs.add(ref_key)
                 priority += 1
 
@@ -616,13 +634,15 @@ def generate_po_resolution_actions(material_issues: List[MaterialIssue]) -> List
         if mat.status == "shortage" and not mat.incoming_supply:
             ref_key = ("product", mat.product_id)
             if ref_key not in seen_refs:
-                actions.append(ResolutionAction(
-                    priority=priority,
-                    action=f"Create PO for {mat.product_sku}",
-                    impact=f"Need {mat.quantity_short:.0f} units",
-                    reference_type="product",
-                    reference_id=mat.product_id
-                ))
+                actions.append(
+                    ResolutionAction(
+                        priority=priority,
+                        action=f"Create PO for {mat.product_sku}",
+                        impact=f"Need {mat.quantity_short:.0f} units",
+                        reference_type="product",
+                        reference_id=mat.product_id,
+                    )
+                )
                 seen_refs.add(ref_key)
                 priority += 1
 

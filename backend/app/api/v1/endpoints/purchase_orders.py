@@ -1,6 +1,7 @@
 """
 Purchase Orders API Endpoints
 """
+
 import os
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Query
 from typing import Annotated, Optional
@@ -52,9 +53,12 @@ def _generate_po_number(db: Session) -> str:
     """Generate next PO number (PO-2025-001, PO-2025-002, etc.)"""
     year = datetime.utcnow().year
     pattern = f"PO-{year}-%"
-    last = db.query(PurchaseOrder).filter(
-        PurchaseOrder.po_number.like(pattern)
-    ).order_by(desc(PurchaseOrder.po_number)).first()
+    last = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.po_number.like(pattern))
+        .order_by(desc(PurchaseOrder.po_number))
+        .first()
+    )
 
     if last:
         try:
@@ -76,10 +80,13 @@ def _calculate_totals(po: PurchaseOrder) -> None:
 # Purchase Order CRUD
 # ============================================================================
 
+
 @router.get("/", response_model=ListResponse[PurchaseOrderListResponse])
 async def list_purchase_orders(
     pagination: Annotated[PaginationParams, Depends(get_pagination_params)],
-    status: Optional[str] = Query(None, description="Filter by status (draft, ordered, shipped, received, closed, cancelled)"),
+    status: Optional[str] = Query(
+        None, description="Filter by status (draft, ordered, shipped, received, closed, cancelled)"
+    ),
     vendor_id: Optional[int] = Query(None, description="Filter by vendor ID"),
     search: Optional[str] = Query(None, description="Search by PO number"),
     current_user: User = Depends(get_current_user),
@@ -113,28 +120,25 @@ async def list_purchase_orders(
 
     result = []
     for po in pos:
-        result.append(PurchaseOrderListResponse(
-            id=po.id,
-            po_number=po.po_number,
-            vendor_id=po.vendor_id,
-            vendor_name=po.vendor.name if po.vendor else "Unknown",
-            status=po.status,
-            order_date=po.order_date,
-            expected_date=po.expected_date,
-            received_date=po.received_date,  # User-entered date from receive workflow
-            total_amount=po.total_amount,
-            line_count=len(po.lines),
-            created_at=po.created_at,
-        ))
+        result.append(
+            PurchaseOrderListResponse(
+                id=po.id,
+                po_number=po.po_number,
+                vendor_id=po.vendor_id,
+                vendor_name=po.vendor.name if po.vendor else "Unknown",
+                status=po.status,
+                order_date=po.order_date,
+                expected_date=po.expected_date,
+                received_date=po.received_date,  # User-entered date from receive workflow
+                total_amount=po.total_amount,
+                line_count=len(po.lines),
+                created_at=po.created_at,
+            )
+        )
 
     return ListResponse(
         items=result,
-        pagination=PaginationMeta(
-            total=total,
-            offset=pagination.offset,
-            limit=pagination.limit,
-            returned=len(result)
-        )
+        pagination=PaginationMeta(total=total, offset=pagination.offset, limit=pagination.limit, returned=len(result)),
     )
 
 
@@ -145,10 +149,14 @@ async def get_purchase_order(
     db: Session = Depends(get_db),
 ):
     """Get purchase order details by ID"""
-    po = db.query(PurchaseOrder).options(
-        joinedload(PurchaseOrder.vendor),
-        joinedload(PurchaseOrder.lines).joinedload(PurchaseOrderLine.product)
-    ).filter(PurchaseOrder.id == po_id).first()
+    po = (
+        db.query(PurchaseOrder)
+        .options(
+            joinedload(PurchaseOrder.vendor), joinedload(PurchaseOrder.lines).joinedload(PurchaseOrderLine.product)
+        )
+        .filter(PurchaseOrder.id == po_id)
+        .first()
+    )
 
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -156,22 +164,24 @@ async def get_purchase_order(
     # Build response with line details
     lines = []
     for line in po.lines:
-        lines.append(POLineResponse(
-            id=line.id,
-            line_number=line.line_number,
-            product_id=line.product_id,
-            product_sku=line.product.sku if line.product else None,
-            product_name=line.product.name if line.product else None,
-            product_unit=line.product.unit if line.product else None,
-            quantity_ordered=line.quantity_ordered,
-            quantity_received=line.quantity_received,
-            unit_cost=line.unit_cost,
-            purchase_unit=line.purchase_unit,
-            line_total=line.line_total,
-            notes=line.notes,
-            created_at=line.created_at,
-            updated_at=line.updated_at,
-        ))
+        lines.append(
+            POLineResponse(
+                id=line.id,
+                line_number=line.line_number,
+                product_id=line.product_id,
+                product_sku=line.product.sku if line.product else None,
+                product_name=line.product.name if line.product else None,
+                product_unit=line.product.unit if line.product else None,
+                quantity_ordered=line.quantity_ordered,
+                quantity_received=line.quantity_received,
+                unit_cost=line.unit_cost,
+                purchase_unit=line.purchase_unit,
+                line_total=line.line_total,
+                notes=line.notes,
+                created_at=line.created_at,
+                updated_at=line.updated_at,
+            )
+        )
 
     return PurchaseOrderResponse(
         id=po.id,
@@ -250,7 +260,7 @@ async def create_purchase_order(
             product_id=line_data.product_id,
             quantity_ordered=line_data.quantity_ordered,
             quantity_received=Decimal("0"),
-            purchase_unit=line_data.purchase_unit or getattr(product, 'purchase_uom', None) or product.unit,
+            purchase_unit=line_data.purchase_unit or getattr(product, "purchase_uom", None) or product.unit,
             unit_cost=line_data.unit_cost,
             line_total=line_data.quantity_ordered * line_data.unit_cost,
             notes=line_data.notes,
@@ -297,10 +307,7 @@ async def update_purchase_order(
 
     # Only allow updates on draft/ordered POs
     if po.status in ["received", "closed", "cancelled"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot update PO in '{po.status}' status"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot update PO in '{po.status}' status")
 
     # Update fields
     update_data = request.model_dump(exclude_unset=True)
@@ -327,9 +334,7 @@ async def add_po_line(
     db: Session = Depends(get_db),
 ):
     """Add a line to a purchase order"""
-    po = db.query(PurchaseOrder).options(
-        joinedload(PurchaseOrder.lines)
-    ).filter(PurchaseOrder.id == po_id).first()
+    po = db.query(PurchaseOrder).options(joinedload(PurchaseOrder.lines)).filter(PurchaseOrder.id == po_id).first()
 
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
@@ -351,7 +356,7 @@ async def add_po_line(
         product_id=request.product_id,
         quantity_ordered=request.quantity_ordered,
         quantity_received=Decimal("0"),
-        purchase_unit=request.purchase_unit or getattr(product, 'purchase_uom', None) or product.unit,
+        purchase_unit=request.purchase_unit or getattr(product, "purchase_uom", None) or product.unit,
         unit_cost=request.unit_cost,
         line_total=request.quantity_ordered * request.unit_cost,
         notes=request.notes,
@@ -392,10 +397,11 @@ async def update_po_line(
     if po.status not in ["draft", "ordered"]:
         raise HTTPException(status_code=400, detail=f"Cannot modify PO in '{po.status}' status")
 
-    line = db.query(PurchaseOrderLine).filter(
-        PurchaseOrderLine.id == line_id,
-        PurchaseOrderLine.purchase_order_id == po_id
-    ).first()
+    line = (
+        db.query(PurchaseOrderLine)
+        .filter(PurchaseOrderLine.id == line_id, PurchaseOrderLine.purchase_order_id == po_id)
+        .first()
+    )
 
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
@@ -404,8 +410,7 @@ async def update_po_line(
     if request.quantity_ordered is not None:
         if request.quantity_ordered < line.quantity_received:
             raise HTTPException(
-                status_code=400,
-                detail=f"Cannot reduce quantity below received amount ({line.quantity_received})"
+                status_code=400, detail=f"Cannot reduce quantity below received amount ({line.quantity_received})"
             )
         line.quantity_ordered = request.quantity_ordered
 
@@ -447,10 +452,11 @@ async def delete_po_line(
     if po.status not in ["draft", "ordered"]:
         raise HTTPException(status_code=400, detail=f"Cannot modify PO in '{po.status}' status")
 
-    line = db.query(PurchaseOrderLine).filter(
-        PurchaseOrderLine.id == line_id,
-        PurchaseOrderLine.purchase_order_id == po_id
-    ).first()
+    line = (
+        db.query(PurchaseOrderLine)
+        .filter(PurchaseOrderLine.id == line_id, PurchaseOrderLine.purchase_order_id == po_id)
+        .first()
+    )
 
     if not line:
         raise HTTPException(status_code=404, detail="Line not found")
@@ -471,6 +477,7 @@ async def delete_po_line(
 # ============================================================================
 # Status Management
 # ============================================================================
+
 
 @router.post("/{po_id}/status", response_model=PurchaseOrderResponse)
 async def update_po_status(
@@ -507,10 +514,7 @@ async def update_po_status(
     }
 
     if new_status not in valid_transitions.get(old_status, []):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot transition from '{old_status}' to '{new_status}'"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot transition from '{old_status}' to '{new_status}'")
 
     # Handle specific transitions
     if new_status == "ordered":
@@ -567,6 +571,7 @@ async def update_po_status(
 # Receiving
 # ============================================================================
 
+
 @router.post("/{po_id}/receive", response_model=ReceivePOResponse)
 async def receive_purchase_order(
     po_id: int,
@@ -582,18 +587,13 @@ async def receive_purchase_order(
     - Updates on-hand inventory
     - Auto-transitions to 'received' if fully received
     """
-    po = db.query(PurchaseOrder).options(
-        joinedload(PurchaseOrder.lines)
-    ).filter(PurchaseOrder.id == po_id).first()
+    po = db.query(PurchaseOrder).options(joinedload(PurchaseOrder.lines)).filter(PurchaseOrder.id == po_id).first()
 
     if not po:
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
     if po.status not in ["ordered", "shipped"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot receive items on PO in '{po.status}' status"
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot receive items on PO in '{po.status}' status")
 
     # User-entered received date (defaults to today if not provided)
     # This is the date items were ACTUALLY received, not when entered in system
@@ -602,19 +602,12 @@ async def receive_purchase_order(
     # Default location (get first warehouse or create default)
     location_id = request.location_id
     if not location_id:
-        default_loc = db.query(InventoryLocation).filter(
-            InventoryLocation.type == "warehouse"
-        ).first()
+        default_loc = db.query(InventoryLocation).filter(InventoryLocation.type == "warehouse").first()
         if default_loc:
             location_id = default_loc.id
         else:
             # Create default warehouse
-            default_loc = InventoryLocation(
-                name="Main Warehouse",
-                code="MAIN",
-                type="warehouse",
-                active=True
-            )
+            default_loc = InventoryLocation(name="Main Warehouse", code="MAIN", type="warehouse", active=True)
             db.add(default_loc)
             db.flush()
             location_id = default_loc.id
@@ -638,7 +631,7 @@ async def receive_purchase_order(
         if item.quantity_received > remaining:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot receive {item.quantity_received} for line {item.line_id}. Only {remaining} remaining."
+                detail=f"Cannot receive {item.quantity_received} for line {item.line_id}. Only {remaining} remaining.",
             )
 
         # Update line
@@ -651,18 +644,18 @@ async def receive_purchase_order(
         product = db.query(Product).filter(Product.id == line.product_id).first()
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {line.product_id} not found")
-        
-        purchase_unit = (line.purchase_unit or product.unit or 'EA').upper().strip()
-        product_unit = (product.unit or 'EA').upper().strip()
-        
+
+        purchase_unit = (line.purchase_unit or product.unit or "EA").upper().strip()
+        product_unit = (product.unit or "EA").upper().strip()
+
         # Check if this is a material (for cost handling)
         is_mat = is_material(product)
-        
+
         # Convert quantity if units differ
         quantity_received_decimal = Decimal(str(item.quantity_received))
         quantity_for_inventory = quantity_received_decimal
         cost_per_unit_for_inventory = line.unit_cost
-        
+
         if purchase_unit != product_unit:
             # Convert quantity: purchase_unit -> product_unit
             # Use safe conversion which falls back to inline conversions if DB lookup fails
@@ -670,11 +663,11 @@ async def receive_purchase_order(
                 f"Converting quantity for PO {po.po_number} line {line.line_number}: "
                 f"{quantity_received_decimal} {purchase_unit} -> {product_unit}"
             )
-            
+
             converted_qty, conversion_success = convert_quantity_safe(
                 db, quantity_received_decimal, purchase_unit, product_unit
             )
-            
+
             if not conversion_success:
                 # Conversion failed - this is a critical error
                 logger.error(
@@ -689,14 +682,14 @@ async def receive_purchase_order(
                         f"Cannot convert {quantity_received_decimal} {purchase_unit} to {product_unit} "
                         f"for product {product.sku}. "
                         f"Units are incompatible. Supported conversions: G↔KG, LB↔KG, OZ↔KG, etc."
-                    )
+                    ),
                 )
-            
+
             quantity_for_inventory = converted_qty
             logger.info(
                 f"Conversion successful: {quantity_received_decimal} {purchase_unit} = {quantity_for_inventory} {product_unit}"
             )
-            
+
             # Convert cost_per_unit: cost per purchase_unit -> cost per product_unit
             # For materials: Convert to $/G since quantity is stored in grams
             # This ensures COGS calculations work correctly: cost_per_unit ($/G) * quantity (G)
@@ -706,8 +699,7 @@ async def receive_purchase_order(
                     # Purchased in KG, storing in G: divide cost by 1000
                     cost_per_unit_for_inventory = line.unit_cost / Decimal("1000")
                     logger.info(
-                        f"Material cost conversion: ${line.unit_cost}/KG → "
-                        f"${cost_per_unit_for_inventory}/G"
+                        f"Material cost conversion: ${line.unit_cost}/KG → " f"${cost_per_unit_for_inventory}/G"
                     )
                 else:
                     # Purchased in other units (G, LB, OZ, etc.) - use conversion factor
@@ -721,10 +713,7 @@ async def receive_purchase_order(
                         )
                     except Exception as e:
                         logger.error(f"Cost conversion failed for material: {e}")
-                        raise HTTPException(
-                            status_code=400,
-                            detail=f"Cannot convert cost from {purchase_unit} to G"
-                        )
+                        raise HTTPException(status_code=400, detail=f"Cannot convert cost from {purchase_unit} to G")
             else:
                 # Non-materials: Convert cost per purchase_unit -> cost per product_unit
                 # Cost conversion factor is the inverse of quantity conversion factor
@@ -759,10 +748,8 @@ async def receive_purchase_order(
                             f"Cost conversion: Cannot derive factor (qty_received={qty_received}, "
                             f"quantity_for_inventory={quantity_for_inventory}), using original cost"
                         )
-                    logger.warning(
-                        f"Cost conversion factor lookup failed, using derived factor: {e}"
-                    )
-            
+                    logger.warning(f"Cost conversion factor lookup failed, using derived factor: {e}")
+
             logger.info(
                 f"UOM conversion for PO {po.po_number} line {line.line_number}: "
                 f"{item.quantity_received} {purchase_unit} @ ${line.unit_cost}/{purchase_unit} -> "
@@ -791,16 +778,14 @@ async def receive_purchase_order(
                 transaction_quantity = quantity_for_inventory * Decimal("28.3495")
             else:
                 # Unknown unit - assume grams for materials
-                logger.warning(
-                    f"Material {product.sku} has unknown unit '{product_unit}', assuming grams"
-                )
+                logger.warning(f"Material {product.sku} has unknown unit '{product_unit}', assuming grams")
                 transaction_quantity = quantity_for_inventory
-            
+
             logger.info(
                 f"Material conversion for transaction: {quantity_for_inventory} {product_unit} -> "
                 f"{transaction_quantity} G (product: {product.sku}, purchased in: {purchase_unit})"
             )
-            
+
             # ============================================================================
             # FIX: Ensure cost is ALWAYS in $/G for materials (matches transaction unit)
             # ============================================================================
@@ -840,9 +825,7 @@ async def receive_purchase_order(
                     )
                 elif product_unit == "G":
                     # Already in $/G, no conversion needed
-                    logger.info(
-                        f"Material cost already in $/G: ${cost_per_unit_for_inventory}/G"
-                    )
+                    logger.info(f"Material cost already in $/G: ${cost_per_unit_for_inventory}/G")
                 else:
                     # Unknown unit - log warning but keep original cost
                     logger.warning(
@@ -850,12 +833,13 @@ async def receive_purchase_order(
                         f"cost not normalized. This may cause incorrect COGS calculations!"
                     )
         # For non-materials, transaction_quantity = quantity_for_inventory (already in product_unit)
-        
+
         # Update inventory (store in transaction unit: GRAMS for materials)
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == line.product_id,
-            Inventory.location_id == location_id
-        ).first()
+        inventory = (
+            db.query(Inventory)
+            .filter(Inventory.product_id == line.product_id, Inventory.location_id == location_id)
+            .first()
+        )
 
         if inventory:
             # Convert both to Decimal for calculation, then back to float for storage
@@ -879,9 +863,9 @@ async def receive_purchase_order(
         # Cost per unit: For materials, cost is $/G (matches quantity unit of grams)
         # SINGLE SOURCE OF TRUTH: total_cost and unit are pre-calculated and stored
         # See docs/AI_DIRECTIVE_UOM_COSTS.md - UI must display these directly, NO client-side math
-        transaction_unit = 'G' if is_mat else product_unit
+        transaction_unit = "G" if is_mat else product_unit
         transaction_total_cost = transaction_quantity * cost_per_unit_for_inventory
-        
+
         txn = InventoryTransaction(
             product_id=line.product_id,
             location_id=location_id,
@@ -907,9 +891,12 @@ async def receive_purchase_order(
         if product:
             # Get current on-hand quantity BEFORE this receipt
             from sqlalchemy import func as sql_func
-            total_on_hand = db.query(sql_func.coalesce(
-                sql_func.sum(Inventory.on_hand_quantity), 0
-            )).filter(Inventory.product_id == product.id).scalar()
+
+            total_on_hand = (
+                db.query(sql_func.coalesce(sql_func.sum(Inventory.on_hand_quantity), 0))
+                .filter(Inventory.product_id == product.id)
+                .scalar()
+            )
 
             old_qty = Decimal(str(total_on_hand)) - transaction_quantity  # Subtract what we just added
             old_cost = Decimal(str(product.average_cost or 0))
@@ -936,22 +923,24 @@ async def receive_purchase_order(
         # MaterialLot Creation (for traceability)
         # ============================================================================
         # Create MaterialLot for supply/component/material items to enable traceability
-        if product.item_type in ('supply', 'component', 'material') or product.material_type_id:
+        if product.item_type in ("supply", "component", "material") or product.material_type_id:
             from sqlalchemy import extract
+
             year = datetime.utcnow().year
 
             # Count existing lots for this product this year to generate sequence
-            existing_count = db.query(MaterialLot).filter(
-                MaterialLot.product_id == product.id,
-                extract('year', MaterialLot.received_date) == year
-            ).count()
+            existing_count = (
+                db.query(MaterialLot)
+                .filter(MaterialLot.product_id == product.id, extract("year", MaterialLot.received_date) == year)
+                .count()
+            )
 
             lot_number = f"{product.sku}-{year}-{existing_count + 1:04d}"
 
             # Get location code for storage
-            location = db.query(InventoryLocation).filter(
-                InventoryLocation.id == location_id
-            ).first() if location_id else None
+            location = (
+                db.query(InventoryLocation).filter(InventoryLocation.id == location_id).first() if location_id else None
+            )
 
             material_lot = MaterialLot(
                 lot_number=lot_number,
@@ -984,64 +973,59 @@ async def receive_purchase_order(
         # ============================================================================
         if item.create_spools and item.spools:
             # Validate product is a material/supply type with material_type_id
-            if product.item_type not in ('supply', 'material') or not product.material_type_id:
+            if product.item_type not in ("supply", "material") or not product.material_type_id:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Spool creation only available for material products with material_type. {product.sku} is type '{product.item_type}'"
+                    detail=f"Spool creation only available for material products with material_type. {product.sku} is type '{product.item_type}'",
                 )
-            
+
             # Convert received quantity to grams for validation
             # quantity_for_inventory is already in product's unit from conversion above
             received_qty_g = quantity_for_inventory
-            product_unit_upper = (product.unit or 'EA').upper().strip()
-            
+            product_unit_upper = (product.unit or "EA").upper().strip()
+
             # Convert to grams if not already in grams
-            if product_unit_upper == 'KG':
+            if product_unit_upper == "KG":
                 received_qty_g = quantity_for_inventory * Decimal("1000")
-            elif product_unit_upper == 'G':
+            elif product_unit_upper == "G":
                 # Already in grams
                 pass
-            elif product_unit_upper == 'LB':
+            elif product_unit_upper == "LB":
                 received_qty_g = quantity_for_inventory * Decimal("453.59237")
-            elif product_unit_upper == 'OZ':
+            elif product_unit_upper == "OZ":
                 received_qty_g = quantity_for_inventory * Decimal("28.34952")
             else:
                 logger.warning(f"Material product {product.sku} has unexpected unit: {product.unit}, assuming grams")
-            
+
             # Validate sum of spool weights equals received quantity (in grams)
             spool_weight_sum_g = sum(Decimal(str(s.weight_g)) for s in item.spools)
             tolerance = Decimal("0.1")  # 0.1g tolerance
-            
+
             if abs(spool_weight_sum_g - received_qty_g) > tolerance:
                 raise HTTPException(
                     status_code=400,
                     detail=(
                         f"Spool weights sum ({spool_weight_sum_g}g) must equal received quantity ({received_qty_g}g) "
                         f"for product {product.sku}. Difference: {abs(spool_weight_sum_g - received_qty_g):.2f}g"
-                    )
+                    ),
                 )
-            
+
             # Create spools
             for idx, spool_data in enumerate(item.spools, start=1):
                 # Generate spool number if not provided
                 spool_number = spool_data.spool_number or f"{po.po_number}-L{line.line_number}-{idx:03d}"
-                
+
                 # Check uniqueness
-                existing = db.query(MaterialSpool).filter(
-                    MaterialSpool.spool_number == spool_number
-                ).first()
+                existing = db.query(MaterialSpool).filter(MaterialSpool.spool_number == spool_number).first()
                 if existing:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Spool number '{spool_number}' already exists"
-                    )
-                
+                    raise HTTPException(status_code=400, detail=f"Spool number '{spool_number}' already exists")
+
                 # Create spool (store in grams despite column name)
                 spool = MaterialSpool(
                     spool_number=spool_number,
                     product_id=line.product_id,
                     initial_weight_kg=spool_data.weight_g,  # Actually grams despite column name
-                    current_weight_kg=spool_data.weight_g,   # Actually grams despite column name
+                    current_weight_kg=spool_data.weight_g,  # Actually grams despite column name
                     status="active",
                     location_id=location_id,
                     supplier_lot_number=spool_data.supplier_lot_number or item.lot_number,
@@ -1054,20 +1038,17 @@ async def receive_purchase_order(
                 )
                 db.add(spool)
                 db.flush()  # Get spool ID
-                
+
                 # Track created spools for response
                 spools_created.append(spool_number)
-                
+
                 logger.info(
                     f"Created spool {spool_number} for {product.sku}: {spool_data.weight_g}g "
                     f"(lot: {spool.supplier_lot_number or 'N/A'})"
                 )
 
     # Check if fully received
-    all_received = all(
-        line.quantity_received >= line.quantity_ordered
-        for line in po.lines
-    )
+    all_received = all(line.quantity_received >= line.quantity_ordered for line in po.lines)
 
     if all_received:
         po.status = "received"
@@ -1129,6 +1110,7 @@ async def receive_purchase_order(
 # File Upload (Google Drive)
 # ============================================================================
 
+
 @router.post("/{po_id}/upload")
 async def upload_po_document(
     po_id: int,
@@ -1159,8 +1141,7 @@ async def upload_po_document(
 
     if content_type not in allowed_types:
         raise HTTPException(
-            status_code=400,
-            detail=f"File type '{content_type}' not allowed. Allowed: PDF, JPEG, PNG, XLSX, CSV"
+            status_code=400, detail=f"File type '{content_type}' not allowed. Allowed: PDF, JPEG, PNG, XLSX, CSV"
         )
 
     # Read file content
@@ -1174,10 +1155,7 @@ async def upload_po_document(
     drive_service = get_drive_service()
     if drive_service.enabled:
         success, result = drive_service.upload_bytes(
-            file_bytes=file_content,
-            filename=safe_filename,
-            mime_type=content_type,
-            subfolder="Purchase Orders"
+            file_bytes=file_content, filename=safe_filename, mime_type=content_type, subfolder="Purchase Orders"
         )
 
         if success:
@@ -1223,6 +1201,7 @@ async def upload_po_document(
 # Delete
 # ============================================================================
 
+
 @router.delete("/{po_id}")
 async def delete_purchase_order(
     po_id: int,
@@ -1239,10 +1218,7 @@ async def delete_purchase_order(
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
     if po.status != "draft":
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot delete PO in '{po.status}' status. Cancel it instead."
-        )
+        raise HTTPException(status_code=400, detail=f"Cannot delete PO in '{po.status}' status. Cancel it instead.")
 
     db.delete(po)
     db.commit()
@@ -1254,6 +1230,7 @@ async def delete_purchase_order(
 # ============================================================================
 # Event Timeline
 # ============================================================================
+
 
 @router.get("/{po_id}/events", response_model=PurchasingEventListResponse)
 async def list_po_events(
@@ -1275,9 +1252,11 @@ async def list_po_events(
         raise HTTPException(status_code=404, detail="Purchase order not found")
 
     # Query events with pagination
-    query = db.query(PurchasingEvent).filter(
-        PurchasingEvent.purchase_order_id == po_id
-    ).order_by(desc(PurchasingEvent.created_at))
+    query = (
+        db.query(PurchasingEvent)
+        .filter(PurchasingEvent.purchase_order_id == po_id)
+        .order_by(desc(PurchasingEvent.created_at))
+    )
 
     total = query.count()
     events = query.offset(offset).limit(limit).all()
@@ -1289,21 +1268,23 @@ async def list_po_events(
         if event.user_id and event.user:
             user_name = event.user.full_name
 
-        items.append(PurchasingEventResponse(
-            id=event.id,
-            purchase_order_id=event.purchase_order_id,
-            user_id=event.user_id,
-            user_name=user_name,
-            event_type=event.event_type,
-            title=event.title,
-            description=event.description,
-            old_value=event.old_value,
-            new_value=event.new_value,
-            event_date=event.event_date,
-            metadata_key=event.metadata_key,
-            metadata_value=event.metadata_value,
-            created_at=event.created_at,
-        ))
+        items.append(
+            PurchasingEventResponse(
+                id=event.id,
+                purchase_order_id=event.purchase_order_id,
+                user_id=event.user_id,
+                user_name=user_name,
+                event_type=event.event_type,
+                title=event.title,
+                description=event.description,
+                old_value=event.old_value,
+                new_value=event.new_value,
+                event_date=event.event_date,
+                metadata_key=event.metadata_key,
+                metadata_value=event.metadata_value,
+                created_at=event.created_at,
+            )
+        )
 
     return PurchasingEventListResponse(items=items, total=total)
 
@@ -1362,4 +1343,3 @@ async def add_po_event(
         metadata_value=event.metadata_value,
         created_at=event.created_at,
     )
-

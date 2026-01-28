@@ -5,13 +5,13 @@ Revises: 026_maintenance_tracking
 Create Date: 2025-12-24
 
 """
+
 from alembic import op
-import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = '027_backfill_po_received_date'
-down_revision = '026_maintenance_tracking'
+revision = "027_backfill_po_received_date"
+down_revision = "026_maintenance_tracking"
 branch_labels = None
 depends_on = None
 

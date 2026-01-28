@@ -3,6 +3,7 @@ Unit of Measure (UOM) Service
 
 Provides conversion functions between compatible units of measure.
 """
+
 from decimal import Decimal
 from typing import Optional, Tuple
 from sqlalchemy import func
@@ -22,24 +23,24 @@ MAX_DECIMAL_PLACES = 10
 
 INLINE_UOM_CONVERSIONS = {
     # Mass conversions (to KG)
-    'G': {'base': 'KG', 'factor': Decimal('0.001')},
-    'KG': {'base': 'KG', 'factor': Decimal('1')},
-    'LB': {'base': 'KG', 'factor': Decimal('0.453592')},
-    'OZ': {'base': 'KG', 'factor': Decimal('0.0283495')},
+    "G": {"base": "KG", "factor": Decimal("0.001")},
+    "KG": {"base": "KG", "factor": Decimal("1")},
+    "LB": {"base": "KG", "factor": Decimal("0.453592")},
+    "OZ": {"base": "KG", "factor": Decimal("0.0283495")},
     # Length conversions (to M)
-    'MM': {'base': 'M', 'factor': Decimal('0.001')},
-    'CM': {'base': 'M', 'factor': Decimal('0.01')},
-    'M': {'base': 'M', 'factor': Decimal('1')},
-    'IN': {'base': 'M', 'factor': Decimal('0.0254')},
-    'FT': {'base': 'M', 'factor': Decimal('0.3048')},
+    "MM": {"base": "M", "factor": Decimal("0.001")},
+    "CM": {"base": "M", "factor": Decimal("0.01")},
+    "M": {"base": "M", "factor": Decimal("1")},
+    "IN": {"base": "M", "factor": Decimal("0.0254")},
+    "FT": {"base": "M", "factor": Decimal("0.3048")},
     # Volume conversions (to L)
-    'ML': {'base': 'L', 'factor': Decimal('0.001')},
-    'L': {'base': 'L', 'factor': Decimal('1')},
+    "ML": {"base": "L", "factor": Decimal("0.001")},
+    "L": {"base": "L", "factor": Decimal("1")},
     # Count units (no conversion)
-    'EA': {'base': 'EA', 'factor': Decimal('1')},
-    'PK': {'base': 'PK', 'factor': Decimal('1')},
-    'BOX': {'base': 'BOX', 'factor': Decimal('1')},
-    'ROLL': {'base': 'ROLL', 'factor': Decimal('1')},
+    "EA": {"base": "EA", "factor": Decimal("1")},
+    "PK": {"base": "PK", "factor": Decimal("1")},
+    "BOX": {"base": "BOX", "factor": Decimal("1")},
+    "ROLL": {"base": "ROLL", "factor": Decimal("1")},
 }
 
 # ============================================================================
@@ -67,6 +68,7 @@ INLINE_UOM_CONVERSIONS = {
 # - admin/accounting.py: COGS calculations
 # ============================================================================
 
+
 def get_cost_reference_unit(inventory_unit: str) -> str:
     """
     Get the reference unit that costs are stored in for a given inventory unit.
@@ -88,10 +90,10 @@ def get_cost_reference_unit(inventory_unit: str) -> str:
     Returns:
         The reference unit that costs are expressed in (e.g., 'KG' for weight units)
     """
-    unit = (inventory_unit or 'EA').upper().strip()
+    unit = (inventory_unit or "EA").upper().strip()
     uom_info = INLINE_UOM_CONVERSIONS.get(unit)
     if uom_info:
-        return uom_info['base']
+        return uom_info["base"]
     return unit  # Unknown unit, return as-is
 
 
@@ -123,8 +125,8 @@ def convert_cost_for_unit(
     if cost_per_source_unit is None:
         return None
 
-    source_unit = (source_unit or 'EA').upper().strip()
-    target_unit = (target_unit or 'EA').upper().strip()
+    source_unit = (source_unit or "EA").upper().strip()
+    target_unit = (target_unit or "EA").upper().strip()
 
     if source_unit == target_unit:
         return cost_per_source_unit
@@ -137,14 +139,14 @@ def convert_cost_for_unit(
         # Unknown unit - return original cost
         return cost_per_source_unit
 
-    if source_info['base'] != target_info['base']:
+    if source_info["base"] != target_info["base"]:
         # Incompatible units - return original cost
         return cost_per_source_unit
 
     # For quantity: target_qty = source_qty * (source_factor / target_factor)
     # For cost: target_cost = source_cost * (target_factor / source_factor)
     # (inverse relationship to preserve total cost)
-    cost_conversion_factor = target_info['factor'] / source_info['factor']
+    cost_conversion_factor = target_info["factor"] / source_info["factor"]
 
     return cost_per_source_unit * cost_conversion_factor
 
@@ -153,36 +155,37 @@ def _convert_uom_inline(quantity: Decimal, from_unit: str, to_unit: str) -> Tupl
     """
     Convert quantity using inline conversion factors (no database lookup).
     Used as fallback when database UOM table is empty.
-    
+
     Returns:
         Tuple of (converted_quantity, was_converted)
         - was_converted=True: Conversion succeeded
         - was_converted=False: Units unknown or incompatible
     """
-    from_unit = (from_unit or 'EA').upper().strip()
-    to_unit = (to_unit or 'EA').upper().strip()
-    
+    from_unit = (from_unit or "EA").upper().strip()
+    to_unit = (to_unit or "EA").upper().strip()
+
     if from_unit == to_unit:
         return quantity, True
-    
+
     from_info = INLINE_UOM_CONVERSIONS.get(from_unit)
     to_info = INLINE_UOM_CONVERSIONS.get(to_unit)
-    
+
     if not from_info or not to_info:
         return quantity, False  # Unknown unit
-    
-    if from_info['base'] != to_info['base']:
+
+    if from_info["base"] != to_info["base"]:
         return quantity, False  # Incompatible bases
-    
+
     # Convert: from_unit -> base -> to_unit
-    quantity_in_base = quantity * from_info['factor']
-    quantity_in_target = quantity_in_base / to_info['factor']
-    
+    quantity_in_base = quantity * from_info["factor"]
+    quantity_in_target = quantity_in_base / to_info["factor"]
+
     return quantity_in_target, True
 
 
 class UOMConversionError(Exception):
     """Raised when a UOM conversion fails."""
+
     pass
 
 
@@ -197,10 +200,11 @@ def get_uom_by_code(db: Session, code: str) -> Optional[UnitOfMeasure]:
     Returns:
         UnitOfMeasure or None if not found
     """
-    return db.query(UnitOfMeasure).filter(
-        func.upper(UnitOfMeasure.code) == code.upper(),
-        UnitOfMeasure.active.is_(True)
-    ).first()
+    return (
+        db.query(UnitOfMeasure)
+        .filter(func.upper(UnitOfMeasure.code) == code.upper(), UnitOfMeasure.active.is_(True))
+        .first()
+    )
 
 
 def get_conversion_factor(db: Session, from_unit: str, to_unit: str) -> Decimal:
@@ -288,7 +292,7 @@ def convert_quantity_with_factor(
 ) -> Tuple[Decimal, Decimal]:
     """
     Convert a quantity and return both the converted value and conversion factor.
-    
+
     This is more efficient than calling convert_quantity and get_conversion_factor
     separately, as it only performs one database lookup.
 
@@ -400,10 +404,7 @@ def get_units_by_class(db: Session, uom_class: str) -> list:
     Returns:
         List of UnitOfMeasure objects
     """
-    return db.query(UnitOfMeasure).filter(
-        UnitOfMeasure.uom_class == uom_class,
-        UnitOfMeasure.active.is_(True)
-    ).all()
+    return db.query(UnitOfMeasure).filter(UnitOfMeasure.uom_class == uom_class, UnitOfMeasure.active.is_(True)).all()
 
 
 def format_quantity_with_unit(quantity: Decimal, unit: str) -> str:
@@ -416,7 +417,7 @@ def format_quantity_with_unit(quantity: Decimal, unit: str) -> str:
 
     Returns:
         Formatted string (e.g., '2.5 kg')
-        
+
     Note:
         Uses fixed-point notation to avoid scientific notation for very small values.
         Precision is limited to avoid excessively long strings.
@@ -424,12 +425,12 @@ def format_quantity_with_unit(quantity: Decimal, unit: str) -> str:
     """
     # Convert to string with fixed-point notation (avoids scientific notation)
     # Limit precision to prevent excessively long strings
-    qty_str = format(quantity, f'.{MAX_DECIMAL_PLACES}f')
-    
+    qty_str = format(quantity, f".{MAX_DECIMAL_PLACES}f")
+
     # Strip trailing zeros after decimal point
-    if '.' in qty_str:
-        qty_str = qty_str.rstrip('0').rstrip('.')
-    
+    if "." in qty_str:
+        qty_str = qty_str.rstrip("0").rstrip(".")
+
     return f"{qty_str} {unit.lower()}"
 
 
@@ -465,39 +466,40 @@ def format_conversion_note(
 
     return note
 
+
 def get_product_consumption_uom(db: Session, product_id: int, default_unit: str = "KG") -> str:
     """
     Get the consumption UOM for a product.
-    
+
     For materials (is_raw_material=True), this is the unit used when consuming
     from inventory. For other products, returns the product's unit or default.
-    
+
     Args:
         db: Database session
         product_id: Product ID
         default_unit: Default unit if product not found or unit is missing
-    
+
     Returns:
         Unit code (e.g., 'KG', 'G', 'EA')
-    
+
     Note:
         This function is safe to call even if product doesn't exist.
         It will return the default_unit in that case.
     """
     from app.models.product import Product
-    
+
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         return default_unit
-    
+
     # Normalize unit (handle None, empty string, or default "EA")
     unit = (product.unit or "").strip().upper()
-    
+
     # For raw materials: if unit is missing/empty/default "EA", use KG
     if product.is_raw_material:  # type: ignore[truthy-bool]
         if not unit or unit == "EA":  # EA is the default, treat as "no unit set"
             return "KG"
         return unit
-    
+
     # For other products, use their unit or default
     return unit if unit else default_unit

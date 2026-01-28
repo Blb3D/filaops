@@ -10,6 +10,7 @@ Tests cover:
 6. Check conflicts endpoint
 7. Start operation blocked if resource busy
 """
+
 import pytest
 from datetime import datetime, timedelta
 from tests.factories import (
@@ -32,8 +33,7 @@ class TestResourceSchedule:
         db.commit()
 
         response = client.get(
-            f"/api/v1/resources/{resource.id}/schedule",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/resources/{resource.id}/schedule", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -58,13 +58,12 @@ class TestResourceSchedule:
             operation_code="PRINT",
             scheduled_start=now,
             scheduled_end=now + timedelta(hours=2),
-            status="queued"
+            status="queued",
         )
         db.commit()
 
         response = client.get(
-            f"/api/v1/resources/{resource.id}/schedule",
-            headers={"Authorization": f"Bearer {admin_token}"}
+            f"/api/v1/resources/{resource.id}/schedule", headers={"Authorization": f"Bearer {admin_token}"}
         )
 
         assert response.status_code == 200
@@ -91,7 +90,7 @@ class TestResourceSchedule:
             operation_code="PRINT",
             scheduled_start=now - timedelta(days=2),
             scheduled_end=now - timedelta(days=1),
-            status="queued"
+            status="queued",
         )
         # Op in the future
         future_op = create_test_po_operation(
@@ -103,7 +102,7 @@ class TestResourceSchedule:
             operation_code="CLEAN",
             scheduled_start=now + timedelta(days=1),
             scheduled_end=now + timedelta(days=2),
-            status="queued"
+            status="queued",
         )
         db.commit()
 
@@ -111,7 +110,7 @@ class TestResourceSchedule:
         response = client.get(
             f"/api/v1/resources/{resource.id}/schedule",
             params={"start_date": now.isoformat()},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -133,11 +132,8 @@ class TestConflictCheck:
         now = datetime.utcnow()
         response = client.get(
             f"/api/v1/resources/{resource.id}/conflicts",
-            params={
-                "start": now.isoformat(),
-                "end": (now + timedelta(hours=2)).isoformat()
-            },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            params={"start": now.isoformat(), "end": (now + timedelta(hours=2)).isoformat()},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -164,18 +160,15 @@ class TestConflictCheck:
             operation_code="PRINT",
             scheduled_start=now,
             scheduled_end=now + timedelta(hours=2),
-            status="queued"
+            status="queued",
         )
         db.commit()
 
         # Check 11:00 - 13:00 (overlaps)
         response = client.get(
             f"/api/v1/resources/{resource.id}/conflicts",
-            params={
-                "start": (now + timedelta(hours=1)).isoformat(),
-                "end": (now + timedelta(hours=3)).isoformat()
-            },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            params={"start": (now + timedelta(hours=1)).isoformat(), "end": (now + timedelta(hours=3)).isoformat()},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -203,18 +196,15 @@ class TestConflictCheck:
             operation_code="PRINT",
             scheduled_start=now,
             scheduled_end=now + timedelta(hours=2),
-            status="queued"
+            status="queued",
         )
         db.commit()
 
         # Check 12:00 - 14:00 (adjacent, should not conflict)
         response = client.get(
             f"/api/v1/resources/{resource.id}/conflicts",
-            params={
-                "start": (now + timedelta(hours=2)).isoformat(),
-                "end": (now + timedelta(hours=4)).isoformat()
-            },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            params={"start": (now + timedelta(hours=2)).isoformat(), "end": (now + timedelta(hours=4)).isoformat()},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -240,18 +230,15 @@ class TestConflictCheck:
             operation_code="PRINT",
             scheduled_start=now,
             scheduled_end=now + timedelta(hours=2),
-            status="complete"  # Already done
+            status="complete",  # Already done
         )
         db.commit()
 
         # Same time slot should be available
         response = client.get(
             f"/api/v1/resources/{resource.id}/conflicts",
-            params={
-                "start": now.isoformat(),
-                "end": (now + timedelta(hours=2)).isoformat()
-            },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            params={"start": now.isoformat(), "end": (now + timedelta(hours=2)).isoformat()},
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -270,12 +257,7 @@ class TestScheduleOperation:
         product = create_test_product(db, sku="PROD-SCH-OP-01")
         po = create_test_production_order(db, product=product, quantity=10, status="released")
         op = create_test_po_operation(
-            db,
-            production_order=po,
-            work_center=wc,
-            sequence=10,
-            operation_code="PRINT",
-            status="pending"
+            db, production_order=po, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
@@ -285,9 +267,9 @@ class TestScheduleOperation:
             json={
                 "resource_id": resource.id,
                 "scheduled_start": now.isoformat(),
-                "scheduled_end": (now + timedelta(hours=2)).isoformat()
+                "scheduled_end": (now + timedelta(hours=2)).isoformat(),
             },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200
@@ -318,17 +300,12 @@ class TestScheduleOperation:
             operation_code="PRINT",
             scheduled_start=now,
             scheduled_end=now + timedelta(hours=2),
-            status="queued"
+            status="queued",
         )
 
         # Try to schedule another in same slot
         new_op = create_test_po_operation(
-            db,
-            production_order=po,
-            work_center=wc,
-            sequence=20,
-            operation_code="CLEAN",
-            status="pending"
+            db, production_order=po, work_center=wc, sequence=20, operation_code="CLEAN", status="pending"
         )
         db.commit()
 
@@ -337,9 +314,9 @@ class TestScheduleOperation:
             json={
                 "resource_id": resource.id,
                 "scheduled_start": (now + timedelta(hours=1)).isoformat(),
-                "scheduled_end": (now + timedelta(hours=3)).isoformat()
+                "scheduled_end": (now + timedelta(hours=3)).isoformat(),
             },
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 409
@@ -364,18 +341,13 @@ class TestStartOperationResourceCheck:
             resource=resource,
             sequence=10,
             operation_code="PRINT",
-            status="running"
+            status="running",
         )
 
         # Second PO with pending operation we want to start
         po2 = create_test_production_order(db, product=product, quantity=5, status="released")
         new_op = create_test_po_operation(
-            db,
-            production_order=po2,
-            work_center=wc,
-            sequence=10,
-            operation_code="PRINT",
-            status="pending"
+            db, production_order=po2, work_center=wc, sequence=10, operation_code="PRINT", status="pending"
         )
         db.commit()
 
@@ -383,7 +355,7 @@ class TestStartOperationResourceCheck:
         response = client.post(
             f"/api/v1/production-orders/{po2.id}/operations/{new_op.id}/start",
             json={"resource_id": resource.id},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 409
@@ -405,14 +377,14 @@ class TestStartOperationResourceCheck:
             resource=resource,
             sequence=10,
             operation_code="PRINT",
-            status="pending"
+            status="pending",
         )
         db.commit()
 
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op.id}/start",
             json={"resource_id": resource.id},
-            headers={"Authorization": f"Bearer {admin_token}"}
+            headers={"Authorization": f"Bearer {admin_token}"},
         )
 
         assert response.status_code == 200

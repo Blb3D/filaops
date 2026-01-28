@@ -117,10 +117,7 @@ class BambuLabAdapter(PrinterDiscoveryAdapter):
         logger.info("BambuLab cloud discovery not yet implemented")
         return []
 
-    async def test_connection(
-        self,
-        config: PrinterConnectionConfig
-    ) -> tuple[bool, Optional[str]]:
+    async def test_connection(self, config: PrinterConnectionConfig) -> tuple[bool, Optional[str]]:
         """Test connection to BambuLab printer via MQTT or HTTP"""
         if not config.ip_address:
             return False, "IP address is required"
@@ -161,10 +158,7 @@ class BambuLabAdapter(PrinterDiscoveryAdapter):
         except Exception:
             return False
 
-    async def get_status(
-        self,
-        config: PrinterConnectionConfig
-    ) -> Optional[PrinterStatus]:
+    async def get_status(self, config: PrinterConnectionConfig) -> Optional[PrinterStatus]:
         """Get printer status via MQTT or HTTP"""
         # TODO: Implement MQTT status monitoring
         # For now, just check if reachable
@@ -249,10 +243,7 @@ class BambuLabAdapter(PrinterDiscoveryAdapter):
 
             # Get capabilities from known models
             model_key = f"bambulab:{model}"
-            capabilities = KNOWN_PRINTER_MODELS.get(model_key, {}).get(
-                "capabilities",
-                PrinterCapabilities()
-            )
+            capabilities = KNOWN_PRINTER_MODELS.get(model_key, {}).get("capabilities", PrinterCapabilities())
 
             return DiscoveredPrinter(
                 brand=PrinterBrand.BAMBULAB,

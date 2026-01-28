@@ -3,14 +3,10 @@ Tests for GET /sales-orders/{id}/fulfillment-status (API-301)
 
 Tests the fulfillment status endpoint for sales orders.
 """
+
 import pytest
 from decimal import Decimal
-from datetime import date, timedelta
-from tests.factories import (
-    create_test_user, create_test_product, create_test_sales_order,
-    create_test_inventory, create_test_vendor, create_test_purchase_order,
-    get_or_create_default_location, reset_sequences
-)
+from tests.factories import create_test_user, create_test_product, create_test_sales_order, reset_sequences
 
 
 class TestFulfillmentStatusEndpoint:
@@ -27,9 +23,7 @@ class TestFulfillmentStatusEndpoint:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # Get the order line and set allocated quantity
         order_line = order.lines[0]
@@ -37,10 +31,7 @@ class TestFulfillmentStatusEndpoint:
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -63,7 +54,7 @@ class TestFulfillmentStatusEndpoint:
             lines=[
                 {"product": product1, "quantity": 10, "unit_price": Decimal("25.00")},
                 {"product": product2, "quantity": 10, "unit_price": Decimal("25.00")},
-            ]
+            ],
         )
         # Fully allocate line1, no allocation for line2
         order.lines[0].allocated_quantity = Decimal("10")
@@ -71,10 +62,7 @@ class TestFulfillmentStatusEndpoint:
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -92,18 +80,13 @@ class TestFulfillmentStatusEndpoint:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # No allocation - leave allocated_quantity as default (0)
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -118,19 +101,14 @@ class TestFulfillmentStatusEndpoint:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # Partial allocation
         order.lines[0].allocated_quantity = Decimal("7")
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         data = response.json()
@@ -144,10 +122,7 @@ class TestFulfillmentStatusEndpoint:
     def test_404_for_nonexistent_order(self, client, admin_headers):
         """Should return 404 for nonexistent order."""
         # Act
-        response = client.get(
-            "/api/v1/sales-orders/99999/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get("/api/v1/sales-orders/99999/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 404
@@ -169,16 +144,13 @@ class TestFulfillmentStatusEndpoint:
             db_session,
             user=user,
             lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}],
-            status="shipped"
+            status="shipped",
         )
         order.lines[0].shipped_quantity = Decimal("10")
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -194,15 +166,12 @@ class TestFulfillmentStatusEndpoint:
             db_session,
             user=user,
             lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}],
-            status="cancelled"
+            status="cancelled",
         )
         db_session.commit()
 
         # Act
-        response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -224,9 +193,7 @@ class TestBulkFulfillmentStatus:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         db_session.commit()
 
@@ -249,19 +216,14 @@ class TestBulkFulfillmentStatus:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # Fully allocate the line
         order.lines[0].allocated_quantity = Decimal("10")
         db_session.commit()
 
         # Act
-        response = client.get(
-            "/api/v1/sales-orders/?include_fulfillment=true",
-            headers=admin_headers
-        )
+        response = client.get("/api/v1/sales-orders/?include_fulfillment=true", headers=admin_headers)
 
         # Assert
         assert response.status_code == 200
@@ -284,24 +246,16 @@ class TestBulkFulfillmentStatus:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # Partial allocation
         order.lines[0].allocated_quantity = Decimal("7")
         db_session.commit()
 
         # Act - get bulk list
-        list_response = client.get(
-            "/api/v1/sales-orders/?include_fulfillment=true",
-            headers=admin_headers
-        )
+        list_response = client.get("/api/v1/sales-orders/?include_fulfillment=true", headers=admin_headers)
         # Act - get single order detail
-        detail_response = client.get(
-            f"/api/v1/sales-orders/{order.id}/fulfillment-status",
-            headers=admin_headers
-        )
+        detail_response = client.get(f"/api/v1/sales-orders/{order.id}/fulfillment-status", headers=admin_headers)
 
         # Assert
         assert list_response.status_code == 200
@@ -343,18 +297,14 @@ class TestEnhancedSOListFiltering:
 
         # Create ready_to_ship order (fully allocated)
         ready_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         ready_order.lines[0].allocated_quantity = Decimal("10")
 
         # Create blocked order (no allocation)
         product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
         blocked_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # No allocation - stays blocked
 
@@ -362,8 +312,7 @@ class TestEnhancedSOListFiltering:
 
         # Act
         response = client.get(
-            "/api/v1/sales-orders/?include_fulfillment=true&fulfillment_state=ready_to_ship",
-            headers=admin_headers
+            "/api/v1/sales-orders/?include_fulfillment=true&fulfillment_state=ready_to_ship", headers=admin_headers
         )
 
         # Assert
@@ -385,18 +334,14 @@ class TestEnhancedSOListFiltering:
 
         # Create ready_to_ship order
         ready_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         ready_order.lines[0].allocated_quantity = Decimal("10")
 
         # Create blocked order
         product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
         blocked_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # No allocation - stays blocked
 
@@ -406,7 +351,7 @@ class TestEnhancedSOListFiltering:
             db_session,
             user=user,
             lines=[{"product": product3, "quantity": 10, "unit_price": Decimal("25.00")}],
-            status="shipped"
+            status="shipped",
         )
         shipped_order.lines[0].shipped_quantity = Decimal("10")
 
@@ -415,7 +360,7 @@ class TestEnhancedSOListFiltering:
         # Act - filter by ready_to_ship and blocked
         response = client.get(
             "/api/v1/sales-orders/?include_fulfillment=true&fulfillment_state=ready_to_ship,blocked",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Assert
@@ -436,18 +381,14 @@ class TestEnhancedSOListFiltering:
         # Create blocked order first
         product1 = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament 1")
         blocked_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product1, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product1, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         # No allocation - blocked
 
         # Create ready_to_ship order second
         product2 = create_test_product(db_session, sku="FIL-TEST-002", name="Test Filament 2")
         ready_order = create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product2, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         ready_order.lines[0].allocated_quantity = Decimal("10")
 
@@ -457,7 +398,7 @@ class TestEnhancedSOListFiltering:
             db_session,
             user=user,
             lines=[{"product": product3, "quantity": 10, "unit_price": Decimal("25.00")}],
-            status="shipped"
+            status="shipped",
         )
         shipped_order.lines[0].shipped_quantity = Decimal("10")
 
@@ -466,7 +407,7 @@ class TestEnhancedSOListFiltering:
         # Act - sort by fulfillment_priority ascending (most actionable first)
         response = client.get(
             "/api/v1/sales-orders/?include_fulfillment=true&sort_by=fulfillment_priority&sort_order=asc",
-            headers=admin_headers
+            headers=admin_headers,
         )
 
         # Assert
@@ -494,17 +435,12 @@ class TestEnhancedSOListFiltering:
         user = create_test_user(db_session, account_type="admin")
         product = create_test_product(db_session, sku="FIL-TEST-001", name="Test Filament")
         create_test_sales_order(
-            db_session,
-            user=user,
-            lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
+            db_session, user=user, lines=[{"product": product, "quantity": 10, "unit_price": Decimal("25.00")}]
         )
         db_session.commit()
 
         # Act
-        response = client.get(
-            "/api/v1/sales-orders/?fulfillment_state=invalid_state",
-            headers=admin_headers
-        )
+        response = client.get("/api/v1/sales-orders/?fulfillment_state=invalid_state", headers=admin_headers)
 
         # Assert
         assert response.status_code == 400

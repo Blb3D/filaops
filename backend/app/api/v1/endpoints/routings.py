@@ -3,6 +3,7 @@ Routings API Endpoints
 
 CRUD operations for routings and routing operations.
 """
+
 # pyright: reportArgumentType=false
 # pyright: reportAssignmentType=false
 # SQLAlchemy Column types resolve to actual values at runtime
@@ -45,6 +46,7 @@ logger = get_logger(__name__)
 # Routing CRUD
 # ============================================================================
 
+
 @router.get("/", response_model=List[RoutingListResponse])
 async def list_routings(
     product_id: Optional[int] = None,
@@ -63,10 +65,7 @@ async def list_routings(
     - **active_only**: Only return active routings
     - **search**: Search by code or product name
     """
-    query = db.query(Routing).options(
-        joinedload(Routing.product),
-        joinedload(Routing.operations)
-    )
+    query = db.query(Routing).options(joinedload(Routing.product), joinedload(Routing.operations))
 
     if templates_only:
         query = query.filter(Routing.is_template.is_(True))  # noqa: E712
@@ -78,32 +77,34 @@ async def list_routings(
 
     if search:
         query = query.outerjoin(Product).filter(
-            (Routing.code.ilike(f"%{search}%")) |
-            (Routing.name.ilike(f"%{search}%")) |
-            (Product.sku.ilike(f"%{search}%")) |
-            (Product.name.ilike(f"%{search}%"))
+            (Routing.code.ilike(f"%{search}%"))
+            | (Routing.name.ilike(f"%{search}%"))
+            | (Product.sku.ilike(f"%{search}%"))
+            | (Product.name.ilike(f"%{search}%"))
         )
 
     routings = query.order_by(desc(Routing.created_at)).offset(skip).limit(limit).all()
 
     result = []
     for r in routings:
-        result.append(RoutingListResponse(  # type: ignore[arg-type]
-            id=r.id,
-            product_id=r.product_id,
-            product_sku=r.product.sku if r.product else None,
-            product_name=r.product.name if r.product else None,
-            code=r.code,
-            name=r.name,
-            is_template=r.is_template,
-            version=r.version,
-            revision=r.revision,
-            is_active=r.is_active,
-            total_run_time_minutes=r.total_run_time_minutes,
-            total_cost=r.total_cost,
-            operation_count=len([op for op in r.operations if op.is_active]),
-            created_at=r.created_at,
-        ))
+        result.append(
+            RoutingListResponse(  # type: ignore[arg-type]
+                id=r.id,
+                product_id=r.product_id,
+                product_sku=r.product.sku if r.product else None,
+                product_name=r.product.name if r.product else None,
+                code=r.code,
+                name=r.name,
+                is_template=r.is_template,
+                version=r.version,
+                revision=r.revision,
+                is_active=r.is_active,
+                total_run_time_minutes=r.total_run_time_minutes,
+                total_cost=r.total_cost,
+                operation_count=len([op for op in r.operations if op.is_active]),
+                created_at=r.created_at,
+            )
+        )
 
     return result
 
@@ -158,10 +159,7 @@ async def create_routing(
             # Verify work center exists
             wc = db.query(WorkCenter).filter(WorkCenter.id == op_data.work_center_id).first()
             if not wc:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Work center {op_data.work_center_id} not found"
-                )
+                raise HTTPException(status_code=400, detail=f"Work center {op_data.work_center_id} not found")
 
             operation = RoutingOperation(
                 routing_id=routing.id,
@@ -204,6 +202,7 @@ async def create_routing(
 # Template Seeding (MUST be before /{routing_id} routes!)
 # ============================================================================
 
+
 @router.post("/seed-templates")
 async def seed_routing_templates(
     current_user: User = Depends(get_current_user),
@@ -229,8 +228,7 @@ async def seed_routing_templates(
     missing = [code for code in required if code not in work_centers]
     if missing:
         raise HTTPException(
-            status_code=400,
-            detail=f"Missing required work centers: {', '.join(missing)}. Please create them first."
+            status_code=400, detail=f"Missing required work centers: {', '.join(missing)}. Please create them first."
         )
 
     # Template definitions
@@ -273,7 +271,7 @@ async def seed_routing_templates(
                     "setup_time_minutes": Decimal("0"),
                     "run_time_minutes": Decimal("3"),
                 },
-            ]
+            ],
         },
         {
             "code": "TPL-ASSEMBLY",
@@ -321,16 +319,13 @@ async def seed_routing_templates(
                     "setup_time_minutes": Decimal("0"),
                     "run_time_minutes": Decimal("3"),
                 },
-            ]
-        }
+            ],
+        },
     ]
 
     for tpl in templates:
         # Check if already exists
-        existing = db.query(Routing).filter(
-            Routing.code == tpl["code"],
-            Routing.is_template.is_(True)
-        ).first()
+        existing = db.query(Routing).filter(Routing.code == tpl["code"], Routing.is_template.is_(True)).first()
 
         if existing:
             skipped.append(tpl["code"])
@@ -398,13 +393,16 @@ async def apply_template_to_product(
     - Creates or updates the routing for the product
     """
     # Validate template exists
-    template = db.query(Routing).options(
-        joinedload(Routing.operations).joinedload(RoutingOperation.work_center)
-    ).filter(
-        Routing.id == data.template_id,
-        Routing.is_template.is_(True),  # noqa: E712
-        Routing.is_active.is_(True)
-    ).first()
+    template = (
+        db.query(Routing)
+        .options(joinedload(Routing.operations).joinedload(RoutingOperation.work_center))
+        .filter(
+            Routing.id == data.template_id,
+            Routing.is_template.is_(True),  # noqa: E712
+            Routing.is_active.is_(True),
+        )
+        .first()
+    )
 
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -415,10 +413,7 @@ async def apply_template_to_product(
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Check for existing routing for this product
-    existing = db.query(Routing).filter(
-        Routing.product_id == data.product_id,
-        Routing.is_active.is_(True)
-    ).first()
+    existing = db.query(Routing).filter(Routing.product_id == data.product_id, Routing.is_active.is_(True)).first()
 
     # Build override lookup
     override_map = {o.operation_code: o for o in data.overrides}
@@ -502,12 +497,14 @@ async def apply_template_to_product(
     for op in new_operations:
         db.refresh(op)
         wc = op.work_center
-        total_time = Decimal(str(
-            float(op.setup_time_minutes or 0) +
-            float(op.run_time_minutes or 0) +
-            float(op.wait_time_minutes or 0) +
-            float(op.move_time_minutes or 0)
-        ))
+        total_time = Decimal(
+            str(
+                float(op.setup_time_minutes or 0)
+                + float(op.run_time_minutes or 0)
+                + float(op.wait_time_minutes or 0)
+                + float(op.move_time_minutes or 0)
+            )
+        )
         # Calculate cost (includes setup + run time)
         total_costed_minutes = float(op.setup_time_minutes or 0) + float(op.run_time_minutes or 0)
         costed_hours = total_costed_minutes / 60
@@ -516,34 +513,36 @@ async def apply_template_to_product(
             rate = Decimal(str(wc.total_rate_per_hour))
         calculated_cost = Decimal(str(costed_hours * float(rate or 0)))
 
-        ops_response.append(RoutingOperationResponse(
-            id=op.id,
-            routing_id=op.routing_id,
-            work_center_id=op.work_center_id,
-            work_center_code=wc.code if wc else None,
-            work_center_name=wc.name if wc else None,
-            sequence=op.sequence,
-            operation_code=op.operation_code,
-            operation_name=op.operation_name,
-            description=op.description,
-            setup_time_minutes=op.setup_time_minutes,
-            run_time_minutes=op.run_time_minutes,
-            wait_time_minutes=op.wait_time_minutes,
-            move_time_minutes=op.move_time_minutes,
-            runtime_source=op.runtime_source,
-            slicer_file_path=op.slicer_file_path,
-            units_per_cycle=op.units_per_cycle,
-            scrap_rate_percent=op.scrap_rate_percent,
-            labor_rate_override=op.labor_rate_override,
-            machine_rate_override=op.machine_rate_override,
-            predecessor_operation_id=op.predecessor_operation_id,
-            can_overlap=op.can_overlap,
-            is_active=op.is_active,
-            total_time_minutes=total_time,
-            calculated_cost=calculated_cost,
-            created_at=op.created_at,
-            updated_at=op.updated_at,
-        ))
+        ops_response.append(
+            RoutingOperationResponse(
+                id=op.id,
+                routing_id=op.routing_id,
+                work_center_id=op.work_center_id,
+                work_center_code=wc.code if wc else None,
+                work_center_name=wc.name if wc else None,
+                sequence=op.sequence,
+                operation_code=op.operation_code,
+                operation_name=op.operation_name,
+                description=op.description,
+                setup_time_minutes=op.setup_time_minutes,
+                run_time_minutes=op.run_time_minutes,
+                wait_time_minutes=op.wait_time_minutes,
+                move_time_minutes=op.move_time_minutes,
+                runtime_source=op.runtime_source,
+                slicer_file_path=op.slicer_file_path,
+                units_per_cycle=op.units_per_cycle,
+                scrap_rate_percent=op.scrap_rate_percent,
+                labor_rate_override=op.labor_rate_override,
+                machine_rate_override=op.machine_rate_override,
+                predecessor_operation_id=op.predecessor_operation_id,
+                can_overlap=op.can_overlap,
+                is_active=op.is_active,
+                total_time_minutes=total_time,
+                calculated_cost=calculated_cost,
+                created_at=op.created_at,
+                updated_at=op.updated_at,
+            )
+        )
 
     return ApplyTemplateResponse(  # type: ignore[arg-type]
         routing_id=routing.id,
@@ -561,16 +560,19 @@ async def apply_template_to_product(
 # Single Routing CRUD
 # ============================================================================
 
+
 @router.get("/{routing_id}", response_model=RoutingResponse)
 async def get_routing(
     routing_id: int,
     db: Session = Depends(get_db),
 ):
     """Get a routing by ID with all operations."""
-    routing = db.query(Routing).options(
-        joinedload(Routing.product),
-        joinedload(Routing.operations).joinedload(RoutingOperation.work_center)
-    ).filter(Routing.id == routing_id).first()
+    routing = (
+        db.query(Routing)
+        .options(joinedload(Routing.product), joinedload(Routing.operations).joinedload(RoutingOperation.work_center))
+        .filter(Routing.id == routing_id)
+        .first()
+    )
 
     if not routing:
         raise HTTPException(status_code=404, detail="Routing not found")
@@ -584,13 +586,13 @@ async def get_product_routing(
     db: Session = Depends(get_db),
 ):
     """Get the active routing for a product."""
-    routing = db.query(Routing).options(
-        joinedload(Routing.product),
-        joinedload(Routing.operations).joinedload(RoutingOperation.work_center)
-    ).filter(
-        Routing.product_id == product_id,
-        Routing.is_active.is_(True)
-    ).order_by(desc(Routing.version)).first()
+    routing = (
+        db.query(Routing)
+        .options(joinedload(Routing.product), joinedload(Routing.operations).joinedload(RoutingOperation.work_center))
+        .filter(Routing.product_id == product_id, Routing.is_active.is_(True))
+        .order_by(desc(Routing.version))
+        .first()
+    )
 
     if not routing:
         raise HTTPException(status_code=404, detail="No active routing found for product")
@@ -646,6 +648,7 @@ async def delete_routing(
 # Routing Operations CRUD
 # ============================================================================
 
+
 @router.get("/{routing_id}/operations", response_model=List[RoutingOperationResponse])
 async def list_routing_operations(
     routing_id: int,
@@ -657,9 +660,11 @@ async def list_routing_operations(
     if not routing:
         raise HTTPException(status_code=404, detail="Routing not found")
 
-    query = db.query(RoutingOperation).options(
-        joinedload(RoutingOperation.work_center)
-    ).filter(RoutingOperation.routing_id == routing_id)
+    query = (
+        db.query(RoutingOperation)
+        .options(joinedload(RoutingOperation.work_center))
+        .filter(RoutingOperation.routing_id == routing_id)
+    )
 
     if active_only:
         query = query.filter(RoutingOperation.is_active.is_(True))  # noqa: E712
@@ -729,10 +734,12 @@ async def update_routing_operation(
     db: Session = Depends(get_db),
 ):
     """Update a routing operation."""
-    operation = db.query(RoutingOperation).options(
-        joinedload(RoutingOperation.routing),
-        joinedload(RoutingOperation.work_center)
-    ).filter(RoutingOperation.id == operation_id).first()
+    operation = (
+        db.query(RoutingOperation)
+        .options(joinedload(RoutingOperation.routing), joinedload(RoutingOperation.work_center))
+        .filter(RoutingOperation.id == operation_id)
+        .first()
+    )
 
     if not operation:
         raise HTTPException(status_code=404, detail="Operation not found")
@@ -770,9 +777,12 @@ async def delete_routing_operation(
     db: Session = Depends(get_db),
 ):
     """Delete a routing operation (soft delete)."""
-    operation = db.query(RoutingOperation).options(
-        joinedload(RoutingOperation.routing)
-    ).filter(RoutingOperation.id == operation_id).first()
+    operation = (
+        db.query(RoutingOperation)
+        .options(joinedload(RoutingOperation.routing))
+        .filter(RoutingOperation.id == operation_id)
+        .first()
+    )
 
     if not operation:
         raise HTTPException(status_code=404, detail="Operation not found")
@@ -792,6 +802,7 @@ async def delete_routing_operation(
 # Routing Operation Materials CRUD (Manufacturing BOM)
 # ============================================================================
 
+
 @router.get("/operations/{operation_id}/materials", response_model=List[RoutingOperationMaterialResponse])
 async def list_operation_materials(
     operation_id: int,
@@ -802,16 +813,21 @@ async def list_operation_materials(
     if not operation:
         raise HTTPException(status_code=404, detail="Operation not found")
 
-    materials = db.query(RoutingOperationMaterial).options(
-        joinedload(RoutingOperationMaterial.component)
-    ).filter(
-        RoutingOperationMaterial.routing_operation_id == operation_id
-    ).all()
+    materials = (
+        db.query(RoutingOperationMaterial)
+        .options(joinedload(RoutingOperationMaterial.component))
+        .filter(RoutingOperationMaterial.routing_operation_id == operation_id)
+        .all()
+    )
 
     return [_build_material_response(m) for m in materials]
 
 
-@router.post("/operations/{operation_id}/materials", response_model=RoutingOperationMaterialResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/operations/{operation_id}/materials",
+    response_model=RoutingOperationMaterialResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 async def add_operation_material(
     operation_id: int,
     data: RoutingOperationMaterialCreate,
@@ -856,9 +872,7 @@ async def update_operation_material(
     db: Session = Depends(get_db),
 ):
     """Update a routing operation material."""
-    material = db.query(RoutingOperationMaterial).filter(
-        RoutingOperationMaterial.id == material_id
-    ).first()
+    material = db.query(RoutingOperationMaterial).filter(RoutingOperationMaterial.id == material_id).first()
 
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -892,9 +906,7 @@ async def delete_operation_material(
     db: Session = Depends(get_db),
 ):
     """Delete a routing operation material."""
-    material = db.query(RoutingOperationMaterial).filter(
-        RoutingOperationMaterial.id == material_id
-    ).first()
+    material = db.query(RoutingOperationMaterial).filter(RoutingOperationMaterial.id == material_id).first()
 
     if not material:
         raise HTTPException(status_code=404, detail="Material not found")
@@ -909,6 +921,7 @@ async def delete_operation_material(
 # Manufacturing BOM View (unified routing + materials)
 # ============================================================================
 
+
 @router.get("/manufacturing-bom/{product_id}", response_model=ManufacturingBOMResponse)
 async def get_manufacturing_bom(
     product_id: int,
@@ -916,7 +929,7 @@ async def get_manufacturing_bom(
 ):
     """
     Get the complete Manufacturing BOM for a product.
-    
+
     Returns the active routing with all operations and their materials,
     providing a unified view of the manufacturing process.
     """
@@ -926,13 +939,18 @@ async def get_manufacturing_bom(
         raise HTTPException(status_code=404, detail="Product not found")
 
     # Get active routing
-    routing = db.query(Routing).options(
-        joinedload(Routing.operations).joinedload(RoutingOperation.work_center),
-        joinedload(Routing.operations).joinedload(RoutingOperation.materials).joinedload(RoutingOperationMaterial.component)
-    ).filter(
-        Routing.product_id == product_id,
-        Routing.is_active.is_(True)
-    ).order_by(desc(Routing.version)).first()
+    routing = (
+        db.query(Routing)
+        .options(
+            joinedload(Routing.operations).joinedload(RoutingOperation.work_center),
+            joinedload(Routing.operations)
+            .joinedload(RoutingOperation.materials)
+            .joinedload(RoutingOperationMaterial.component),
+        )
+        .filter(Routing.product_id == product_id, Routing.is_active.is_(True))
+        .order_by(desc(Routing.version))
+        .first()
+    )
 
     if not routing:
         raise HTTPException(status_code=404, detail="No active routing found for product")
@@ -944,14 +962,15 @@ async def get_manufacturing_bom(
 # Helper Functions
 # ============================================================================
 
+
 def _recalculate_routing_totals(routing: Routing, db: Session):
     """Recalculate routing totals from operations."""
-    operations = db.query(RoutingOperation).options(
-        joinedload(RoutingOperation.work_center)
-    ).filter(
-        RoutingOperation.routing_id == routing.id,
-        RoutingOperation.is_active.is_(True)
-    ).all()
+    operations = (
+        db.query(RoutingOperation)
+        .options(joinedload(RoutingOperation.work_center))
+        .filter(RoutingOperation.routing_id == routing.id, RoutingOperation.is_active.is_(True))
+        .all()
+    )
 
     total_setup = Decimal("0")
     total_run = Decimal("0")
@@ -959,9 +978,11 @@ def _recalculate_routing_totals(routing: Routing, db: Session):
 
     for op in operations:
         total_setup += op.setup_time_minutes or Decimal("0")
-        total_run += (op.run_time_minutes or Decimal("0")) + \
-                     (op.wait_time_minutes or Decimal("0")) + \
-                     (op.move_time_minutes or Decimal("0"))
+        total_run += (
+            (op.run_time_minutes or Decimal("0"))
+            + (op.wait_time_minutes or Decimal("0"))
+            + (op.move_time_minutes or Decimal("0"))
+        )
 
         # Calculate operation cost (includes setup + run time)
         total_costed_minutes = float(op.setup_time_minutes or 0) + float(op.run_time_minutes or 0)  # type: ignore[arg-type]
@@ -969,9 +990,9 @@ def _recalculate_routing_totals(routing: Routing, db: Session):
         rate = op.labor_rate_override or op.machine_rate_override
         if not rate and op.work_center:  # type: ignore[truthy-bool]
             rate = (
-                (op.work_center.machine_rate_per_hour or Decimal("0")) +
-                (op.work_center.labor_rate_per_hour or Decimal("0")) +
-                (op.work_center.overhead_rate_per_hour or Decimal("0"))
+                (op.work_center.machine_rate_per_hour or Decimal("0"))
+                + (op.work_center.labor_rate_per_hour or Decimal("0"))
+                + (op.work_center.overhead_rate_per_hour or Decimal("0"))
             )
         total_cost += Decimal(str(costed_hours)) * (rate or Decimal("0"))
 
@@ -1013,10 +1034,10 @@ def _build_routing_response(routing: Routing, db: Session) -> RoutingResponse:
 def _build_operation_response(op: RoutingOperation) -> RoutingOperationResponse:
     """Build a routing operation response."""
     total_time = (
-        (op.setup_time_minutes or Decimal("0")) +
-        (op.run_time_minutes or Decimal("0")) +
-        (op.wait_time_minutes or Decimal("0")) +
-        (op.move_time_minutes or Decimal("0"))
+        (op.setup_time_minutes or Decimal("0"))
+        + (op.run_time_minutes or Decimal("0"))
+        + (op.wait_time_minutes or Decimal("0"))
+        + (op.move_time_minutes or Decimal("0"))
     )
 
     # Calculate cost (includes setup + run time)
@@ -1025,9 +1046,9 @@ def _build_operation_response(op: RoutingOperation) -> RoutingOperationResponse:
     rate = op.labor_rate_override or op.machine_rate_override
     if not rate and op.work_center:  # type: ignore[truthy-bool]
         rate = (
-            (op.work_center.machine_rate_per_hour or Decimal("0")) +
-            (op.work_center.labor_rate_per_hour or Decimal("0")) +
-            (op.work_center.overhead_rate_per_hour or Decimal("0"))
+            (op.work_center.machine_rate_per_hour or Decimal("0"))
+            + (op.work_center.labor_rate_per_hour or Decimal("0"))
+            + (op.work_center.overhead_rate_per_hour or Decimal("0"))
         )
     calculated_cost = Decimal(str(costed_hours)) * (rate or Decimal("0"))
 
@@ -1064,7 +1085,7 @@ def _build_operation_response(op: RoutingOperation) -> RoutingOperationResponse:
 def _build_material_response(material: RoutingOperationMaterial) -> RoutingOperationMaterialResponse:
     """Build a routing operation material response."""
     component = material.component
-    
+
     return RoutingOperationMaterialResponse(  # type: ignore[arg-type]
         id=material.id,
         routing_operation_id=material.routing_operation_id,
@@ -1086,19 +1107,18 @@ def _build_material_response(material: RoutingOperationMaterial) -> RoutingOpera
 
 
 def _build_operation_with_materials_response(
-    op: RoutingOperation,
-    db: Session
+    op: RoutingOperation, db: Session
 ) -> RoutingOperationWithMaterialsResponse:
     """Build a routing operation response with materials."""
     base = _build_operation_response(op)
-    
+
     # Get materials for this operation
     materials = [_build_material_response(m) for m in (op.materials or [])]
-    
+
     # Calculate material cost
     material_cost = sum(m.extended_cost for m in materials)
     total_cost_with_materials = base.calculated_cost + material_cost
-    
+
     return RoutingOperationWithMaterialsResponse(
         **base.model_dump(),
         materials=materials,
@@ -1107,23 +1127,19 @@ def _build_operation_with_materials_response(
     )
 
 
-def _build_manufacturing_bom_response(
-    routing: Routing,
-    product: Product,
-    db: Session
-) -> ManufacturingBOMResponse:
+def _build_manufacturing_bom_response(routing: Routing, product: Product, db: Session) -> ManufacturingBOMResponse:
     """Build a complete Manufacturing BOM response."""
     operations = []
     total_labor_cost = Decimal("0")
     total_material_cost = Decimal("0")
-    
+
     for op in sorted(routing.operations, key=lambda x: x.sequence):
         if op.is_active:
             op_response = _build_operation_with_materials_response(op, db)
             operations.append(op_response)
             total_labor_cost += op_response.calculated_cost
             total_material_cost += op_response.material_cost
-    
+
     return ManufacturingBOMResponse(  # type: ignore[arg-type]
         routing_id=routing.id,
         routing_code=routing.code,

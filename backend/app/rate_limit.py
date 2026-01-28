@@ -1,11 +1,14 @@
 # file: backend/app/rate_limit.py
 # why: make rate limiting optional; no crash if slowapi isn't installed
 
+
 class _NoopLimiter:
     def limit(self, *_args, **_kwargs):
         def deco(fn):  # no-op decorator so routes still work
             return fn
+
         return deco
+
 
 def setup_rate_limit(app) -> tuple[object, bool]:
     try:

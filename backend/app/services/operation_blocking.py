@@ -3,6 +3,7 @@ Service layer for operation-level blocking checks.
 
 Checks material availability for a specific operation, not the entire PO.
 """
+
 from decimal import Decimal
 from typing import List, Tuple
 from sqlalchemy import func
@@ -10,11 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.product import Product
 from app.models.bom import BOMLine
-from app.models.production_order import (
-    ProductionOrder,
-    ProductionOrderOperation,
-    ProductionOrderOperationMaterial
-)
+from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
 from app.models.inventory import Inventory
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.services.operation_material_mapping import get_consume_stages_for_operation
@@ -22,6 +19,7 @@ from app.services.operation_material_mapping import get_consume_stages_for_opera
 
 class OperationBlockingError(Exception):
     """Custom exception for operation blocking errors."""
+
     def __init__(self, message: str, status_code: int = 400):
         self.message = message
         self.status_code = status_code
@@ -29,9 +27,7 @@ class OperationBlockingError(Exception):
 
 
 def get_operation_with_validation(
-    db: Session,
-    po_id: int,
-    op_id: int
+    db: Session, po_id: int, op_id: int
 ) -> Tuple[ProductionOrder, ProductionOrderOperation]:
     """
     Get operation and validate it belongs to the specified PO.
@@ -51,9 +47,7 @@ def get_operation_with_validation(
         raise OperationBlockingError(f"Operation {op_id} not found", 404)
 
     if op.production_order_id != po_id:
-        raise OperationBlockingError(
-            f"Operation {op_id} does not belong to production order {po_id}", 404
-        )
+        raise OperationBlockingError(f"Operation {op_id} does not belong to production order {po_id}", 404)
 
     return po, op
 
@@ -64,20 +58,16 @@ def get_material_available(db: Session, product_id: int) -> Decimal:
 
     Available = on_hand - allocated (across all locations)
     """
-    result = db.query(
-        func.coalesce(func.sum(Inventory.on_hand_quantity - Inventory.allocated_quantity), Decimal("0"))
-    ).filter(
-        Inventory.product_id == product_id
-    ).scalar()
+    result = (
+        db.query(func.coalesce(func.sum(Inventory.on_hand_quantity - Inventory.allocated_quantity), Decimal("0")))
+        .filter(Inventory.product_id == product_id)
+        .scalar()
+    )
 
     return Decimal(str(result or 0))
 
 
-def get_bom_lines_for_operation(
-    db: Session,
-    bom_id: int,
-    operation_code: str
-) -> List[BOMLine]:
+def get_bom_lines_for_operation(db: Session, bom_id: int, operation_code: str) -> List[BOMLine]:
     """
     Get BOM lines that should be checked for a specific operation.
 
@@ -95,29 +85,29 @@ def get_bom_lines_for_operation(
     """
     consume_stages = get_consume_stages_for_operation(operation_code)
 
-    lines = db.query(BOMLine).filter(
-        BOMLine.bom_id == bom_id,
-        BOMLine.consume_stage.in_(consume_stages),
-        BOMLine.is_cost_only == False  # noqa: E712
-    ).all()
+    lines = (
+        db.query(BOMLine)
+        .filter(
+            BOMLine.bom_id == bom_id,
+            BOMLine.consume_stage.in_(consume_stages),
+            BOMLine.is_cost_only == False,  # noqa: E712
+        )
+        .all()
+    )
 
     return lines
 
 
-def get_pending_purchase_orders(
-    db: Session,
-    product_id: int
-) -> List[Tuple[PurchaseOrder, Decimal]]:
+def get_pending_purchase_orders(db: Session, product_id: int) -> List[Tuple[PurchaseOrder, Decimal]]:
     """Get pending purchase orders for a product with remaining quantities."""
-    active_statuses = ['draft', 'ordered', 'shipped']
+    active_statuses = ["draft", "ordered", "shipped"]
 
-    results = db.query(PurchaseOrder, PurchaseOrderLine).join(
-        PurchaseOrderLine,
-        PurchaseOrder.id == PurchaseOrderLine.purchase_order_id
-    ).filter(
-        PurchaseOrderLine.product_id == product_id,
-        PurchaseOrder.status.in_(active_statuses)
-    ).all()
+    results = (
+        db.query(PurchaseOrder, PurchaseOrderLine)
+        .join(PurchaseOrderLine, PurchaseOrder.id == PurchaseOrderLine.purchase_order_id)
+        .filter(PurchaseOrderLine.product_id == product_id, PurchaseOrder.status.in_(active_statuses))
+        .all()
+    )
 
     pos = []
     for po, pol in results:
@@ -128,11 +118,7 @@ def get_pending_purchase_orders(
     return pos
 
 
-def check_operation_blocking(
-    db: Session,
-    po_id: int,
-    op_id: int
-) -> dict:
+def check_operation_blocking(db: Session, po_id: int, op_id: int) -> dict:
     """
     Check if an operation is blocked by material shortages.
 
@@ -176,15 +162,14 @@ def check_operation_blocking(
     # PRIMARY: Check PO Operation Materials (routing-based)
     # These are created when the PO is released from routing materials
     # =========================================================================
-    po_op_materials = db.query(ProductionOrderOperationMaterial).filter(
-        ProductionOrderOperationMaterial.production_order_operation_id == op_id
-    ).all()
+    po_op_materials = (
+        db.query(ProductionOrderOperationMaterial)
+        .filter(ProductionOrderOperationMaterial.production_order_operation_id == op_id)
+        .all()
+    )
 
     # Filter to only non-cost-only, non-optional materials that aren't consumed
-    active_materials = [
-        m for m in po_op_materials
-        if m.status != 'consumed'
-    ]
+    active_materials = [m for m in po_op_materials if m.status != "consumed"]
 
     if active_materials:
         result["material_source"] = "routing"
@@ -214,7 +199,7 @@ def check_operation_blocking(
                     "purchase_order_id": po_incoming.id,
                     "purchase_order_code": po_incoming.po_number,
                     "quantity": float(po_qty),
-                    "expected_date": po_incoming.expected_date.isoformat() if po_incoming.expected_date else None
+                    "expected_date": po_incoming.expected_date.isoformat() if po_incoming.expected_date else None,
                 }
 
             material_issue = {
@@ -283,7 +268,7 @@ def check_operation_blocking(
                 "purchase_order_id": po_incoming.id,
                 "purchase_order_code": po_incoming.po_number,
                 "quantity": float(po_qty),
-                "expected_date": po_incoming.expected_date.isoformat() if po_incoming.expected_date else None
+                "expected_date": po_incoming.expected_date.isoformat() if po_incoming.expected_date else None,
             }
 
         material_issue = {
@@ -308,11 +293,7 @@ def check_operation_blocking(
     return result
 
 
-def can_operation_start(
-    db: Session,
-    po_id: int,
-    op_id: int
-) -> dict:
+def can_operation_start(db: Session, po_id: int, op_id: int) -> dict:
     """
     Quick check if an operation can start.
 
@@ -320,7 +301,4 @@ def can_operation_start(
     """
     full_result = check_operation_blocking(db, po_id, op_id)
 
-    return {
-        "can_start": full_result["can_start"],
-        "blocking_issues": full_result["blocking_issues"]
-    }
+    return {"can_start": full_result["can_start"], "blocking_issues": full_result["blocking_issues"]}

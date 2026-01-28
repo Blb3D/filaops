@@ -10,6 +10,7 @@ Endpoints:
     POST /api/v1/test/cleanup    - Remove all test data
     GET  /api/v1/test/health     - Health check for test endpoints
 """
+
 import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -26,6 +27,7 @@ router = APIRouter(prefix="/test", tags=["testing"])
 # GUARD: Only allow in non-production environments
 # =============================================================================
 
+
 def require_test_mode():
     """
     Dependency that blocks requests in production.
@@ -34,10 +36,7 @@ def require_test_mode():
     """
     env = os.getenv("ENVIRONMENT", "development").lower()
     if env == "production":
-        raise HTTPException(
-            status_code=403,
-            detail="Test endpoints are disabled in production"
-        )
+        raise HTTPException(status_code=403, detail="Test endpoints are disabled in production")
     return True
 
 
@@ -57,7 +56,7 @@ def require_data_wipe_allowed():
             detail=(
                 "Data wipe not allowed. Set ALLOW_TEST_DATA_WIPE=true to enable. "
                 "WARNING: This will delete ALL data from the database!"
-            )
+            ),
         )
     return True
 
@@ -66,18 +65,19 @@ def require_data_wipe_allowed():
 # SCHEMAS
 # =============================================================================
 
+
 class SeedRequest(BaseModel):
     """Request body for seeding a test scenario."""
+
     scenario: str
 
     class Config:
-        json_schema_extra = {
-            "example": {"scenario": "full-demand-chain"}
-        }
+        json_schema_extra = {"example": {"scenario": "full-demand-chain"}}
 
 
 class SeedResponse(BaseModel):
     """Response from seeding a test scenario."""
+
     success: bool
     scenario: str
     data: Dict[str, Any]
@@ -85,6 +85,7 @@ class SeedResponse(BaseModel):
 
 class CleanupResponse(BaseModel):
     """Response from cleanup operation."""
+
     success: bool
     cleaned: bool
     tables: List[str]
@@ -92,11 +93,13 @@ class CleanupResponse(BaseModel):
 
 class ScenariosResponse(BaseModel):
     """Response listing available scenarios."""
+
     scenarios: List[str]
 
 
 class HealthResponse(BaseModel):
     """Response from health check."""
+
     status: str
     test_mode: bool
     environment: str
@@ -106,25 +109,21 @@ class HealthResponse(BaseModel):
 # ENDPOINTS
 # =============================================================================
 
+
 @router.get("/scenarios", response_model=ScenariosResponse)
-async def list_scenarios(
-    _: bool = Depends(require_test_mode)
-):
+async def list_scenarios(_: bool = Depends(require_test_mode)):
     """
     List available test scenarios.
 
     Returns a list of scenario names that can be used with the /seed endpoint.
     """
     from tests.scenarios import SCENARIOS
+
     return ScenariosResponse(scenarios=sorted(SCENARIOS.keys()))
 
 
 @router.post("/seed", response_model=SeedResponse)
-async def seed_test_data(
-    request: SeedRequest,
-    db: Session = Depends(get_db),
-    _: bool = Depends(require_test_mode)
-):
+async def seed_test_data(request: SeedRequest, db: Session = Depends(get_db), _: bool = Depends(require_test_mode)):
     """
     Seed the database with a test scenario.
 
@@ -144,11 +143,7 @@ async def seed_test_data(
 
     try:
         data = seed_scenario(db, request.scenario)
-        return SeedResponse(
-            success=True,
-            scenario=request.scenario,
-            data=data
-        )
+        return SeedResponse(success=True, scenario=request.scenario, data=data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -160,7 +155,7 @@ async def seed_test_data(
 async def cleanup_data(
     db: Session = Depends(get_db),
     _test_mode: bool = Depends(require_test_mode),
-    _wipe_allowed: bool = Depends(require_data_wipe_allowed)
+    _wipe_allowed: bool = Depends(require_data_wipe_allowed),
 ):
     """
     Remove all test data from the database.
@@ -189,8 +184,4 @@ async def test_health():
     (so you can verify the endpoint exists even in production).
     """
     env = os.getenv("ENVIRONMENT", "development").lower()
-    return HealthResponse(
-        status="ok",
-        test_mode=env != "production",
-        environment=env
-    )
+    return HealthResponse(status="ok", test_mode=env != "production", environment=env)

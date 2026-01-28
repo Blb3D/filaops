@@ -1,6 +1,7 @@
 """
 Purchase Order models for purchasing module
 """
+
 from sqlalchemy import Column, Integer, String, DateTime, Text, Numeric, ForeignKey, Date
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -15,6 +16,7 @@ except Exception:
 
 class PurchaseOrder(Base):
     """Purchase Order header model"""
+
     __tablename__ = "purchase_orders"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -23,7 +25,7 @@ class PurchaseOrder(Base):
     po_number = Column(String(50), unique=True, nullable=False, index=True)
 
     # Vendor reference
-    vendor_id = Column(Integer, ForeignKey('vendors.id'), nullable=False)
+    vendor_id = Column(Integer, ForeignKey("vendors.id"), nullable=False)
 
     # Status workflow: draft -> ordered -> shipped -> received -> closed
     # Also: cancelled
@@ -71,15 +73,16 @@ class PurchaseOrder(Base):
 
 class PurchaseOrderLine(Base):
     """Purchase Order line item model"""
+
     __tablename__ = "purchase_order_lines"
 
     id = Column(Integer, primary_key=True, index=True)
 
     # Parent PO
-    purchase_order_id = Column(Integer, ForeignKey('purchase_orders.id', ondelete='CASCADE'), nullable=False)
+    purchase_order_id = Column(Integer, ForeignKey("purchase_orders.id", ondelete="CASCADE"), nullable=False)
 
     # Product reference
-    product_id = Column(Integer, ForeignKey('products.id'), nullable=False)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
 
     # Line number for ordering
     line_number = Column(Integer, nullable=False)
@@ -87,7 +90,7 @@ class PurchaseOrderLine(Base):
     # Quantities
     quantity_ordered = Column(Numeric(18, 4), nullable=False)
     quantity_received = Column(Numeric(18, 4), default=0, nullable=False)
-    
+
     # Unit of Measure - the unit the item is purchased in (may differ from product's default unit)
     purchase_unit = Column(String(20), nullable=True)  # e.g., 'G', 'KG', 'EA', 'LB'
 
@@ -108,4 +111,3 @@ class PurchaseOrderLine(Base):
 
     def __repr__(self):
         return f"<PurchaseOrderLine {self.line_number}: {self.quantity_ordered}>"
-

@@ -3,6 +3,7 @@ Sales Order Model
 
 Represents customer orders converted from approved quotes
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -12,6 +13,7 @@ from app.db.base import Base
 
 class SalesOrder(Base):
     """Sales Order - Customer order created from accepted quote"""
+
     __tablename__ = "sales_orders"
 
     # Primary Key
@@ -27,11 +29,11 @@ class SalesOrder(Base):
     order_number = Column(String(50), unique=True, nullable=False, index=True)  # SO-2025-001
 
     # Order Type & Source (for hybrid architecture)
-    order_type = Column(String(20), nullable=False, default='quote_based', index=True)
+    order_type = Column(String(20), nullable=False, default="quote_based", index=True)
     # 'quote_based' = Single custom product from portal quote
     # 'line_item' = Multi-product order from marketplace (Squarespace/WooCommerce)
 
-    source = Column(String(50), nullable=False, default='portal', index=True)
+    source = Column(String(50), nullable=False, default="portal", index=True)
     # 'portal' | 'squarespace' | 'woocommerce' | 'manual'
 
     source_order_id = Column(String(255), nullable=True, index=True)
@@ -135,7 +137,9 @@ class SalesOrder(Base):
     quote = relationship("Quote", back_populates="sales_order", uselist=False)
     product = relationship("Product", foreign_keys=[product_id])
     lines = relationship("SalesOrderLine", back_populates="sales_order", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="sales_order", cascade="all, delete-orphan", order_by="Payment.payment_date.desc()")
+    payments = relationship(
+        "Payment", back_populates="sales_order", cascade="all, delete-orphan", order_by="Payment.payment_date.desc()"
+    )
     mrp_run = relationship("MRPRun", foreign_keys=[mrp_run_id])
 
     def __repr__(self):
@@ -154,16 +158,13 @@ class SalesOrder(Base):
     @property
     def can_start_production(self) -> bool:
         """Check if order can start production"""
-        return (
-            self.status == "confirmed" and
-            self.payment_status in ["paid", "partial"]
-        )
-    
+        return self.status == "confirmed" and self.payment_status in ["paid", "partial"]
+
     @property
     def is_ready_to_ship(self) -> bool:
         """Check if order is ready for shipping"""
         return self.fulfillment_status == "ready" and self.status == "ready_to_ship"
-    
+
     @property
     def is_complete(self) -> bool:
         """Check if order is fully complete"""
@@ -177,6 +178,7 @@ class SalesOrderLine(Base):
     Used when order_type = 'line_item' (Squarespace, WooCommerce, manual multi-item orders)
     Each line represents one product with quantity and pricing
     """
+
     __tablename__ = "sales_order_lines"
 
     # Primary Key

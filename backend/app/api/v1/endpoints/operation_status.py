@@ -1,6 +1,7 @@
 """
 API endpoints for operation status transitions.
 """
+
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -68,7 +69,7 @@ def build_operation_response(op, po, next_op=None) -> OperationResponse:
     # Get current operation sequence for PO
     current_seq = None
     for o in sorted(po.operations, key=lambda x: x.sequence):
-        if o.status not in ('complete', 'skipped'):
+        if o.status not in ("complete", "skipped"):
             current_seq = o.sequence
             break
 
@@ -87,7 +88,7 @@ def build_operation_response(op, po, next_op=None) -> OperationResponse:
     # Calculate shortage info
     qty_ordered = po.quantity_ordered or 0
     qty_completed = po.quantity_completed or 0
-    qty_short = max(0, qty_ordered - qty_completed) if po.status == 'short' else 0
+    qty_short = max(0, qty_ordered - qty_completed) if po.status == "short" else 0
 
     # Get sales order code if linked
     sales_order_code = None
@@ -126,15 +127,9 @@ def build_operation_response(op, po, next_op=None) -> OperationResponse:
 
 
 @router.get(
-    "/{po_id}/operations",
-    response_model=List[OperationListItem],
-    summary="List operations for a production order"
+    "/{po_id}/operations", response_model=List[OperationListItem], summary="List operations for a production order"
 )
-def get_operations(
-    po_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
-):
+def get_operations(po_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get all operations for a production order, ordered by sequence.
 
@@ -161,16 +156,18 @@ def get_operations(
         # Build materials list for this operation
         op_materials = []
         for mat in op.materials:
-            op_materials.append(OperationMaterial(
-                id=mat.id,
-                component_id=mat.component_id,
-                component_sku=mat.component.sku if mat.component else None,
-                component_name=mat.component.name if mat.component else None,
-                quantity_required=mat.quantity_required,
-                quantity_consumed=mat.quantity_consumed,
-                unit=mat.unit,
-                status=mat.status,
-            ))
+            op_materials.append(
+                OperationMaterial(
+                    id=mat.id,
+                    component_id=mat.component_id,
+                    component_sku=mat.component.sku if mat.component else None,
+                    component_name=mat.component.name if mat.component else None,
+                    quantity_required=mat.quantity_required,
+                    quantity_consumed=mat.quantity_consumed,
+                    unit=mat.unit,
+                    status=mat.status,
+                )
+            )
 
         # Resolve resource name - handle negative IDs (printers) vs positive (resources)
         resource_code = None
@@ -188,43 +185,41 @@ def get_operations(
                     resource_code = op.resource.code
                     resource_name = op.resource.name
 
-        result.append(OperationListItem(
-            id=op.id,
-            sequence=op.sequence,
-            operation_code=op.operation_code,
-            operation_name=op.operation_name,
-            status=op.status,
-            work_center_id=op.work_center_id,
-            work_center_code=op.work_center.code if op.work_center else None,
-            work_center_name=op.work_center.name if op.work_center else None,
-            resource_id=op.resource_id,
-            resource_code=resource_code,
-            resource_name=resource_name,
-            planned_setup_minutes=op.planned_setup_minutes,
-            planned_run_minutes=op.planned_run_minutes,
-            actual_start=op.actual_start,
-            actual_end=op.actual_end,
-            quantity_input=qty_input,
-            quantity_completed=op.quantity_completed,
-            quantity_scrapped=op.quantity_scrapped,
-            scrap_reason=op.scrap_reason,
-            materials=op_materials,
-        ))
+        result.append(
+            OperationListItem(
+                id=op.id,
+                sequence=op.sequence,
+                operation_code=op.operation_code,
+                operation_name=op.operation_name,
+                status=op.status,
+                work_center_id=op.work_center_id,
+                work_center_code=op.work_center.code if op.work_center else None,
+                work_center_name=op.work_center.name if op.work_center else None,
+                resource_id=op.resource_id,
+                resource_code=resource_code,
+                resource_name=resource_name,
+                planned_setup_minutes=op.planned_setup_minutes,
+                planned_run_minutes=op.planned_run_minutes,
+                actual_start=op.actual_start,
+                actual_end=op.actual_end,
+                quantity_input=qty_input,
+                quantity_completed=op.quantity_completed,
+                quantity_scrapped=op.quantity_scrapped,
+                scrap_reason=op.scrap_reason,
+                materials=op_materials,
+            )
+        )
 
     return result
 
 
-@router.post(
-    "/{po_id}/operations/{op_id}/start",
-    response_model=OperationResponse,
-    summary="Start an operation"
-)
+@router.post("/{po_id}/operations/{op_id}/start", response_model=OperationResponse, summary="Start an operation")
 def start_operation_endpoint(
     po_id: int,
     op_id: int,
     request: OperationStartRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Start an operation.
@@ -253,17 +248,13 @@ def start_operation_endpoint(
     return build_operation_response(op, po, next_op)
 
 
-@router.post(
-    "/{po_id}/operations/{op_id}/complete",
-    response_model=OperationResponse,
-    summary="Complete an operation"
-)
+@router.post("/{po_id}/operations/{op_id}/complete", response_model=OperationResponse, summary="Complete an operation")
 def complete_operation_endpoint(
     po_id: int,
     op_id: int,
     request: OperationCompleteRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Complete an operation with optional partial scrap and cascading material accounting.
@@ -311,17 +302,13 @@ def complete_operation_endpoint(
     return response
 
 
-@router.post(
-    "/{po_id}/operations/{op_id}/skip",
-    response_model=OperationResponse,
-    summary="Skip an operation"
-)
+@router.post("/{po_id}/operations/{op_id}/skip", response_model=OperationResponse, summary="Skip an operation")
 def skip_operation_endpoint(
     po_id: int,
     op_id: int,
     request: OperationSkipRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Skip an operation with a reason.
@@ -351,17 +338,11 @@ def skip_operation_endpoint(
 # Operation Blocking Check Endpoints (API-402)
 # =============================================================================
 
+
 @router.get(
-    "/{po_id}/operations/{op_id}/can-start",
-    response_model=CanStartResponse,
-    summary="Check if operation can start"
+    "/{po_id}/operations/{op_id}/can-start", response_model=CanStartResponse, summary="Check if operation can start"
 )
-def check_can_start(
-    po_id: int,
-    op_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
-):
+def check_can_start(po_id: int, op_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Quick check if an operation can start based on material availability.
 
@@ -378,14 +359,9 @@ def check_can_start(
 @router.get(
     "/{po_id}/operations/{op_id}/blocking-issues",
     response_model=OperationBlockingResponse,
-    summary="Get detailed blocking issues for operation"
+    summary="Get detailed blocking issues for operation",
 )
-def get_blocking_issues(
-    po_id: int,
-    op_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
-):
+def get_blocking_issues(po_id: int, op_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     """
     Get detailed blocking issues for an operation.
 
@@ -403,17 +379,18 @@ def get_blocking_issues(
 # Resource Scheduling Endpoints (API-403)
 # =============================================================================
 
+
 @router.post(
     "/{po_id}/operations/{op_id}/schedule",
     response_model=ScheduleOperationResponse,
-    summary="Schedule an operation on a resource"
+    summary="Schedule an operation on a resource",
 )
 def schedule_operation_endpoint(
     po_id: int,
     op_id: int,
     request: ScheduleOperationRequest,
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Schedule an operation on a resource with time slot validation.
@@ -435,10 +412,7 @@ def schedule_operation_endpoint(
     if not op:
         raise HTTPException(status_code=404, detail="Operation not found")
     if op.production_order_id != po_id:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Operation {op_id} does not belong to production order {po_id}"
-        )
+        raise HTTPException(status_code=404, detail=f"Operation {op_id} does not belong to production order {po_id}")
 
     # Validate resource/printer exists
     if request.is_printer:
@@ -461,10 +435,7 @@ def schedule_operation_endpoint(
     )
 
     if not success:
-        raise HTTPException(
-            status_code=409,
-            detail=f"Scheduling conflict with {len(conflicts)} existing operation(s)"
-        )
+        raise HTTPException(status_code=409, detail=f"Scheduling conflict with {len(conflicts)} existing operation(s)")
 
     db.commit()
 
@@ -474,12 +445,10 @@ def schedule_operation_endpoint(
 @router.post(
     "/resources/next-available",
     response_model=NextAvailableSlotResponse,
-    summary="Find next available time slot on a resource"
+    summary="Find next available time slot on a resource",
 )
 def get_next_available_slot(
-    request: NextAvailableSlotRequest,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    request: NextAvailableSlotRequest, db: Session = Depends(get_db), current_user=Depends(get_current_user)
 ):
     """
     Find the next available time slot on a resource.
@@ -503,35 +472,30 @@ def get_next_available_slot(
 
     # Find next available slot
     next_start = find_next_available_slot(
-        db=db,
-        resource_id=stored_resource_id,
-        duration_minutes=request.duration_minutes,
-        after=request.after
+        db=db, resource_id=stored_resource_id, duration_minutes=request.duration_minutes, after=request.after
     )
 
     # Calculate suggested end time
     suggested_end = next_start + timedelta(minutes=request.duration_minutes)
 
-    return NextAvailableSlotResponse(
-        next_available=next_start,
-        suggested_end=suggested_end
-    )
+    return NextAvailableSlotResponse(next_available=next_start, suggested_end=suggested_end)
 
 
 # =============================================================================
 # Operation Generation Endpoint (API-404)
 # =============================================================================
 
+
 @router.post(
     "/{po_id}/operations/generate",
     response_model=GenerateOperationsResponse,
-    summary="Generate operations from routing"
+    summary="Generate operations from routing",
 )
 def generate_operations(
     po_id: int,
     request: GenerateOperationsRequest = GenerateOperationsRequest(),
     db: Session = Depends(get_db),
-    current_user=Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     """
     Manually generate operations from routing.
@@ -552,5 +516,5 @@ def generate_operations(
     return GenerateOperationsResponse(
         success=True,
         operations_created=len(created_ops),
-        message=f"Generated {len(created_ops)} operations from routing"
+        message=f"Generated {len(created_ops)} operations from routing",
     )

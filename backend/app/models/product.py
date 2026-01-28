@@ -1,6 +1,7 @@
 """
 Product model - unified item management for products, components, and supplies
 """
+
 from sqlalchemy import Column, Integer, String, Numeric, DateTime, Boolean, Text, BigInteger, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -16,6 +17,7 @@ class Product(Base):
     - supply: Consumables (e.g., filament, packaging)
     - service: Non-physical items (e.g., machine time)
     """
+
     __tablename__ = "products"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -23,7 +25,7 @@ class Product(Base):
     legacy_sku = Column(String(50), nullable=True, index=True)  # Old SKU for Squarespace mapping
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
-    
+
     # Unit of Measure - THREE FIELDS for proper cost handling
     # See docs/AI_DIRECTIVE_UOM_COSTS.md for complete documentation.
     #
@@ -36,14 +38,15 @@ class Product(Base):
     #   Purchase: 3 KG @ $20/KG
     #   Transaction: 3000 G @ $0.02/G = $60 total
     #
-    unit = Column(String(20), default='EA')  # Storage/consumption unit
-    purchase_uom = Column(String(20), default='EA')  # Purchase unit
-    purchase_factor = Column(Numeric(18, 6), nullable=True,
-                             comment='Conversion: 1 purchase_uom = X unit. E.g., 1000 for KG->G')
+    unit = Column(String(20), default="EA")  # Storage/consumption unit
+    purchase_uom = Column(String(20), default="EA")  # Purchase unit
+    purchase_factor = Column(
+        Numeric(18, 6), nullable=True, comment="Conversion: 1 purchase_uom = X unit. E.g., 1000 for KG->G"
+    )
 
     # Item classification
-    item_type = Column(String(20), default='finished_good', nullable=False)  # finished_good, component, supply, service
-    procurement_type = Column(String(20), default='buy', nullable=False)  # 'make', 'buy', 'make_or_buy'
+    item_type = Column(String(20), default="finished_good", nullable=False)  # finished_good, component, supply, service
+    procurement_type = Column(String(20), default="buy", nullable=False)  # 'make', 'buy', 'make_or_buy'
     category_id = Column(Integer, ForeignKey("item_categories.id"), nullable=True)
 
     # Material link (for supply items that are materials/filament)
@@ -52,7 +55,7 @@ class Product(Base):
     color_id = Column(Integer, ForeignKey("colors.id"), nullable=True)
 
     # Cost tracking
-    cost_method = Column(String(20), default='average')  # fifo, average, standard
+    cost_method = Column(String(20), default="average")  # fifo, average, standard
     standard_cost = Column(Numeric(10, 2), nullable=True)  # For standard costing
     average_cost = Column(Numeric(10, 2), nullable=True)  # Running average
     last_cost = Column(Numeric(10, 2), nullable=True)  # Most recent purchase cost
@@ -71,18 +74,18 @@ class Product(Base):
     min_order_qty = Column(Numeric(10, 2), nullable=True)  # Minimum order quantity
     reorder_point = Column(Numeric(10, 2), nullable=True)  # When to reorder (for stocked items)
     safety_stock = Column(Numeric(18, 4), default=0)  # MRP safety stock buffer
-    preferred_vendor_id = Column(Integer, ForeignKey('vendors.id', ondelete='SET NULL'), nullable=True, index=True)
+    preferred_vendor_id = Column(Integer, ForeignKey("vendors.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Stocking policy: determines how inventory is managed
     # - 'stocked': Keep minimum on hand, reorder at reorder_point (proactive)
     # - 'on_demand': Only order when MRP shows demand (reactive)
-    stocking_policy = Column(String(20), default='on_demand', nullable=False)
+    stocking_policy = Column(String(20), default="on_demand", nullable=False)
 
     # Identifiers
     upc = Column(String(50), nullable=True)  # UPC/barcode
 
     # Product type
-    type = Column(String(20), default='standard', nullable=False)  # 'standard' | 'custom'
+    type = Column(String(20), default="standard", nullable=False)  # 'standard' | 'custom'
 
     # 3D Printing
     gcode_file_path = Column(String(500), nullable=True)  # Path to GCODE file
@@ -92,8 +95,10 @@ class Product(Base):
 
     # Visibility & Sales Channels
     is_public = Column(Boolean, default=True)  # Show on public storefront?
-    sales_channel = Column(String(20), default='public')  # 'public' | 'b2b' | 'internal'
-    customer_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)  # Restrict to specific customer (B2B)
+    sales_channel = Column(String(20), default="public")  # 'public' | 'b2b' | 'internal'
+    customer_id = Column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )  # Restrict to specific customer (B2B)
 
     # Flags
     is_raw_material = Column(Boolean, default=False)
@@ -120,7 +125,7 @@ class Product(Base):
 
     # Spool tracking (for filament/materials)
     spools = relationship("MaterialSpool", back_populates="product")
-    
+
     # Material relationships (for supply items that are materials)
     material_type = relationship("MaterialType", foreign_keys=[material_type_id])
     color = relationship("Color", foreign_keys=[color_id])
