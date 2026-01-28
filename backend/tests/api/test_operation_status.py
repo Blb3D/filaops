@@ -538,7 +538,7 @@ class TestQuantityValidation:
         response = client.post(
             f"/api/v1/production-orders/{po.id}/operations/{op2.id}/complete",
             headers={"Authorization": f"Bearer {admin_token}"},
-            json={"quantity_completed": 7, "quantity_scrapped": 1},
+            json={"quantity_completed": 7, "quantity_scrapped": 1, "scrap_reason": "DEFECT"},
         )
 
         # Verify - 7 + 1 = 8 which equals op1's qty_completed
