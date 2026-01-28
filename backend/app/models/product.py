@@ -130,8 +130,5 @@ class Product(Base):
     material_type = relationship("MaterialType", foreign_keys=[material_type_id])
     color = relationship("Color", foreign_keys=[color_id])
 
-    # Catalog relationships (for B2B product visibility)
-    catalog_products = relationship("CatalogProduct", back_populates="product", cascade="all, delete-orphan")
-
     def __repr__(self):
         return f"<Product {self.sku}: {self.name}>"
