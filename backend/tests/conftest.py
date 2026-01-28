@@ -6,9 +6,14 @@ Uses PostgreSQL test database (filaops_test) by default.
 Set TEST_USE_POSTGRES=false to use SQLite in-memory for faster tests.
 """
 import os
+
+# Set test environment variables BEFORE any app imports
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-pytest-only-not-for-production")
+os.environ.setdefault("ENVIRONMENT", "test")
+
 import pytest
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
@@ -302,7 +307,7 @@ def sample_quote(db_session, customer_user):
         file_format=".3mf",
         file_size_bytes=1024000,
         status="pending",
-        expires_at=datetime.utcnow() + timedelta(days=30),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
     )
     db_session.add(quote)
     db_session.commit()

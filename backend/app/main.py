@@ -182,7 +182,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=getattr(settings, 'ALLOWED_ORIGINS', ["*"]),
+    allow_origins=getattr(settings, 'ALLOWED_ORIGINS', []),  # Empty default - must configure explicitly
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],

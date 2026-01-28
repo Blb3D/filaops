@@ -15,7 +15,25 @@ import bcrypt
 
 # JWT Configuration
 import os
-SECRET_KEY = os.environ.get("SECRET_KEY", "dev-only-change-in-production")
+
+def _get_secret_key() -> str:
+    """Get SECRET_KEY from environment, fail loudly if not set."""
+    key = os.environ.get("SECRET_KEY")
+    if not key:
+        raise RuntimeError(
+            "SECRET_KEY environment variable is not set. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    if key == "dev-only-change-in-production" or len(key) < 32:
+        import warnings
+        warnings.warn(
+            "SECRET_KEY is weak or using default value. "
+            "Generate a secure key for production.",
+            RuntimeWarning
+        )
+    return key
+
+SECRET_KEY = _get_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 30 minutes
 REFRESH_TOKEN_EXPIRE_DAYS = 7  # 7 days
