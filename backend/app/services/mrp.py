@@ -565,38 +565,19 @@ class MRPService:
     def calculate_net_requirements(
         self,
         requirements: List[ComponentRequirement],
-        source_production_order_ids: Optional[set] = None
     ) -> List[NetRequirement]:
         """
-        Calculate net requirements by comparing gross requirements to available inventory.
+        Calculate net requirements using standard MRP netting.
 
-        Formula: Net = Gross - Available - Incoming + Safety Stock
+        Formula: Net = Gross - On-Hand - Incoming + Safety Stock
 
-        CRITICAL: Per-Order Allocation Handling
-        ----------------------------------------
-        The Inventory.allocated_quantity is an aggregate that doesn't track WHICH
-        production orders own those allocations. This causes two problems:
-
-        Scenario A (Own Allocation):
-          - PO-001 needs 1000g, has already reserved 1000g
-          - Using available (on_hand - allocated): shortage shows 0
-          - This is CORRECT - the reservation IS for this order
-
-        Scenario B (Competing Orders):
-          - PO-OTHER reserved 9000g for OTHER orders
-          - PO-NEW needs 1500g (no reservation yet)
-          - Using available: 10000 - 9000 = 1000, need 1500, shortage = 500
-          - This is CORRECT - PO-NEW can't use PO-OTHER's materials
-
-        When source_production_order_ids is provided, we add back those POs'
-        allocations to the available inventory because their demand is already
-        included in the gross requirements.
+        Uses on_hand (not available) because allocations represent the same
+        demand that drives gross requirements — subtracting them would
+        double-count. MRP has full visibility into all demand and generates
+        planned orders to cover shortages.
 
         Args:
             requirements: List of gross component requirements
-            source_production_order_ids: Optional set of PO IDs whose allocations
-                should be added back to available (because their demand is already
-                counted in gross requirements)
 
         Returns:
             List of NetRequirement with shortage calculations
@@ -632,15 +613,14 @@ class MRPService:
             incoming = incoming_by_product.get(req.product_id, Decimal("0"))
             safety_stock = Decimal(str(product.safety_stock or 0))
 
-            # Net requirement calculation
-            # Net = Gross - On-Hand - Incoming + Safety Stock
-            # NOTE: We use on_hand (not available) because allocations represent
-            # the SAME demand we're calculating - using available would double-count.
-            # Allocations are for reservation (preventing over-promising), not MRP.
-            # Known limitation: this assumes allocations come only from demand included
-            # in the current MRP run. Allocations from outside this scope (for example,
-            # production orders beyond the planning horizon or manual reservations)
-            # will still be treated as available here, which can lead to over-promising.
+            # Standard MRP netting formula:
+            # Net = Gross - On-Hand - Incoming (Scheduled Receipts) + Safety Stock
+            #
+            # We use on_hand (not available) because allocations are an order
+            # management concept, not an MRP concept. MRP has full visibility
+            # into all demand and generates planned orders to cover shortages.
+            # Using available (on_hand - allocated) would double-count demand
+            # since allocations represent the same orders driving gross requirements.
             available_supply = inv["on_hand"] + incoming
             net_shortage = req.gross_quantity - available_supply + safety_stock
 

@@ -890,10 +890,7 @@ async def get_low_stock_items(
             else:
                 aggregated_requirements[key]["gross_quantity"] += req.gross_quantity
 
-        # Calculate net requirements
-        # Pass source_production_order_ids so MRP adds back their allocations
-        # (since their demand is already in gross_quantity, we don't want to
-        # double-count by also subtracting their allocations from available)
+        # Calculate net requirements (uses on_hand, not available, to avoid double-counting)
         if aggregated_requirements:
             from app.services.mrp import ComponentRequirement
             component_reqs = []
