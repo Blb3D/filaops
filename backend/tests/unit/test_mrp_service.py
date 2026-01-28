@@ -177,6 +177,7 @@ def create_all_tables():
         Column("quantity_completed", Numeric(18, 4), default=0),
         Column("quantity_scrapped", Numeric(18, 4), default=0),
         Column("status", String(50), default="draft"),
+        Column("order_type", String(50), default="standard"),
         # QC Status fields (Sprint 3-4)
         Column("qc_status", String(50), default="not_required"),
         Column("qc_notes", Text, nullable=True),
