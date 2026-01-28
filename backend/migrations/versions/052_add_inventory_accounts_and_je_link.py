@@ -5,7 +5,7 @@ This migration:
 2. Adds journal_entry_id foreign key to inventory_transactions for audit trail
 
 Revision ID: 052_inv_accounts_je_link
-Revises: 9056086f1897
+Revises: 051_add_user_customer_access
 Create Date: 2026-01-20
 """
 
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "052_inv_accounts_je_link"
-down_revision = "9056086f1897"
+down_revision = "051_add_user_customer_access"
 branch_labels = None
 depends_on = None
 

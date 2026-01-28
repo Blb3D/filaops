@@ -1,7 +1,7 @@
 """Add user_customer_access table for multi-customer portal access
 
 Revision ID: 051_add_user_customer_access
-Revises: 050_add_shopify_webhook_log
+Revises: 047_add_entity_members
 Create Date: 2026-01-19
 
 This enables:
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "051_add_user_customer_access"
-down_revision = "050_add_shopify_webhook_log"
+down_revision = "047_add_entity_members"
 branch_labels = None
 depends_on = None
 
@@ -55,7 +55,7 @@ def upgrade():
         WHERE customer_id IS NOT NULL
           AND account_type = 'customer'
           AND NOT EXISTS (
-              SELECT 1 FROM user_customer_access uca 
+              SELECT 1 FROM user_customer_access uca
               WHERE uca.user_id = users.id AND uca.customer_id = users.customer_id
           )
     """)

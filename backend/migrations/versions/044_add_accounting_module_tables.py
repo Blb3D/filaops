@@ -1,13 +1,13 @@
 """Add accounting module tables (GL)
 
-This migration creates the double-entry bookkeeping tables for FilaOps Pro:
-- gl_accounts: Chart of Accounts with Schedule C mapping
+This migration creates the double-entry bookkeeping tables for FilaOps:
+- gl_accounts: Chart of Accounts
 - gl_fiscal_periods: Period tracking for month/year
 - gl_journal_entries: Journal entry headers with audit trail
 - gl_journal_entry_lines: Debit/credit lines for each entry
 
 Revision ID: 044_gl_tables
-Revises: 043_add_customer_name_fields
+Revises: 042_add_catalog_system
 Create Date: 2026-01-16
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "044_gl_tables"
-down_revision = "043_add_customer_name_fields"
+down_revision = "042_add_catalog_system"
 branch_labels = None
 depends_on = None
 

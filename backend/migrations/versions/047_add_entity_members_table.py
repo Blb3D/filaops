@@ -1,7 +1,7 @@
 """Add entity_members table for LLC/Partnership member tracking
 
 Revision ID: 047_add_entity_members
-Revises: 046_add_business_type
+Revises: 045_seed_coa
 Create Date: 2026-01-16
 
 Stores LLC members/partners for K-1 allocation:
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "047_add_entity_members"
-down_revision = "046_add_business_type"
+down_revision = "045_seed_coa"
 branch_labels = None
 depends_on = None
 
