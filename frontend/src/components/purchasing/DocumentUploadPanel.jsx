@@ -198,13 +198,6 @@ export default function DocumentUploadPanel({ poId, onDocumentsChange }) {
     }
   };
 
-  // Handle preview
-  const handlePreview = (doc) => {
-    if (doc.file_url) {
-      window.open(doc.file_url, '_blank');
-    }
-  };
-
   // Get type info
   const getTypeInfo = (type) => {
     return DOCUMENT_TYPES.find((t) => t.value === type) || DOCUMENT_TYPES[5]; // Default to 'other'

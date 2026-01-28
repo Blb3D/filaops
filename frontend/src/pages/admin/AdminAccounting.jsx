@@ -1987,7 +1987,7 @@ function PeriodsTab({ token }) {
 export default function AdminAccounting() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const token = localStorage.getItem("adminToken");
-  const { isPro, isEnterprise, loading: tierLoading } = useFeatureFlags();
+  const { isPro, isEnterprise } = useFeatureFlags();
 
   const tabs = [
     { id: "dashboard", label: "Dashboard", icon: "chart-bar", tier: "community" },

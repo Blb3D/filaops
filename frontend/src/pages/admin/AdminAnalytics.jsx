@@ -52,7 +52,7 @@ const AdminAnalytics = () => {
     }
   };
 
-  if (flagsLoading || loading) {
+  if (loading) {
     return <div className="p-6 text-white">Loading analytics...</div>;
   }
 
