@@ -84,6 +84,7 @@ def create_all_tables():
         Column("upc", String(50), nullable=True),
         Column("type", String(20), default="standard"),
         Column("gcode_file_path", String(500), nullable=True),
+        Column("image_url", String(500), nullable=True),
         Column("is_public", Boolean, default=True),
         Column("sales_channel", String(20), default="public"),
         Column("customer_id", Integer, nullable=True),
