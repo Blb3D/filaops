@@ -1,54 +1,85 @@
-> [!CAUTION]
-> ## ⚠️ Security Alert: Malicious Fork Detected
-> 
-> A malicious actor has been distributing malware through a fake FilaOps repository for **2+ months**.
-> 
-> ### ✅ Official Sources ONLY
-> - **Repository:** `github.com/Blb3D/filaops` (you're here)
-> - **Releases:** [github.com/Blb3D/filaops/releases](https://github.com/Blb3D/filaops/releases)
-> 
-> ### 🚫 Known Malicious
-> - `github.com/printertechn/filaops` — **DO NOT DOWNLOAD**
-> 
-> ### Red Flags
-> - Downloads from `raw.githubusercontent.com` zip links
-> - Any GitHub account other than `Blb3D`
-> - "Documentation" or "Support" links pointing to zip files
-> 
-> **If you downloaded from an unofficial source, delete it and scan your system immediately.**
-> 
-> [Full Security Details](SECURITY.md) | [Verify Downloads](SECURITY.md#verifying-releases) | [Report Suspicious Forks](https://github.com/Blb3D/filaops/issues/new)
+<div align="center">
 
-# FilaOps - 3D Print Farm ERP
+# FilaOps
 
-> The ERP that understands additive manufacturing—built by a print farm, for print farms.
+### The ERP Built for 3D Print Farms
+
+*Production-grade manufacturing software that actually understands additive manufacturing*
 
 [![License: BSL 1.1](https://img.shields.io/badge/License-BSL%201.1-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com/)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/FAhxySnRwa)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18+-61DAFB.svg?logo=react&logoColor=black)](https://reactjs.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16+-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Discord](https://img.shields.io/badge/Discord-Community-5865F2.svg?logo=discord&logoColor=white)](https://discord.gg/FAhxySnRwa)
+
+[Quick Start](#-quick-start) · [Features](#-features) · [Documentation](docs/) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
+
+> [!CAUTION]
+> **Security Alert:** A malicious actor has been distributing malware through fake FilaOps repositories.
+>
+> **Official source:** `github.com/Blb3D/filaops` only. [Full security details](SECURITY.md)
 
 ---
 
 ## Why FilaOps?
 
-Most ERP systems are built for traditional manufacturing. They don't understand filament spools, print times, multi-material jobs, or why you need to track which roll went into which print.
+Most ERP systems were built for traditional manufacturing—injection molding, CNC, assembly lines. They don't understand filament spools, print times, multi-material jobs, or why you need to track which roll went into which print.
 
-FilaOps was built by someone who runs a print farm and got tired of spreadsheets and generic software that didn't fit.
+**FilaOps was built by a print farm owner who got tired of spreadsheets.**
 
-**What makes it different:**
-- **3D printing native** - BOMs that understand filament, print times, and material costs
-- **Actually usable** - Simple PostgreSQL setup, dark theme UI, no enterprise sales calls required
-- **Self-hosted & open** - Your data stays yours. No cloud dependency, no vendor lock-in
-- **Production-grade** - Serial/lot traceability ready for medical device and aerospace compliance
+| Problem | FilaOps Solution |
+|---------|------------------|
+| Generic BOMs don't track filament usage | BOMs with per-gram material costs and scrap factors |
+| No concept of print failures | Scrap tracking with reasons, partial quantities, auto-remake orders |
+| Inventory doesn't track spools | Lot/serial traceability down to the spool level |
+| Enterprise software requires enterprise budgets | Self-hosted, open source, your data stays yours |
+| Dark mode? What's that? | Built for 2am production runs |
+
+---
+
+## Features
+
+### Core Manufacturing
+
+| Module | Description |
+|--------|-------------|
+| **Products & Items** | Unified catalog for finished goods, components, filament, hardware |
+| **Bill of Materials** | Multi-level BOMs with material costs, scrap factors, unit conversions |
+| **Inventory Management** | Real-time stock levels, FIFO tracking, configurable reorder points |
+| **Production Orders** | Complete workflow from sales order to shipment |
+| **Operations & Routing** | Multi-step manufacturing with work centers and scheduling |
+| **Scrap & Remake** | Track failures by reason, partial scrap, automatic remake generation |
+| **MRP Engine** | Material requirements planning with shortage detection and suggestions |
+
+### Quality & Traceability
+
+| Feature | Description |
+|---------|-------------|
+| **Serial Numbers** | Unique identifiers for finished goods |
+| **Lot Tracking** | Batch traceability for raw materials |
+| **Forward/Backward Trace** | "Where did this material go?" / "What went into this product?" |
+| **Compliance Ready** | Foundation for FDA 21 CFR Part 11, ISO 13485 |
+
+### Business Operations
+
+| Feature | Description |
+|---------|-------------|
+| **Sales Orders** | Customer order management with status tracking |
+| **Purchase Orders** | Vendor management, receiving, cost tracking |
+| **General Ledger** | Basic accounting with journal entries |
+| **Multi-User** | Team access with role-based permissions |
+| **REST API** | Complete API for integrations and automation |
 
 ---
 
 ## Quick Start
 
-Choose your preferred installation method:
-
-### 🐳 Docker (Recommended for Quick Start)
+### Option 1: Docker (Fastest)
 
 ```bash
 git clone https://github.com/Blb3D/filaops.git
@@ -57,200 +88,186 @@ cp .env.example .env
 docker-compose up --build
 ```
 
-Open http://localhost:5173 — done! See **[Docker Setup Guide](docs/setup/docker.md)** for details.
+Open http://localhost:5173 — the Setup Wizard creates your admin account.
 
-### 💻 Native Installation
+### Option 2: Native Installation
 
-For development or if you prefer running services directly:
+**Prerequisites:** Python 3.11+, PostgreSQL 16+, Node.js 18+
 
-| Platform | Guide | Prerequisites |
-|----------|-------|---------------|
-| **Windows** | [Windows Setup Guide](docs/setup/windows.md) | Python 3.11+, PostgreSQL 16+, Node.js 18+ |
-| **macOS/Linux** | [macOS/Linux Setup Guide](docs/setup/linux-macos.md) | Python 3.11+, PostgreSQL 16+, Node.js 18+ |
+```bash
+# Clone
+git clone https://github.com/Blb3D/filaops.git
+cd filaops
 
-After setup, open http://localhost:5173 — the **Setup Wizard** will guide you through creating your admin account.
+# Backend
+cd backend
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env      # Edit with your PostgreSQL credentials
+python -m uvicorn app.main:app --reload --port 8000
 
-📖 **[Getting Started Guide](docs/getting-started.md)** for detailed instructions and troubleshooting.
+# Frontend (new terminal)
+cd frontend
+npm install
+npm run dev
+```
 
----
+| URL | Description |
+|-----|-------------|
+| http://localhost:5173 | Admin Dashboard |
+| http://localhost:8000/docs | API Documentation |
+| http://localhost:8000/health | Health Check |
 
-## What's Included
-
-### Core ERP (Free, Self-Hosted)
-
-| Module | What It Does |
-|--------|--------------|
-| **Products & Items** | Unified catalog for finished goods, components, filament, hardware |
-| **Bill of Materials** | Multi-level BOMs with material costs and unit tracking |
-| **Inventory** | Stock levels, FIFO tracking, low stock alerts |
-| **Sales Orders** | Order management with status tracking |
-| **Production Orders** | Manufacturing workflow from order to ship |
-| **Scrap & Remake** | Track print failures with configurable reasons, partial scrap, auto-remake orders |
-| **MRP** | Material requirements planning with shortage detection |
-| **Traceability** | Serial numbers, lot tracking, forward/backward recall queries |
-| **Multi-User** | Team access with user accounts |
-| **REST API** | Full API for integrations and automation |
-
-### Admin Dashboard
-- Dark theme (your eyes will thank you at 2am)
-- Real-time KPIs: overdue orders, low stock, revenue
-- Order Command Center with MRP explosion
+**Detailed guides:** [Windows](docs/setup/windows.md) · [macOS/Linux](docs/setup/linux-macos.md) · [Docker](docs/setup/docker.md)
 
 ---
 
-## Feature Comparison
+## Architecture
 
-The core ERP is fully functional and free to self-host. Pro and Enterprise tiers add integrations and advanced features for larger operations.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         FilaOps ERP                              │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌─────────────┐     ┌─────────────┐     ┌─────────────┐        │
+│  │   React     │────▶│   FastAPI   │────▶│ PostgreSQL  │        │
+│  │  Frontend   │     │   Backend   │     │  Database   │        │
+│  │  (Vite)     │◀────│  (Uvicorn)  │◀────│   (16+)     │        │
+│  └─────────────┘     └─────────────┘     └─────────────┘        │
+│        :5173              :8000                                  │
+├─────────────────────────────────────────────────────────────────┤
+│  Backend Services:                                               │
+│  • MRP Engine - Material requirements planning                   │
+│  • Scrap Service - Failure tracking and remake generation        │
+│  • Inventory Service - Stock management with FIFO                │
+│  • Traceability - Lot/serial tracking with recall queries        │
+│  • Transaction Audit - Complete change history                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Project Structure
+
+```
+filaops/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/        # REST endpoints
+│   │   ├── models/        # SQLAlchemy ORM models
+│   │   ├── services/      # Business logic (MRP, scrap, inventory)
+│   │   ├── schemas/       # Pydantic request/response models
+│   │   └── core/          # Configuration, security, utilities
+│   ├── migrations/        # Alembic database migrations
+│   └── tests/             # pytest test suite
+├── frontend/
+│   ├── src/
+│   │   ├── components/    # Reusable React components
+│   │   ├── pages/         # Page components
+│   │   └── lib/           # Utilities and API client
+│   └── public/
+└── docs/                  # Documentation
+```
+
+---
+
+## Editions
 
 | | Community | Pro | Enterprise |
 |---|:---:|:---:|:---:|
 | **Core ERP** | ✅ | ✅ | ✅ |
 | Products, BOMs, Inventory | ✅ | ✅ | ✅ |
 | Sales & Production Orders | ✅ | ✅ | ✅ |
+| Operations & Routing | ✅ | ✅ | ✅ |
+| Scrap Tracking & Remakes | ✅ | ✅ | ✅ |
 | MRP & Shortage Detection | ✅ | ✅ | ✅ |
 | Serial/Lot Traceability | ✅ | ✅ | ✅ |
-| Multi-User | ✅ | ✅ | ✅ |
 | REST API | ✅ | ✅ | ✅ |
-| | | | |
 | **Integrations** | | | |
 | Customer Quote Portal | — | ✅ | ✅ |
-| Multi-Material/AMS Quoting | — | ✅ | ✅ |
-| Squarespace Sync | — | ✅ | ✅ |
+| B2B Wholesale Portal | — | ✅ | ✅ |
 | QuickBooks Integration | — | ✅ | ✅ |
-| | | | |
+| Shopify/Squarespace Sync | — | ✅ | ✅ |
 | **Advanced** | | | |
-| Advanced Role Permissions | — | ✅ | ✅ |
-| User Activity Audit Logs | — | ✅ | ✅ |
+| Advanced Permissions | — | ✅ | ✅ |
+| User Activity Audit | — | ✅ | ✅ |
 | ML Print Time Estimation | — | — | ✅ |
 | Printer Fleet Management | — | — | ✅ |
 | SSO / LDAP | — | ✅ | ✅ |
 | Priority Support | — | — | ✅ |
+| **Pricing** | Free | Contact | Contact |
 
-**Pro & Enterprise launching 2026** — [Join the waitlist](mailto:info@blb3dprinting.com)
-
----
-
-## ⚙️ Build Configuration (Community Edition)
-
-The community version uses **development mode builds** for the frontend to maximize debuggability and contributor experience:
-
-- ✅ **Unminified code** - Easy to debug and understand
-- ✅ **Source maps included** - Full stack traces with real line numbers
-- ✅ **Readable variable names** - Contributing PRs is easier
-- ✅ **Instant hot reload** - Changes appear immediately (no Docker rebuilds)
-- ⚠️ **Larger bundle size** (~2MB vs ~1MB minified)
-
-**This is intentional for self-hosted deployments** where source code is already visible and performance impact is negligible on local networks.
-
-> 📝 **For SaaS/Production hosting:** Production builds require refactoring ~30 components to fix React hook timing issues. See `frontend/PRODUCTION_BUILD_BLOCKED.md` for details. This only affects public-facing deployments; self-hosted users are unaffected.
-
-## 🆕 Recent Improvements
-
-### PostgreSQL-Only Architecture
-- **Simplified setup** - No Docker required, direct PostgreSQL connection
-- **Faster performance** - Native database drivers, no container overhead
-- **Easier debugging** - Direct access to database tools
-- **Better reliability** - Fewer moving parts
-
-### Enhanced Production Scheduling
-- **Gantt chart interface** - Visual timeline for production orders
-- **Drag & drop scheduling** - Easily reschedule orders
-- **Resource management** - Assign orders to specific machines
-- **Auto-arrange** - Optimize schedule layout automatically
-
-### Frontend Enhancements
-- **Better error handling** - More informative error messages
-- **Centralized API client** - Automatic retry and error recovery
-- **Improved components** - Enhanced scheduling, scrap, and update modals
-- **Instant hot reload** - See changes immediately during development
-
-See **[PostgreSQL Migration Announcement](docs/archive/ANNOUNCEMENT_POSTGRES_MIGRATION.md)** for complete details.
+**Pro & Enterprise launching 2026** — [Join waitlist](mailto:info@blb3dprinting.com)
 
 ---
 
 ## Documentation
 
-| | |
-|---|---|
-| **[How It Works](docs/how-it-works.md)** | System overview and workflows |
-| **[docs/EMAIL_CONFIGURATION.md](docs/EMAIL_CONFIGURATION.md)** | Email/SMTP setup guide |
-| **[Known Issues](docs/releases/v1.5.0_KNOWN_ISSUES.md)** | Known issues and workarounds |
-| **[Troubleshooting](docs/troubleshooting.md)** | Common issues and fixes |
-| **[FAQ](docs/faq.md)** | Frequently asked questions |
-| **[CONTRIBUTING.md](CONTRIBUTING.md)** | For contributors |
-| **[docs/](docs/)** | Full documentation (architecture, API, planning) |
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | First-time setup walkthrough |
+| [How It Works](docs/how-it-works.md) | System overview and workflows |
+| [API Reference](http://localhost:8000/docs) | Interactive API documentation |
+| [Email Configuration](docs/EMAIL_CONFIGURATION.md) | SMTP setup for notifications |
+| [Troubleshooting](docs/troubleshooting.md) | Common issues and solutions |
+| [FAQ](docs/faq.md) | Frequently asked questions |
 
 ---
 
-## For Developers
+## Contributing
 
-### Local Development Setup
-
-**Prerequisites:** Python 3.11+, Node.js 18+, PostgreSQL 16+
+We welcome contributions from the community.
 
 ```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-# Create .env file with PostgreSQL connection details
-python -m uvicorn app.main:app --reload --port 8000
+# Fork and clone
+git clone https://github.com/YOUR_USERNAME/filaops.git
+cd filaops
 
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+# Create feature branch
+git checkout -b feature/your-feature
+
+# Make changes, then
+git commit -m "feat: add your feature"
+git push origin feature/your-feature
 ```
-
-- API docs: http://localhost:8000/docs
-- Admin UI: http://localhost:5173
-
-See **[Windows Setup](docs/setup/windows.md)** or **[macOS/Linux Setup](docs/setup/linux-macos.md)** for complete setup instructions.
-
-### Project Structure
-
-```
-filaops/
-├── backend/           # FastAPI API
-│   ├── app/
-│   │   ├── api/       # REST endpoints
-│   │   ├── models/    # SQLAlchemy ORM
-│   │   ├── services/  # Business logic (MRP, etc)
-│   │   └── core/      # Config, security
-│   └── tests/
-├── frontend/          # React admin UI
-└── docs/              # Documentation
-```
-
-### Contributing
-
-We welcome contributions. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 **Good first issues:**
-- Bug fixes
-- Documentation improvements  
+- Bug fixes and error handling improvements
+- Documentation updates
 - UI/UX polish
-- Test coverage
+- Test coverage expansion
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 ---
 
 ## License
 
-**Business Source License 1.1** — see [LICENSE](LICENSE)
+**Business Source License 1.1** — [Full text](LICENSE)
 
-- ✅ Free for internal business use
-- ✅ Free for personal and educational use  
-- ❌ Cannot offer FilaOps as a hosted service to others
-- 🔓 Converts to Apache 2.0 after 4 years
+| Use Case | Allowed |
+|----------|---------|
+| Internal business use | ✅ Yes |
+| Personal / educational | ✅ Yes |
+| Modifications for internal use | ✅ Yes |
+| Offering as hosted service | ❌ No |
+| After 4 years | Apache 2.0 |
 
 ---
 
 ## Support
 
-- **[Discord](https://discord.gg/FAhxySnRwa)** — Chat with the community
-- **[GitHub Issues](https://github.com/Blb3D/filaops/issues)** — Bug reports
-- **[GitHub Discussions](https://github.com/Blb3D/filaops/discussions)** — Questions and ideas
-- **Email:** info@blb3dprinting.com
+| Channel | Use For |
+|---------|---------|
+| [Discord](https://discord.gg/FAhxySnRwa) | Community chat, quick questions |
+| [GitHub Issues](https://github.com/Blb3D/filaops/issues) | Bug reports |
+| [GitHub Discussions](https://github.com/Blb3D/filaops/discussions) | Feature requests, ideas |
+| [Email](mailto:info@blb3dprinting.com) | Business inquiries |
 
 ---
 
-Built by [BLB3D](https://blb3dprinting.com) — a print farm that needed real manufacturing software.
+<div align="center">
+
+**Built by [BLB3D](https://blb3dprinting.com)** — A print farm that needed real manufacturing software.
+
+*If you find FilaOps useful, consider giving it a ⭐ on GitHub!*
+
+</div>
