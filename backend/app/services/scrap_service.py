@@ -243,7 +243,7 @@ def process_operation_scrap(
     po, op = get_operation_with_po(db, po_id, op_id)
 
     # Validate scrap reason
-    reason = db.query(ScrapReason).filter(ScrapReason.code == scrap_reason_code, ScrapReason.active == True).first()
+    reason = db.query(ScrapReason).filter(ScrapReason.code == scrap_reason_code, ScrapReason.active.is_(True)).first()
 
     if not reason:
         raise ScrapError(f"Invalid or inactive scrap reason: {scrap_reason_code}", 400)

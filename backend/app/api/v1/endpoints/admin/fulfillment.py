@@ -1904,7 +1904,6 @@ async def buy_shipping_label(
 
     packaging_consumed = []
     finished_goods_shipped = None
-    shipment_journal_entry_id = None
 
     # Get quote for product info
     quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
@@ -2007,7 +2006,6 @@ async def buy_shipping_label(
             "inventory_remaining": float(fg_inventory.on_hand_quantity) if fg_inventory else 0,
             "journal_entry_id": journal_entry.id if journal_entry else None,
         }
-        shipment_journal_entry_id = journal_entry.id if journal_entry else None
 
     # Update order
     order.tracking_number = result.tracking_number
