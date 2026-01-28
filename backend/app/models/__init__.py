@@ -28,10 +28,8 @@ from app.models.purchasing_event import PurchasingEvent
 from app.models.shipping_event import ShippingEvent
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
 from app.models.maintenance import MaintenanceLog
-from app.models.customer import Customer
 from app.models.accounting import GLAccount, GLFiscalPeriod, GLJournalEntry, GLJournalEntryLine
 from app.models.entity_member import EntityMember
-from app.models.user_customer_access import UserCustomerAccess
 from app.models.production_order import ScrapRecord
 # from app.models.license import License  # Disabled until ready for production
 
@@ -105,8 +103,6 @@ __all__ = [
     "ProductionOrderSpool",
     # Maintenance
     "MaintenanceLog",
-    # CRM / B2B
-    "Customer",
     # Accounting / GL
     "GLAccount",
     "GLFiscalPeriod",
@@ -114,7 +110,6 @@ __all__ = [
     "GLJournalEntryLine",
     # Entity Members
     "EntityMember",
-    "UserCustomerAccess",
     # Scrap
     "ScrapRecord",
     # License (disabled until ready)

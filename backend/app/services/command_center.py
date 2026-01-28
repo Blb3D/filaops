@@ -155,7 +155,7 @@ def _get_overdue_sales_orders(db: Session) -> List[ActionItem]:
                 created_at=so.estimated_completion_date,
                 metadata={
                     "days_overdue": str(days_overdue),
-                    "customer": so.customer.company_name if so.customer else "Unknown",
+                    "customer": so.customer_name or "Unknown",
                 },
             )
         )
@@ -196,7 +196,7 @@ def _get_due_today_sales_orders(db: Session) -> List[ActionItem]:
                     SuggestedAction(label="View Order", url=f"/admin/orders/{so.id}", action_type="navigate")
                 ],
                 created_at=so.order_date,
-                metadata={"status": so.status, "customer": so.customer.company_name if so.customer else "Unknown"},
+                metadata={"status": so.status, "customer": so.customer_name or "Unknown"},
             )
         )
 

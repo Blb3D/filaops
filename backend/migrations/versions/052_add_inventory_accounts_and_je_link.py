@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "052_inv_accounts_je_link"
-down_revision = "051_add_user_customer_access"
+down_revision = "047_add_entity_members"
 branch_labels = None
 depends_on = None
 

@@ -103,11 +103,7 @@ def get_fulfillment_status(db: Session, order_id: int) -> Optional[FulfillmentSt
     order_date = order.created_at.date() if order.created_at else date.today()
 
     # Get customer name
-    customer_name = order.customer_name
-    if not customer_name and order.customer:
-        customer_name = f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip()
-    if not customer_name:
-        customer_name = "Unknown"
+    customer_name = order.customer_name or "Unknown"
 
     return FulfillmentStatus(
         order_id=order.id,
@@ -191,9 +187,7 @@ def _build_shipped_status(db: Session, order: SalesOrder) -> FulfillmentStatus:
         )
 
     order_date = order.created_at.date() if order.created_at else date.today()
-    customer_name = order.customer_name or (
-        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip() if order.customer else "Unknown"
-    )
+    customer_name = order.customer_name or "Unknown"
 
     return FulfillmentStatus(
         order_id=order.id,
@@ -243,9 +237,7 @@ def _build_cancelled_status(db: Session, order: SalesOrder) -> FulfillmentStatus
         )
 
     order_date = order.created_at.date() if order.created_at else date.today()
-    customer_name = order.customer_name or (
-        f"{order.customer.first_name or ''} {order.customer.last_name or ''}".strip() if order.customer else "Unknown"
-    )
+    customer_name = order.customer_name or "Unknown"
 
     return FulfillmentStatus(
         order_id=order.id,

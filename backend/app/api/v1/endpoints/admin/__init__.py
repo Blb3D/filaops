@@ -10,7 +10,6 @@ from . import (
     audit,
     accounting,
     traceability,
-    customers,
     inventory_transactions,
     analytics,
     export,
@@ -26,9 +25,6 @@ router = APIRouter()
 
 # User Management (Admin/Operator users)
 router.include_router(users.router)
-
-# Customer Management
-router.include_router(customers.router)
 
 # BOM Management
 router.include_router(bom.router)
