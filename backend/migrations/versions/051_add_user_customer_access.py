@@ -1,4 +1,7 @@
-"""Add user_customer_access table for multi-customer portal access
+"""Note: This table supports FilaOps PRO (B2B Portal multi-customer access).
+Included for schema compatibility.
+
+Add user_customer_access table for multi-customer portal access
 
 Revision ID: 051_add_user_customer_access
 Revises: 050_add_shopify_webhook_log

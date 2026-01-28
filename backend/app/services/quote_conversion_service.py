@@ -305,20 +305,19 @@ def convert_quote_after_payment(
     quote_id: int,
     db: Session,
     payment_transaction_id: str,
-    payment_method: str = "stripe",
+    payment_method: str = "manual",
 ) -> ConversionResult:
     """
     Convenience function to convert a quote after successful payment.
-    
-    This is called after Stripe webhook confirms payment.
+
     Sets payment_status to "paid" and auto-confirms the order.
-    
+
     Args:
         quote_id: ID of the quote to convert
         db: Database session
-        payment_transaction_id: Stripe payment intent ID or similar
-        payment_method: Payment method used (default: "stripe")
-    
+        payment_transaction_id: External payment transaction ID
+        payment_method: Payment method used (default: "manual")
+
     Returns:
         ConversionResult
     """

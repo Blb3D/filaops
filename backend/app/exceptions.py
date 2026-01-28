@@ -380,24 +380,6 @@ class IntegrationError(FilaOpsException):
         super().__init__(f"{service}: {message}", details=details)
 
 
-class StripeError(IntegrationError):
-    """Raised when Stripe payment processing fails."""
-
-    error_code = "STRIPE_ERROR"
-
-    def __init__(
-        self,
-        message: str = "Payment processing error",
-        *,
-        stripe_error_code: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ):
-        details = details or {}
-        if stripe_error_code:
-            details["stripe_error_code"] = stripe_error_code
-        super().__init__("Stripe", message, details=details)
-
-
 class EasyPostError(IntegrationError):
     """Raised when EasyPost shipping integration fails."""
 

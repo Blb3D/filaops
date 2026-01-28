@@ -88,7 +88,7 @@ class Product(Base):
     gcode_file_path = Column(String(500), nullable=True)  # Path to GCODE file
 
     # Product Image
-    image_url = Column(String(500), nullable=True)  # URL to product image (Portal display, Shopify sync)
+    image_url = Column(String(500), nullable=True)  # URL to product image
 
     # Visibility & Sales Channels
     is_public = Column(Boolean, default=True)  # Show on public storefront?
@@ -124,8 +124,6 @@ class Product(Base):
     # Material relationships (for supply items that are materials)
     material_type = relationship("MaterialType", foreign_keys=[material_type_id])
     color = relationship("Color", foreign_keys=[color_id])
-
-    # Note: Catalog and Shopify relationships available in FilaOps PRO
 
     def __repr__(self):
         return f"<Product {self.sku}: {self.name}>"

@@ -30,17 +30,9 @@ from app.models.shipping_event import ShippingEvent
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool
 from app.models.maintenance import MaintenanceLog
 from app.models.customer import Customer
-from app.models.user_customer_access import UserCustomerAccess
 
 # Accounting (GL)
 from app.models.accounting import GLAccount, GLFiscalPeriod, GLJournalEntry, GLJournalEntryLine
-
-# PRO Features (not included in open source core):
-# - PriceLevel, Catalog, CatalogProduct, CustomerCatalog
-# - PortalAccessRequest
-# - EntityMember
-# - License
-# - ShopifyConfig, ShopifyWebhookLog, ShopifyProductMapping
 
 __all__ = [
     # Item management
@@ -115,7 +107,6 @@ __all__ = [
     "MaintenanceLog",
     # CRM (Core)
     "Customer",
-    "UserCustomerAccess",
     # Accounting (GL)
     "GLAccount",
     "GLFiscalPeriod",

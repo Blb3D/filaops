@@ -19,7 +19,6 @@ from app.api.v1.endpoints import (
     po_documents,
     low_stock,
     vendor_items,
-    exports,
     work_centers,
     resources,
     routings,
@@ -136,15 +135,8 @@ router.include_router(
     tags=["purchase-orders"]
 )
 
-# Invoice Import (AI-powered invoice parsing) - PRO feature
-
-# Exports (QuickBooks, etc.)
-router.include_router(
-    exports.router,
-    prefix="/exports",
-    tags=["exports"]
-)
-
+# Invoice Import is a PRO feature
+# Exports (QuickBooks) is a PRO feature
 # Amazon Import is a PRO feature
 
 # Work Centers
@@ -232,8 +224,7 @@ router.include_router(
     tags=["command-center"]
 )
 
-# License activation (disabled until ready for production)
-# router.include_router(license.router)
+# License activation is a PRO feature
 
 # Test endpoints - only enabled in non-production environments
 # These endpoints allow E2E tests to seed test data

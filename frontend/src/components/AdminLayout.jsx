@@ -1,10 +1,7 @@
 import { Outlet, Link, NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import ProFeaturesAnnouncement from "./ProFeaturesAnnouncement";
-// import UpdateNotification from "./UpdateNotification"; // TODO: Re-enable once upgrade endpoint exists
 import SecurityBadge from "./SecurityBadge";
 import useActivityTokenRefresh from "../hooks/useActivityTokenRefresh";
-import { useFeatureFlags } from "../hooks/useFeatureFlags";
 import { getCurrentVersion, getCurrentVersionSync, formatVersion } from "../utils/version";
 import { API_URL } from "../config/api";
 import logoNavbar from "../assets/logo_navbar.png";
@@ -541,18 +538,15 @@ export default function AdminLayout() {
     return () => clearInterval(interval);
   }, []);
 
-  // Filter nav items based on user role and tier
+  // Filter nav items based on user role
   const isAdmin = user?.account_type === "admin";
-  const { isPro } = useFeatureFlags();
 
-  // Filter groups and items based on admin status and tier
   const filteredNavGroups = navGroups
     .filter((group) => !group.adminOnly || isAdmin)
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => {
         if (item.adminOnly && !isAdmin) return false;
-        if (item.proOnly && !isPro) return false;
         return true;
       }),
     }))
@@ -593,7 +587,6 @@ export default function AdminLayout() {
       >
         Skip to main content
       </a>
-      <ProFeaturesAnnouncement />
       <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
         {/* Mobile menu button */}
         <button
@@ -749,7 +742,6 @@ export default function AdminLayout() {
           </nav>
         </aside>
         <div className="flex-1 flex flex-col">
-          {/* TODO: Re-enable UpdateNotification once /api/v1/system/updates/upgrade endpoint is implemented */}
           <header
             className="sticky top-0 z-30 glass px-6 py-4"
             style={{ borderBottom: '1px solid var(--border-subtle)' }}

@@ -6,7 +6,7 @@ Provides endpoints for viewing inventory flow through accounting lens:
 
 Also provides:
 - Financial dashboard summary
-- Sales journal with QuickBooks export
+- Sales journal with CSV export
 - Tax summary for filing prep
 - Payment summary views
 
@@ -803,17 +803,10 @@ async def export_sales_journal_csv(
     db: Session = Depends(get_db),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
-    format: str = Query("quickbooks", description="Export format: quickbooks, generic"),
 ):
     """
-    Export sales journal as CSV for QuickBooks import.
+    Export sales journal as CSV.
     Uses shipped_at for accrual basis revenue recognition per GAAP.
-
-    QuickBooks IIF format creates journal entries for:
-    - Accounts Receivable (debit grand_total)
-    - Sales Income (credit subtotal, excludes tax)
-    - Sales Tax Payable (credit tax - liability account)
-    - Shipping Income (credit shipping)
     """
     if not end_date:
         end_date = datetime.now(timezone.utc)
@@ -832,82 +825,35 @@ async def export_sales_journal_csv(
 
     output = io.StringIO()
 
-    if format == "quickbooks":
-        # QuickBooks IIF-style CSV format
-        writer = csv.writer(output)
-        writer.writerow(["!TRNS", "DATE", "ACCNT", "NAME", "CLASS", "AMOUNT", "MEMO"])
-        writer.writerow(["!SPL", "DATE", "ACCNT", "NAME", "CLASS", "AMOUNT", "MEMO"])
-        writer.writerow(["!ENDTRNS"])
+    writer = csv.writer(output)
+    # Disclaimer header
+    writer.writerow(["# FilaOps Sales Journal - For Reference Only"])
+    writer.writerow(["# Verify with qualified accountant before use in tax filings."])
+    writer.writerow([f"# Date Range: {start_date} to {end_date}"])
+    writer.writerow([])
+    writer.writerow([
+        "Date", "Order Number", "Status", "Payment Status", "Source",
+        "Product", "Quantity", "Subtotal", "Tax Rate", "Tax Amount",
+        "Shipping", "Grand Total", "Paid Date", "Shipped Date"
+    ])
 
-        for order in orders:
-            # Use shipped_at for accrual basis revenue recognition
-            date_str = order.shipped_at.strftime("%m/%d/%Y") if order.shipped_at else ""
-            # Revenue excludes tax (tax is a liability, not revenue)
-            subtotal = float(order.total_price or 0)
-            tax = float(order.tax_amount or 0)
-            shipping = float(order.shipping_cost or 0)
-            grand_total = float(order.grand_total or (subtotal + tax + shipping))
-
-            # Main transaction line (Accounts Receivable)
-            writer.writerow([
-                "TRNS", date_str, "Accounts Receivable", order.order_number,
-                "Sales", f"{grand_total:.2f}", f"Sales Order {order.order_number}"
-            ])
-
-            # Split: Sales Income (credit = negative in QB)
-            if subtotal > 0:
-                writer.writerow([
-                    "SPL", date_str, "Sales Income", order.order_number,
-                    "Sales", f"-{subtotal:.2f}", "Product Sales"
-                ])
-
-            # Split: Sales Tax Payable
-            if tax > 0:
-                writer.writerow([
-                    "SPL", date_str, "Sales Tax Payable", order.order_number,
-                    "Sales", f"-{tax:.2f}", "Sales Tax"
-                ])
-
-            # Split: Shipping Income
-            if shipping > 0:
-                writer.writerow([
-                    "SPL", date_str, "Shipping Income", order.order_number,
-                    "Sales", f"-{shipping:.2f}", "Shipping"
-                ])
-
-            writer.writerow(["ENDTRNS"])
-
-    else:
-        # Generic CSV format
-        writer = csv.writer(output)
-        # Disclaimer header
-        writer.writerow(["# FilaOps Sales Journal - For Reference Only"])
-        writer.writerow(["# Verify with qualified accountant before use in tax filings."])
-        writer.writerow([f"# Date Range: {start_date} to {end_date}"])
-        writer.writerow([])
+    for order in orders:
         writer.writerow([
-            "Date", "Order Number", "Status", "Payment Status", "Source",
-            "Product", "Quantity", "Subtotal", "Tax Rate", "Tax Amount",
-            "Shipping", "Grand Total", "Paid Date", "Shipped Date"
+            order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Revenue recognition date
+            order.order_number,
+            order.status,
+            order.payment_status,
+            order.source or "portal",
+            order.product_name or "",
+            order.quantity,
+            float(order.total_price or 0),  # Subtotal (excludes tax)
+            float(order.tax_rate or 0) if order.tax_rate else "",
+            float(order.tax_amount or 0),  # Tax liability
+            float(order.shipping_cost or 0),
+            float(order.grand_total or 0),
+            order.paid_at.strftime("%Y-%m-%d") if order.paid_at else "",
+            order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",
         ])
-
-        for order in orders:
-            writer.writerow([
-                order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",  # Revenue recognition date
-                order.order_number,
-                order.status,
-                order.payment_status,
-                order.source or "portal",
-                order.product_name or "",
-                order.quantity,
-                float(order.total_price or 0),  # Subtotal (excludes tax)
-                float(order.tax_rate or 0) if order.tax_rate else "",
-                float(order.tax_amount or 0),  # Tax liability
-                float(order.shipping_cost or 0),
-                float(order.grand_total or 0),
-                order.paid_at.strftime("%Y-%m-%d") if order.paid_at else "",
-                order.shipped_at.strftime("%Y-%m-%d") if order.shipped_at else "",
-            ])
 
     output.seek(0)
     filename = f"sales_journal_{start_date.strftime('%Y%m%d')}_{end_date.strftime('%Y%m%d')}.csv"

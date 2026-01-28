@@ -17,7 +17,6 @@ import {
   X,
   Download,
   Trash2,
-  Eye,
   Loader2,
   Plus,
   AlertCircle,
@@ -191,12 +190,7 @@ export default function DocumentUploadPanel({ poId, onDocumentsChange }) {
 
   // Handle download
   const handleDownload = (doc) => {
-    if (doc.storage_type === 'google_drive' && doc.google_drive_id) {
-      window.open(
-        `https://drive.google.com/uc?id=${doc.google_drive_id}&export=download`,
-        '_blank'
-      );
-    } else if (doc.download_url) {
+    if (doc.download_url) {
       window.open(doc.download_url, '_blank');
     } else {
       // Fallback to API endpoint
@@ -204,14 +198,9 @@ export default function DocumentUploadPanel({ poId, onDocumentsChange }) {
     }
   };
 
-  // Handle preview (Google Drive only)
+  // Handle preview
   const handlePreview = (doc) => {
-    if (doc.storage_type === 'google_drive' && doc.google_drive_id) {
-      window.open(
-        `https://drive.google.com/file/d/${doc.google_drive_id}/preview`,
-        '_blank'
-      );
-    } else if (doc.file_url) {
+    if (doc.file_url) {
       window.open(doc.file_url, '_blank');
     }
   };
@@ -359,28 +348,11 @@ export default function DocumentUploadPanel({ poId, onDocumentsChange }) {
                       <span>{formatFileSize(doc.file_size)}</span>
                       <span>•</span>
                       <span>{formatDate(doc.uploaded_at)}</span>
-                      {doc.storage_type === 'google_drive' && (
-                        <>
-                          <span>•</span>
-                          <span className="text-blue-400">Google Drive</span>
-                        </>
-                      )}
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {/* Preview (Google Drive only) */}
-                    {doc.storage_type === 'google_drive' && (
-                      <button
-                        onClick={() => handlePreview(doc)}
-                        className="p-1.5 hover:bg-gray-700 rounded text-gray-400 hover:text-blue-400"
-                        title="Preview"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    )}
-
                     {/* Download */}
                     <button
                       onClick={() => handleDownload(doc)}

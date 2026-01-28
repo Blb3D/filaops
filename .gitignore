@@ -1,6 +1,12 @@
 # =============================================================================
-# BLB3D Production - Git Ignore
+# FilaOps - Git Ignore
 # =============================================================================
+
+# Binaries (ship instructions, not executables)
+*.exe
+
+# Windows artifacts
+nul
 
 # Environment & Secrets
 .env

@@ -17,7 +17,7 @@ const paymentMethods = [
   { value: "check", label: "Check" },
   { value: "credit_card", label: "Credit Card" },
   { value: "paypal", label: "PayPal" },
-  { value: "stripe", label: "Stripe" },
+  { value: "online", label: "Online Payment" },
   { value: "venmo", label: "Venmo" },
   { value: "zelle", label: "Zelle" },
   { value: "wire", label: "Wire Transfer" },
@@ -471,7 +471,7 @@ export default function RecordPaymentModal({
                 onChange={(e) =>
                   setForm({ ...form, transaction_id: e.target.value })
                 }
-                placeholder="Stripe, PayPal, or other reference"
+                placeholder="Transaction ID or reference number"
                 className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
               />
             </div>

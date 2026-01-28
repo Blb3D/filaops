@@ -71,14 +71,6 @@ class User(Base):
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     quotes = relationship("Quote", back_populates="user", foreign_keys="[Quote.user_id]", cascade="all, delete-orphan")
     sales_orders = relationship("SalesOrder", back_populates="user", foreign_keys="[SalesOrder.user_id]", cascade="all, delete-orphan")
-    
-    # Multi-customer access (B2B portal)
-    customer_access = relationship(
-        "UserCustomerAccess",
-        back_populates="user",
-        foreign_keys="[UserCustomerAccess.user_id]",
-        cascade="all, delete-orphan"
-    )
 
     def __repr__(self):
         return f"<User(id={self.id}, email='{self.email}', status='{self.status}')>"

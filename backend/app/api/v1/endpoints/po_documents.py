@@ -62,7 +62,6 @@ def _document_to_response(doc: PurchaseOrderDocument) -> PODocumentResponse:
         storage_type=doc.storage_type,
         file_size=doc.file_size,
         mime_type=doc.mime_type,
-        google_drive_id=doc.google_drive_id,
         notes=doc.notes,
         uploaded_by=doc.uploaded_by,
         uploaded_at=doc.uploaded_at,
@@ -135,19 +134,13 @@ async def upload_document(
     storage_type = "local"
     file_url = None
     file_path = None
-    google_drive_id = None
-
-    # TODO: Google Drive integration disabled - requires proper OAuth token flow
-    # For now, always use local storage
-
     # Save to local storage
-    if storage_type == "local":
-        _ensure_upload_dir()
-        local_path = os.path.join(UPLOAD_DIR, safe_filename)
-        with open(local_path, "wb") as f:
-            f.write(file_content)
-        file_path = local_path
-        logger.info(f"Saved {safe_filename} locally to {local_path}")
+    _ensure_upload_dir()
+    local_path = os.path.join(UPLOAD_DIR, safe_filename)
+    with open(local_path, "wb") as f:
+        f.write(file_content)
+    file_path = local_path
+    logger.info(f"Saved {safe_filename} locally to {local_path}")
     
     # Create document record
     doc = PurchaseOrderDocument(
@@ -160,7 +153,6 @@ async def upload_document(
         storage_type=storage_type,
         file_size=file_size,
         mime_type=mime_type,
-        google_drive_id=google_drive_id,
         notes=notes,
         uploaded_by=current_user.email,
         uploaded_at=datetime.now(timezone.utc),
@@ -242,8 +234,7 @@ async def download_document(
     """
     Download a document
     
-    For local files, returns the file directly.
-    For Google Drive files, redirects to the download URL.
+    Returns the file for download.
     """
     doc = db.query(PurchaseOrderDocument).filter(
         PurchaseOrderDocument.id == doc_id,
@@ -252,12 +243,6 @@ async def download_document(
     
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
-    # Google Drive - redirect to download URL
-    if doc.storage_type == "google_drive" and doc.google_drive_id:
-        from fastapi.responses import RedirectResponse
-        download_url = f"https://drive.google.com/uc?id={doc.google_drive_id}&export=download"
-        return RedirectResponse(url=download_url)
     
     # Local file
     if doc.file_path and os.path.exists(doc.file_path):

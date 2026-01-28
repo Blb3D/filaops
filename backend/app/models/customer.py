@@ -66,15 +66,7 @@ class Customer(Base):
     updated_at = Column(DateTime(timezone=False), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
-    # Note: price_level and customer_catalogs relationships available in FilaOps PRO
-    users = relationship("User", back_populates="customer")  # Portal users for this customer (legacy single-customer)
-    
-    # Multi-user access (B2B portal)
-    user_access = relationship(
-        "UserCustomerAccess",
-        back_populates="customer",
-        cascade="all, delete-orphan"
-    )
+    users = relationship("User", back_populates="customer")
 
     def __repr__(self):
         return f"<Customer(id={self.id}, number='{self.customer_number}', company='{self.company_name}')>"

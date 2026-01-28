@@ -368,13 +368,12 @@ function SalesJournalTab({ token }) {
     }
   };
 
-  const handleExport = async (format) => {
+  const handleExport = async () => {
     setExportError(null); // Clear previous errors
     try {
       const params = new URLSearchParams({
         start_date: new Date(startDate).toISOString(),
         end_date: new Date(endDate).toISOString(),
-        format: format,
       });
 
       // Use fetch with Authorization header to keep credentials secure
@@ -397,9 +396,7 @@ function SalesJournalTab({ token }) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `sales-journal-${startDate}-to-${endDate}.${
-        format === "quickbooks" ? "iif" : "csv"
-      }`;
+      a.download = `sales-journal-${startDate}-to-${endDate}.csv`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -446,16 +443,10 @@ function SalesJournalTab({ token }) {
         <div className="flex-1"></div>
         <div className="flex gap-2">
           <button
-            onClick={() => handleExport("generic")}
+            onClick={() => handleExport()}
             className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 text-sm"
           >
             Export CSV
-          </button>
-          <button
-            onClick={() => handleExport("quickbooks")}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
-          >
-            Export for QuickBooks
           </button>
         </div>
       </div>

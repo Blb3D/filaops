@@ -350,12 +350,11 @@ class PODocumentResponse(BaseModel):
     storage_type: str
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
-    google_drive_id: Optional[str] = None
     notes: Optional[str] = None
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     download_url: Optional[str] = None  # Computed URL for downloading
-    preview_url: Optional[str] = None  # Computed URL for preview (Google Drive)
+    preview_url: Optional[str] = None  # Computed URL for preview
 
     class Config:
         from_attributes = True
@@ -405,36 +404,6 @@ class VendorItemResponse(VendorItemBase):
         from_attributes = True
 
 
-# ============================================================================
-# QuickBooks Export Schemas
-# ============================================================================
-
-class QBExportType(str, Enum):
-    """QuickBooks export types"""
-    EXPENSE = "expense"  # Direct expenses (credit card purchases)
-    BILL = "bill"  # Accounts payable
-    CHECK = "check"  # Check register
-
-
-class QBExportFormat(str, Enum):
-    """QuickBooks export formats"""
-    CSV = "csv"  # Universal CSV
-    IIF = "iif"  # QuickBooks Desktop Interchange Format
-
-
-class QBExportRequest(BaseModel):
-    """Request for QuickBooks export"""
-    start_date: date
-    end_date: date
-    export_type: QBExportType = QBExportType.EXPENSE
-    format: QBExportFormat = QBExportFormat.CSV
-    include_tax: bool = True
-    include_shipping: bool = True
-    include_line_detail: bool = False
-    status_filter: Optional[List[str]] = Field(
-        default=["received", "closed"],
-        description="Only export POs with these statuses"
-    )
 
 
 class QBExportPreviewLine(BaseModel):

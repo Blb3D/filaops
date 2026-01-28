@@ -7,9 +7,6 @@ import VendorDetailPanel from "../../components/purchasing/VendorDetailPanel";
 import POCreateModal from "../../components/purchasing/POCreateModal";
 import PODetailModal from "../../components/purchasing/PODetailModal";
 import ReceiveModal from "../../components/purchasing/ReceiveModal";
-import QuickBooksExportModal from "../../components/purchasing/QuickBooksExportModal";
-import InvoiceUploadModal from "../../components/purchasing/InvoiceUploadModal";
-import InvoiceReviewModal from "../../components/purchasing/InvoiceReviewModal";
 
 // Purchasing Trend Chart Component
 function PurchasingChart({ data, period, onPeriodChange, loading }) {
@@ -256,12 +253,6 @@ export default function AdminPurchasing() {
     }
   }, [searchParams]);
 
-  // Amazon Import State
-  const [importFile, setImportFile] = useState(null);
-  const [importData, setImportData] = useState(null);
-  const [importMappings, setImportMappings] = useState({});
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState(null);
   const [orders, setOrders] = useState([]);
   const [vendors, setVendors] = useState([]);
   const [products, setProducts] = useState([]);
@@ -275,15 +266,6 @@ export default function AdminPurchasing() {
   const [lowStockLoading, setLowStockLoading] = useState(false);
   const [selectedLowStockIds, setSelectedLowStockIds] = useState(new Set());
 
-  // QuickBooks Export Modal
-  const [showQBExportModal, setShowQBExportModal] = useState(false);
-
-  // Invoice Import Modals
-  const [showInvoiceUpload, setShowInvoiceUpload] = useState(false);
-  const [showInvoiceReview, setShowInvoiceReview] = useState(false);
-  const [parsedInvoice, setParsedInvoice] = useState(null);
-  const [invoiceFile, setInvoiceFile] = useState(null);
-
   // Company Settings (for auto-calc tax)
   const [companySettings, setCompanySettings] = useState(null);
 
@@ -294,18 +276,6 @@ export default function AdminPurchasing() {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
   const [selectedVendor, setSelectedVendor] = useState(null);
-
-  // Create New Item Modal
-  const [showCreateItemModal, setShowCreateItemModal] = useState(false);
-  const [createItemForAsin, setCreateItemForAsin] = useState(null);
-  const [newItemForm, setNewItemForm] = useState({
-    sku: "",
-    name: "",
-    item_type: "raw_material",
-  });
-  const [creatingItem, setCreatingItem] = useState(false);
-  const [expandedDescriptions, setExpandedDescriptions] = useState({});
-  const [productSearches, setProductSearches] = useState({}); // Per-ASIN search filters
 
   // Trend chart state
   const [purchasingTrend, setPurchasingTrend] = useState(null);
@@ -662,76 +632,6 @@ export default function AdminPurchasing() {
   };
 
   // ============================================================================
-  // Create New Item (from Import)
-  // ============================================================================
-
-  const openCreateItemModal = (asin, amazonProduct) => {
-    setCreateItemForAsin(asin);
-    // Pre-fill with Amazon data
-    const suggestedSku = `AMZ-${asin.slice(-8).toUpperCase()}`;
-    setNewItemForm({
-      sku: suggestedSku,
-      name: amazonProduct.title,
-      item_type:
-        amazonProduct.suggested_category === "filament"
-          ? "raw_material"
-          : "supply",
-    });
-    setShowCreateItemModal(true);
-  };
-
-  const handleCreateItem = async () => {
-    if (!newItemForm.sku || !newItemForm.name) {
-      toast.warning("SKU and Name are required");
-      return;
-    }
-
-    setCreatingItem(true);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/items`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          sku: newItemForm.sku,
-          name: newItemForm.name,
-          item_type: newItemForm.item_type,
-          active: true,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to create item");
-      }
-
-      const newItem = await res.json();
-
-      // Add to products list and map ASIN to it
-      setProducts((prev) => [
-        ...prev,
-        { id: newItem.id, sku: newItem.sku, name: newItem.name },
-      ]);
-      handleMappingChange(createItemForAsin, "product_id", newItem.id);
-
-      toast.success("Item created and mapped");
-      setShowCreateItemModal(false);
-      setCreateItemForAsin(null);
-      setNewItemForm({ sku: "", name: "", item_type: "raw_material" });
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setCreatingItem(false);
-    }
-  };
-
-  const toggleDescription = (asin) => {
-    setExpandedDescriptions((prev) => ({ ...prev, [asin]: !prev[asin] }));
-  };
-
-  // ============================================================================
   // Purchase Order CRUD
   // ============================================================================
 
@@ -923,96 +823,6 @@ export default function AdminPurchasing() {
   };
 
   // ============================================================================
-  // Amazon Import Handlers
-  // ============================================================================
-
-  const handleImportFileSelect = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setImportFile(file);
-    setImportData(null);
-    setImportResult(null);
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await fetch(`${API_URL}/api/v1/import/amazon/parse`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Failed to parse file");
-      }
-
-      const data = await res.json();
-      setImportData(data);
-
-      // Initialize mappings with suggested categories
-      const mappings = {};
-      data.products.forEach((p) => {
-        mappings[p.asin] = {
-          asin: p.asin,
-          product_id: null,
-          category:
-            p.suggested_category === "subscription"
-              ? "skip"
-              : p.suggested_category,
-        };
-      });
-      setImportMappings(mappings);
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleMappingChange = (asin, field, value) => {
-    setImportMappings((prev) => ({
-      ...prev,
-      [asin]: { ...prev[asin], [field]: value },
-    }));
-  };
-
-  const executeImport = async () => {
-    if (!importData) return;
-
-    setImporting(true);
-    try {
-      const res = await fetch(`${API_URL}/api/v1/import/amazon/execute`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          orders: importData.orders,
-          mappings: importMappings,
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Import failed");
-      }
-
-      const result = await res.json();
-      setImportResult(result);
-      toast.success(
-        `Import complete! ${result.pos_created} POs created with ${result.lines_created} line items.`
-      );
-      fetchOrders();
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setImporting(false);
-    }
-  };
-
-  // ============================================================================
   // Filters
   // ============================================================================
 
@@ -1063,15 +873,6 @@ export default function AdminPurchasing() {
           )}
           {activeTab === "orders" && (
             <>
-              <button
-                onClick={() => setShowInvoiceUpload(true)}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white font-medium flex items-center gap-2"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-                Import Invoice
-              </button>
               <button
                 onClick={async () => {
                   setSelectedPO(null);
@@ -1454,321 +1255,24 @@ export default function AdminPurchasing() {
         </div>
       )}
 
-      {/* Import Tab */}
+      {/* Import Tab — Amazon Business import is a PRO feature */}
       {activeTab === "import" && (
-        <div className="space-y-6">
-          {/* Upload Section */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-            <h3 className="text-lg font-semibold text-white mb-4">
-              Import Amazon Business Orders
-            </h3>
-            <p className="text-gray-400 text-sm mb-4">
-              Upload your Amazon Business CSV export to import orders as
-              Purchase Orders.
-            </p>
-            <div className="flex items-center gap-4">
-              <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium cursor-pointer">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                  />
-                </svg>
-                Select CSV File
-                <input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleImportFileSelect}
-                  className="hidden"
-                />
-              </label>
-              {importFile && (
-                <span className="text-gray-300">{importFile.name}</span>
-              )}
-            </div>
-          </div>
-
-          {/* Summary */}
-          {importData && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-semibold text-white mb-4">
-                Import Summary
-              </h3>
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-white">
-                    {importData.order_count}
-                  </div>
-                  <div className="text-sm text-gray-400">Orders</div>
-                </div>
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-white">
-                    {importData.product_count}
-                  </div>
-                  <div className="text-sm text-gray-400">Unique Products</div>
-                </div>
-                <div className="bg-gray-800/50 rounded-lg p-4 text-center">
-                  <div className="text-2xl font-bold text-green-400">
-                    ${importData.total_spend.toFixed(2)}
-                  </div>
-                  <div className="text-sm text-gray-400">Total Spend</div>
-                </div>
-              </div>
-
-              {/* Product Mapping Table */}
-              <h4 className="text-md font-medium text-white mb-3">
-                Product Mapping
-              </h4>
-              <p className="text-gray-400 text-sm mb-4">
-                Assign each Amazon product to an existing item or mark as MISC.
-                Skip subscriptions/services.
-              </p>
-              <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-800/50 sticky top-0">
-                    <tr>
-                      <th className="text-left py-2 px-3 text-xs font-medium text-gray-400">
-                        Product
-                      </th>
-                      <th className="text-center py-2 px-3 text-xs font-medium text-gray-400">
-                        Ordered
-                      </th>
-                      <th className="text-center py-2 px-3 text-xs font-medium text-gray-400">
-                        Recv Qty
-                      </th>
-                      <th className="text-right py-2 px-3 text-xs font-medium text-gray-400">
-                        Spent
-                      </th>
-                      <th className="text-right py-2 px-3 text-xs font-medium text-gray-400">
-                        CPU
-                      </th>
-                      <th className="text-left py-2 px-3 text-xs font-medium text-gray-400">
-                        Category
-                      </th>
-                      <th className="text-left py-2 px-3 text-xs font-medium text-gray-400">
-                        Map To
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importData.products.map((product) => {
-                      const mapping = importMappings[product.asin] || {};
-                      const isExpanded = expandedDescriptions[product.asin];
-                      return (
-                        <tr
-                          key={product.asin}
-                          className="border-b border-gray-800"
-                        >
-                          <td className="py-2 px-3 max-w-md">
-                            <div className="text-white text-sm font-medium">
-                              {product.brand}
-                            </div>
-                            <div
-                              className={`text-gray-400 text-xs cursor-pointer hover:text-gray-300 ${
-                                isExpanded ? "" : "line-clamp-2"
-                              }`}
-                              onClick={() => toggleDescription(product.asin)}
-                              title="Click to expand/collapse"
-                            >
-                              {product.title}
-                            </div>
-                            <div className="text-gray-500 text-xs mt-1">
-                              ASIN: {product.asin}
-                            </div>
-                          </td>
-                          <td className="py-2 px-3 text-center text-gray-400 text-sm">
-                            {product.total_qty}
-                          </td>
-                          <td className="py-2 px-3 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              value={mapping.qty_override || product.total_qty}
-                              onChange={(e) =>
-                                handleMappingChange(
-                                  product.asin,
-                                  "qty_override",
-                                  parseInt(e.target.value) || product.total_qty
-                                )
-                              }
-                              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white w-16 text-center"
-                              title="Adjust if pack contains multiple units (e.g., 240 magnets in 1 pack)"
-                            />
-                          </td>
-                          <td className="py-2 px-3 text-right text-green-400">
-                            ${product.total_spent.toFixed(2)}
-                          </td>
-                          <td className="py-2 px-3 text-right text-blue-400 text-sm">
-                            $
-                            {(
-                              product.total_spent /
-                              (mapping.qty_override || product.total_qty)
-                            ).toFixed(4)}
-                          </td>
-                          <td className="py-2 px-3">
-                            <select
-                              value={
-                                mapping.category ||
-                                product.suggested_category ||
-                                "misc"
-                              }
-                              onChange={(e) =>
-                                handleMappingChange(
-                                  product.asin,
-                                  "category",
-                                  e.target.value
-                                )
-                              }
-                              className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
-                            >
-                              <option value="filament">Filament</option>
-                              <option value="printer_parts">
-                                Printer Parts
-                              </option>
-                              <option value="misc">Misc</option>
-                              <option value="subscription">Subscription</option>
-                              <option value="skip">Skip (Don't Import)</option>
-                            </select>
-                          </td>
-                          <td className="py-2 px-3">
-                            {mapping.category !== "skip" && (
-                              <div className="space-y-1">
-                                <input
-                                  type="text"
-                                  placeholder="Search items..."
-                                  value={productSearches[product.asin] || ""}
-                                  onChange={(e) =>
-                                    setProductSearches({
-                                      ...productSearches,
-                                      [product.asin]: e.target.value,
-                                    })
-                                  }
-                                  className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white w-full"
-                                />
-                                <select
-                                  value={mapping.product_id || ""}
-                                  onChange={(e) => {
-                                    if (e.target.value === "CREATE_NEW") {
-                                      openCreateItemModal(
-                                        product.asin,
-                                        product
-                                      );
-                                    } else {
-                                      handleMappingChange(
-                                        product.asin,
-                                        "product_id",
-                                        e.target.value
-                                          ? parseInt(e.target.value)
-                                          : null
-                                      );
-                                    }
-                                  }}
-                                  className="bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white w-full"
-                                >
-                                  <option value="">MISC (Auto)</option>
-                                  <option
-                                    value="CREATE_NEW"
-                                    className="text-blue-400"
-                                  >
-                                    + Create New Item
-                                  </option>
-                                  <optgroup label="Matching Items">
-                                    {products
-                                      .filter((p) => {
-                                        const search = (
-                                          productSearches[product.asin] || ""
-                                        ).toLowerCase();
-                                        if (!search) return true;
-                                        return (
-                                          p.sku
-                                            .toLowerCase()
-                                            .includes(search) ||
-                                          p.name.toLowerCase().includes(search)
-                                        );
-                                      })
-                                      .slice(0, 50)
-                                      .map((p) => (
-                                        <option key={p.id} value={p.id}>
-                                          {p.sku} - {p.name}
-                                        </option>
-                                      ))}
-                                  </optgroup>
-                                </select>
-                              </div>
-                            )}
-                            {mapping.category === "skip" && (
-                              <span className="text-gray-500 text-sm">
-                                Will not import
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Import Button */}
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={executeImport}
-                  disabled={importing}
-                  className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg text-white font-medium flex items-center gap-2"
-                >
-                  {importing ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Importing...
-                    </>
-                  ) : (
-                    <>
-                      <svg
-                        className="w-5 h-5"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                        />
-                      </svg>
-                      Import {importData.order_count} Orders
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Import Result */}
-          {importResult && (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
-              <h4 className="text-green-400 font-medium mb-2">
-                Import Complete!
-              </h4>
-              <ul className="text-sm text-gray-300 space-y-1">
-                <li>POs Created: {importResult.pos_created}</li>
-                <li>Line Items: {importResult.lines_created}</li>
-                <li>Skipped (duplicates): {importResult.skipped_orders}</li>
-                {importResult.errors.length > 0 && (
-                  <li className="text-red-400">
-                    Errors: {importResult.errors.length}
-                  </li>
-                )}
-              </ul>
-            </div>
-          )}
+        <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Amazon Business Import
+          </h3>
+          <p className="text-gray-400 text-sm mb-4">
+            Import purchase orders directly from Amazon Business CSV exports.
+            Available in FilaOps Pro.
+          </p>
+          <a
+            href="https://filaops.com/pricing"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white font-medium"
+          >
+            Learn More
+          </a>
         </div>
       )}
 
@@ -1832,17 +1336,6 @@ export default function AdminPurchasing() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {/* QuickBooks Export Button */}
-                <button
-                  onClick={() => setShowQBExportModal(true)}
-                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded-lg text-sm text-white flex items-center gap-2"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Export to QB
-                </button>
-
                 {/* Create PO Dropdown - shows when items are selected */}
                 {selectedLowStockIds.size > 0 && selectedItemsByVendor.length > 0 && (
                   <div className="relative group">
@@ -2151,139 +1644,7 @@ export default function AdminPurchasing() {
         />
       )}
 
-      {/* Create New Item Modal */}
-      {showCreateItemModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="bg-gray-900 rounded-xl p-6 w-full max-w-lg border border-gray-800">
-            <h3 className="text-xl font-bold text-white mb-4">
-              Create New Item
-            </h3>
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">
-                  SKU *
-                </label>
-                <input
-                  type="text"
-                  value={newItemForm.sku}
-                  onChange={(e) =>
-                    setNewItemForm({ ...newItemForm, sku: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  placeholder="e.g., FIL-PLA-BLK-1KG"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">
-                  Name *
-                </label>
-                <textarea
-                  value={newItemForm.name}
-                  onChange={(e) =>
-                    setNewItemForm({ ...newItemForm, name: e.target.value })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                  rows={3}
-                  placeholder="Item name"
-                />
-              </div>
-
-              <div>
-                <label className="block text-gray-400 text-sm mb-1">
-                  Item Type
-                </label>
-                <select
-                  value={newItemForm.item_type}
-                  onChange={(e) =>
-                    setNewItemForm({
-                      ...newItemForm,
-                      item_type: e.target.value,
-                    })
-                  }
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white"
-                >
-                  <option value="raw_material">Raw Material (Filament)</option>
-                  <option value="supply">Supply</option>
-                  <option value="component">Component</option>
-                  <option value="finished_good">Finished Good</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowCreateItemModal(false);
-                  setCreateItemForAsin(null);
-                }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-white"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateItem}
-                disabled={creatingItem}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg text-white flex items-center gap-2"
-              >
-                {creatingItem ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Creating...
-                  </>
-                ) : (
-                  "Create & Map"
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QuickBooks Export Modal */}
-      {showQBExportModal && (
-        <QuickBooksExportModal
-          isOpen={showQBExportModal}
-          onClose={() => setShowQBExportModal(false)}
-        />
-      )}
-
-      {/* Invoice Upload Modal */}
-      {showInvoiceUpload && (
-        <InvoiceUploadModal
-          vendors={vendors}
-          onClose={() => setShowInvoiceUpload(false)}
-          onParsed={(parsed, file) => {
-            setParsedInvoice(parsed);
-            setInvoiceFile(file);
-            setShowInvoiceUpload(false);
-            setShowInvoiceReview(true);
-          }}
-        />
-      )}
-
-      {/* Invoice Review Modal */}
-      {showInvoiceReview && parsedInvoice && (
-        <InvoiceReviewModal
-          parsedInvoice={parsedInvoice}
-          originalFile={invoiceFile}
-          vendors={vendors}
-          products={products}
-          onClose={() => {
-            setShowInvoiceReview(false);
-            setParsedInvoice(null);
-            setInvoiceFile(null);
-          }}
-          onSuccess={(createdPO) => {
-            setShowInvoiceReview(false);
-            setParsedInvoice(null);
-            setInvoiceFile(null);
-            toast.success(`Created PO ${createdPO.po_number}`);
-            fetchOrders(); // Refresh the PO list
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -38,10 +38,10 @@ class Payment(Base):
     amount = Column(Numeric(10, 2), nullable=False)  # Positive for payment, negative for refund
 
     # Payment Method
-    payment_method = Column(String(50), nullable=False)  # cash, check, credit_card, paypal, stripe, venmo, zelle, wire, other
+    payment_method = Column(String(50), nullable=False)  # cash, check, credit_card, paypal, venmo, zelle, wire, other
 
     # Transaction Details
-    transaction_id = Column(String(255), nullable=True)  # External transaction ID (Stripe, PayPal, etc.)
+    transaction_id = Column(String(255), nullable=True)  # External transaction ID (if applicable)
     check_number = Column(String(50), nullable=True)  # For check payments
 
     # Payment Type

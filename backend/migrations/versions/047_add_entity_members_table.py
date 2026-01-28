@@ -1,4 +1,7 @@
-"""Add entity_members table for LLC/Partnership member tracking
+"""Note: This table supports FilaOps PRO (LLC/Partnership accounting).
+Included for schema compatibility.
+
+Add entity_members table for LLC/Partnership member tracking
 
 Revision ID: 047_add_entity_members
 Revises: 046_add_business_type

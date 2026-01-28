@@ -11,7 +11,6 @@ from sqlalchemy import desc
 
 from app.db.session import get_db
 from app.logging_config import get_logger
-from app.services.google_drive import get_drive_service
 from app.services.uom_service import convert_quantity_safe, get_conversion_factor
 from app.services.inventory_helpers import is_material
 from app.services.transaction_service import TransactionService, ReceiptItem
@@ -1146,32 +1145,7 @@ async def upload_po_document(
     ext = os.path.splitext(file.filename or "document")[1] or ".pdf"
     safe_filename = f"{po.po_number}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}{ext}"
 
-    # Try Google Drive first
-    drive_service = get_drive_service()
-    if drive_service.enabled:
-        success, result = drive_service.upload_bytes(
-            file_bytes=file_content,
-            filename=safe_filename,
-            mime_type=content_type,
-            subfolder="Purchase Orders"
-        )
-
-        if success:
-            # Save URL to PO
-            po.document_url = result
-            po.updated_at = datetime.now(timezone.utc)
-            db.commit()
-
-            return {
-                "success": True,
-                "storage": "google_drive",
-                "url": result,
-                "filename": safe_filename,
-            }
-        else:
-            logger.warning(f"Google Drive upload failed: {result}, falling back to local")
-
-    # Fallback: Save locally
+    # Save locally
     upload_dir = os.path.join("uploads", "purchase_orders")
     os.makedirs(upload_dir, exist_ok=True)
 

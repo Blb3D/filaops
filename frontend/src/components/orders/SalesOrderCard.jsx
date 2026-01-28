@@ -4,7 +4,7 @@
  */
 import React from 'react';
 import { formatCurrency } from '../../lib/number';
-import { formatDate } from '../../lib/dateFormat';
+import { formatDate } from '../../utils/formatting';
 
 // Status badge styles per fulfillment state
 const STATUS_STYLES = {

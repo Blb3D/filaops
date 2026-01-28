@@ -5,7 +5,6 @@ import { createApiClient } from "./lib/apiClient";
 import { API_URL } from "./config/api";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ApiErrorToaster from "./components/ApiErrorToaster";
-import UpgradeModal from "./components/UpgradeModal";
 import AdminLayout from "./components/AdminLayout";
 import Setup from "./pages/Setup";
 import Onboarding from "./pages/Onboarding";
@@ -46,7 +45,6 @@ import AdminSecurity from "./pages/admin/AdminSecurity";
 import AdminCycleCount from "./pages/admin/AdminCycleCount";
 import MaterialTraceability from "./pages/admin/quality/MaterialTraceability";
 import CommandCenter from "./pages/CommandCenter";
-// import AdminLicense from "./pages/admin/AdminLicense";  // Disabled until ready
 import Pricing from "./pages/Pricing";
 
 export default function App() {
@@ -75,8 +73,6 @@ export default function App() {
         <ToastProvider>
           {/* Global API error toasts */}
           <ApiErrorToaster />
-          {/* Upgrade modal for tier limits */}
-          <UpgradeModal />
           <BrowserRouter>
         <Routes>
           {/* Redirect root to admin */}
@@ -120,7 +116,6 @@ export default function App() {
             <Route path="analytics" element={<AdminAnalytics />} />
             <Route path="materials/import" element={<AdminMaterialImport />} />
             <Route path="orders/import" element={<AdminOrderImport />} />
-            {/* <Route path="license" element={<AdminLicense />} />  Disabled until ready */}
             <Route
               path="inventory/transactions"
               element={<AdminInventoryTransactions />}

@@ -1,22 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { useFeatureFlags } from "../../hooks/useFeatureFlags";
-import ProFeaturesAnnouncement from "../../components/ProFeaturesAnnouncement";
 import { API_URL } from "../../config/api";
 
 const AdminAnalytics = () => {
-  const { isPro, tier, loading: flagsLoading } = useFeatureFlags();
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [days, setDays] = useState(30);
 
   useEffect(() => {
-    if (isPro && !flagsLoading) {
-      fetchAnalytics();
-    } else if (!flagsLoading && !isPro) {
-      setLoading(false);
-    }
-  }, [isPro, flagsLoading, days]);
+    fetchAnalytics();
+  }, [days]);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -85,11 +78,10 @@ const AdminAnalytics = () => {
     );
   }
 
-  if (!isPro) {
+  if (error?.includes("402") || error?.includes("tier")) {
     return (
       <div className="p-6 space-y-6">
         <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 rounded-lg p-8 text-center">
-          <div className="text-6xl mb-4">📊</div>
           <h1 className="text-3xl font-bold text-white mb-2">
             Advanced Analytics
           </h1>
@@ -103,39 +95,29 @@ const AdminAnalytics = () => {
             </h2>
             <ul className="text-left text-gray-300 space-y-2 max-w-md mx-auto">
               <li className="flex items-start">
-                <span className="text-green-400 mr-2">✓</span>
+                <span className="text-green-400 mr-2">+</span>
                 <span>Revenue metrics with growth tracking</span>
               </li>
               <li className="flex items-start">
-                <span className="text-green-400 mr-2">✓</span>
+                <span className="text-green-400 mr-2">+</span>
                 <span>Top customers and products analysis</span>
               </li>
               <li className="flex items-start">
-                <span className="text-green-400 mr-2">✓</span>
+                <span className="text-green-400 mr-2">+</span>
                 <span>Profit margin calculations</span>
               </li>
               <li className="flex items-start">
-                <span className="text-green-400 mr-2">✓</span>
+                <span className="text-green-400 mr-2">+</span>
                 <span>Customizable date ranges</span>
               </li>
             </ul>
           </div>
-          <div className="text-sm text-gray-400">
-            <p>FilaOps Pro coming in 2026</p>
-            <p className="mt-2">
-              Current tier:{" "}
-              <span className="text-white font-semibold">
-                {tier.toUpperCase()}
-              </span>
-            </p>
-            {/* License activation disabled until ready */}
-            {/* <a
-              href="/admin/license"
-              className="mt-4 inline-block bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-            >
-              Activate License
-            </a> */}
-          </div>
+          <p className="text-sm text-gray-400">
+            Learn more at{" "}
+            <a href="/pricing" className="text-blue-400 hover:text-blue-300 underline">
+              filaops.com/pricing
+            </a>
+          </p>
         </div>
       </div>
     );

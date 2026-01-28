@@ -7,11 +7,6 @@ from datetime import datetime
 
 from app.db.base import Base
 
-try:
-    from app.services import google_drive
-except Exception:
-    google_drive = None  # type: ignore
-
 
 class PurchaseOrder(Base):
     """Purchase Order header model"""

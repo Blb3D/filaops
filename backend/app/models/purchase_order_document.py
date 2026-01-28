@@ -22,16 +22,16 @@ class PurchaseOrderDocument(Base):
     file_name = Column(String(255), nullable=False)
     original_file_name = Column(String(255), nullable=True)
     
-    # Storage location (supports multiple backends)
-    file_url = Column(String(1000), nullable=True)  # External URL (Google Drive, etc.)
+    # Storage location
+    file_url = Column(String(1000), nullable=True)  # External URL
     file_path = Column(String(500), nullable=True)  # Local file path
-    storage_type = Column(String(50), nullable=False, default='local')  # local, google_drive, s3
-    
+    storage_type = Column(String(50), nullable=False, default='local')  # local, s3
+
     # File info
     file_size = Column(Integer, nullable=True)  # Size in bytes
     mime_type = Column(String(100), nullable=True)
-    
-    # Google Drive specific
+
+    # Reserved for cloud storage integrations (PRO)
     google_drive_id = Column(String(100), nullable=True)
     
     # Additional info
@@ -62,20 +62,16 @@ class PurchaseOrderDocument(Base):
     @property
     def download_url(self):
         """Get the appropriate download URL based on storage type"""
-        if self.storage_type == 'google_drive' and self.google_drive_id:
-            return f"https://drive.google.com/uc?id={self.google_drive_id}&export=download"
-        elif self.file_url:
+        if self.file_url:
             return self.file_url
         elif self.file_path:
             # Local files served through API
             return f"/api/v1/purchase-orders/{self.purchase_order_id}/documents/{self.id}/download"
         return None
-    
-    @property 
+
+    @property
     def preview_url(self):
-        """Get preview URL (for Google Drive)"""
-        if self.storage_type == 'google_drive' and self.google_drive_id:
-            return f"https://drive.google.com/file/d/{self.google_drive_id}/preview"
+        """Get preview URL"""
         return self.download_url
 
 

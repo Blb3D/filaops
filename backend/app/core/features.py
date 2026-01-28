@@ -93,25 +93,25 @@ FEATURE_FLAGS: Dict[str, Dict] = {
     # When ready to monetize, change these to FeatureTier.PROFESSIONAL
     "recall_impact_calculator": {
         "name": "Recall Impact Calculator",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to PROFESSIONAL when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: PROFESSIONAL tier
         "description": "Calculate scope of material recalls",
         "category": "quality",
     },
     "quality_holds": {
         "name": "Quality Holds & Quarantine",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to PROFESSIONAL when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: PROFESSIONAL tier
         "description": "Put materials/products on quality hold",
         "category": "quality",
     },
     "traceability_alerts": {
         "name": "Material Usage Alerts",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to PROFESSIONAL when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: PROFESSIONAL tier
         "description": "Email notifications when specific materials are used",
         "category": "quality",
     },
     "advanced_reports": {
         "name": "Advanced Quality Reports",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to PROFESSIONAL when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: PROFESSIONAL tier
         "description": "Custom quality reports and analytics",
         "category": "quality",
     },
@@ -122,19 +122,19 @@ FEATURE_FLAGS: Dict[str, Dict] = {
     # When ready to monetize, change these to FeatureTier.ENTERPRISE
     "traceability_webhooks": {
         "name": "Traceability API Webhooks",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to ENTERPRISE when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: ENTERPRISE tier
         "description": "Real-time webhooks for material usage events",
         "category": "quality",
     },
     "multi_site_traceability": {
         "name": "Multi-Site Traceability",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to ENTERPRISE when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: ENTERPRISE tier
         "description": "Trace materials across multiple facilities",
         "category": "quality",
     },
     "spc_charts": {
         "name": "Statistical Process Control",
-        "tier": FeatureTier.COMMUNITY,  # TODO: Change to ENTERPRISE when ready
+        "tier": FeatureTier.COMMUNITY,  # Future: ENTERPRISE tier
         "description": "Real-time SPC charts and control limits",
         "category": "quality",
     },
@@ -246,8 +246,7 @@ def get_current_tier(db: Session, user) -> FeatureTier:
     if not LICENSING_ENABLED:
         return FeatureTier.ENTERPRISE
     
-    # TODO: When licensing is enabled, check organization's license key
-    # For now, default to community
+    # License key validation available in FilaOps Pro
     return FeatureTier.COMMUNITY
 
 def get_available_features(tier: FeatureTier) -> List[str]:

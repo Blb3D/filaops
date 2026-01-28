@@ -81,12 +81,6 @@ class Settings(BaseSettings):
     )
     API_KEY: Optional[str] = Field(default=None, description="API key for integrations")
 
-    # ===================
-    # Portal Integration
-    # ===================
-    PORTAL_API_KEY: Optional[str] = Field(default=None, description="API key for portal authentication")
-    PORTAL_URL: str = Field(default="http://localhost:3000", description="Portal frontend URL")
-
     @field_validator("SECRET_KEY")
     @classmethod
     def warn_default_secret(cls, v: str) -> str:
@@ -154,13 +148,6 @@ class Settings(BaseSettings):
             self.ALLOWED_ORIGINS_STR = f"{self.ALLOWED_ORIGINS_STR},{self.FRONTEND_URL}"
         return self
 
-    # ==============================
-    # Optional Google Drive switch
-    # ==============================
-    ENABLE_GOOGLE_DRIVE: bool = Field(
-        default=False, validation_alias="ENABLE_GOOGLE_DRIVE"
-    )
-
     # ===================
     # Bambu Print Suite
     # ===================
@@ -184,28 +171,6 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [fmt.strip() for fmt in v.split(",") if fmt.strip()]
         return v
-
-    # ===================
-    # Google Cloud Storage
-    # ===================
-    GCS_ENABLED: bool = Field(default=False, description="Enable GCS backup")
-    GCS_BUCKET_NAME: str = Field(default="filaops-quote-files", description="Bucket")
-    GCS_PROJECT_ID: Optional[str] = Field(default=None)
-    GCS_CREDENTIALS_PATH: Optional[str] = Field(default=None)
-
-    # ===================
-    # Google Drive (legacy fields; optional)
-    # ===================
-    GDRIVE_ENABLED: bool = Field(default=False, description="Enable Google Drive")
-    GDRIVE_CREDENTIALS_PATH: Optional[str] = Field(default=None)
-    GDRIVE_FOLDER_ID: Optional[str] = Field(default=None)
-
-    # ===================
-    # Stripe
-    # ===================
-    STRIPE_SECRET_KEY: Optional[str] = None
-    STRIPE_PUBLISHABLE_KEY: Optional[str] = None
-    STRIPE_WEBHOOK_SECRET: Optional[str] = None
 
     # ===================
     # EasyPost
@@ -257,26 +222,9 @@ class Settings(BaseSettings):
     AUDIT_LOG_FILE: Optional[str] = "./logs/audit.log"
 
     # ===================
-    # WooCommerce (future)
-    # ===================
-    WOOCOMMERCE_URL: Optional[str] = None
-    WOOCOMMERCE_KEY: Optional[str] = None
-    WOOCOMMERCE_SECRET: Optional[str] = None
-    WOOCOMMERCE_WEBHOOK_SECRET: Optional[str] = None
-
-    # ===================
-    # QuickBooks (future)
-    # ===================
-    QUICKBOOKS_CLIENT_ID: Optional[str] = None
-    QUICKBOOKS_CLIENT_SECRET: Optional[str] = None
-    QUICKBOOKS_REDIRECT_URI: Optional[str] = None
-    QUICKBOOKS_ENVIRONMENT: str = "sandbox"
-
-    # ===================
     # Product Tier
     # ===================
-    TIER: str = Field(default="open", description="open, pro, enterprise")
-    LICENSE_KEY: Optional[str] = None
+    TIER: str = Field(default="community", description="community, pro, enterprise")
 
     # ===================
     # MRP Settings (safe defaults)

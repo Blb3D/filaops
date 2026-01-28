@@ -773,7 +773,6 @@ export default function Onboarding() {
                 >
                   <option value="manual">Manual / Generic</option>
                   <option value="squarespace">Squarespace</option>
-                  <option value="shopify">Shopify</option>
                   <option value="woocommerce">WooCommerce</option>
                   <option value="etsy">Etsy</option>
                   <option value="tiktok">TikTok Shop</option>

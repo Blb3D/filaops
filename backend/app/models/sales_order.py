@@ -75,7 +75,7 @@ class SalesOrder(Base):
     # Payment Status
     payment_status = Column(String(50), nullable=False, default="pending", index=True)
     # pending, paid, partial, refunded, cancelled
-    payment_method = Column(String(50), nullable=True)  # credit_card, paypal, stripe, manual
+    payment_method = Column(String(50), nullable=True)  # credit_card, paypal, manual, cash, check
     payment_transaction_id = Column(String(255), nullable=True)
     paid_at = Column(DateTime, nullable=True)
 
