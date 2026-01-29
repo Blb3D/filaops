@@ -335,12 +335,11 @@ async def open_env_file(
     import subprocess
     import platform
 
-    # Find the .env file path (project root, one level above backend/)
+    # Find the .env file path (backend/.env, same as settings.py)
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )))
-    project_root = os.path.dirname(backend_dir)
-    env_path = os.path.join(project_root, ".env")
+    env_path = os.path.join(backend_dir, ".env")
 
     if not os.path.exists(env_path):
         raise HTTPException(
@@ -391,12 +390,11 @@ async def update_secret_key(
     import secrets
     import re
 
-    # Find the .env file path (project root, one level above backend/)
+    # Find the .env file path (backend/.env, same as settings.py)
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )))
-    project_root = os.path.dirname(backend_dir)
-    env_path = os.path.join(project_root, ".env")
+    env_path = os.path.join(backend_dir, ".env")
 
     if not os.path.exists(env_path):
         raise HTTPException(

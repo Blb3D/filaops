@@ -20,9 +20,7 @@ semver==3.0.2
 reportlab==4.4.6
 sentry-sdk[fastapi]>=1.29.0
 
-# Invoice parsing (AI + PDF)
-anthropic>=0.18.0
-pypdf>=4.0.0
+# AI Invoice Parsing is a PRO feature (anthropic, pypdf)
 
 mypy==1.7.1
 types-python-dateutil==2.8.19.14
