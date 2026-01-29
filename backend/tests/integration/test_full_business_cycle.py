@@ -279,9 +279,11 @@ class TestFullBusinessCycle:
             po_line = PurchaseOrderLine(
                 purchase_order_id=po.id,
                 product_id=raw_material.id,
-                quantity=Decimal("1"),  # 1 KG
-                unit_price=Decimal("20.00"),  # $20/KG
-                uom="KG",
+                line_number=1,
+                quantity_ordered=Decimal("1"),  # 1 KG
+                unit_cost=Decimal("20.00"),  # $20/KG
+                line_total=Decimal("20.00"),
+                purchase_unit="KG",
             )
             db.add(po_line)
             db.flush()
