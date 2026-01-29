@@ -12,8 +12,6 @@ from pydantic import BaseModel
 from app.models.user import User
 from app.api.v1.deps import get_current_user
 from app.logging_config import get_logger
-from app.core.config import settings
-
 router = APIRouter()
 logger = get_logger(__name__)
 

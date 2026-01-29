@@ -1914,7 +1914,6 @@ async def buy_shipping_label(
 
     packaging_consumed = []
     finished_goods_shipped = None
-    shipment_journal_entry_id = None
 
     # Get quote for product info
     quote = db.query(Quote).filter(Quote.id == order.quote_id).first() if order.quote_id else None
