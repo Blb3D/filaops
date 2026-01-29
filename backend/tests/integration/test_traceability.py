@@ -53,7 +53,7 @@ def test_vendor(db: Session):
     vendor = Vendor(
         name=f"Traceability Vendor {uuid.uuid4().hex[:8]}",
         code=f"V-TRACE-{uuid.uuid4().hex[:8]}",
-        active=True,
+        is_active=True,
     )
     db.add(vendor)
     db.flush()

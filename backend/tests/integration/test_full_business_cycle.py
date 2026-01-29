@@ -149,15 +149,15 @@ class TestFullBusinessCycle:
             vendor = Vendor(
                 name=f"Golden Path Vendor {uid}",
                 code=f"V-GP-{uid}",
-                active=True,
+                is_active=True,
             )
             db.add(vendor)
 
             # Create customer
             customer = Customer(
-                name=f"Golden Path Customer {uid}",
+                company_name=f"Golden Path Customer {uid}",
                 email=f"customer-{uid}@example.com",
-                active=True,
+                status="active",
             )
             db.add(customer)
 
@@ -185,7 +185,7 @@ class TestFullBusinessCycle:
             db.flush()
 
             print(f"  Created vendor: {vendor.name}")
-            print(f"  Created customer: {customer.name}")
+            print(f"  Created customer: {customer.company_name}")
             print(f"  Created raw material: {raw_material.sku}")
             print(f"  Created finished good: {finished_good.sku}")
 
@@ -493,8 +493,8 @@ def test_golden_path_smoke(db: Session):
     # Verify we can create all required objects
     uid = uuid.uuid4().hex[:8]
 
-    vendor = Vendor(name=f"Smoke Vendor {uid}", code=f"V-S-{uid}", active=True)
-    customer = Customer(name=f"Smoke Customer {uid}", email=f"smoke-{uid}@example.com", active=True)
+    vendor = Vendor(name=f"Smoke Vendor {uid}", code=f"V-S-{uid}", is_active=True)
+    customer = Customer(company_name=f"Smoke Customer {uid}", email=f"smoke-{uid}@example.com", status="active")
 
     db.add(vendor)
     db.add(customer)

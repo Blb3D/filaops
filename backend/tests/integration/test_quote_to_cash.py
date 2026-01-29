@@ -54,9 +54,9 @@ def db():
 def test_customer(db: Session):
     """Create a test customer."""
     customer = Customer(
-        name=f"Test Customer {uuid.uuid4().hex[:8]}",
+        company_name=f"Test Customer {uuid.uuid4().hex[:8]}",
         email=f"test-{uuid.uuid4().hex[:8]}@example.com",
-        active=True,
+        status="active",
     )
     db.add(customer)
     db.flush()

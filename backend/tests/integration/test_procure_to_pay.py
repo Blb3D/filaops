@@ -48,8 +48,8 @@ def test_vendor(db: Session):
     vendor = Vendor(
         name=f"Test Vendor {uuid.uuid4().hex[:8]}",
         code=f"V-{uuid.uuid4().hex[:8]}",
-        contact_email=f"vendor-{uuid.uuid4().hex[:8]}@example.com",
-        active=True,
+        email=f"vendor-{uuid.uuid4().hex[:8]}@example.com",
+        is_active=True,
     )
     db.add(vendor)
     db.flush()
