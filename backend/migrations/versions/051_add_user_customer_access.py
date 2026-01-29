@@ -51,19 +51,7 @@ def upgrade():
     op.create_index('ix_user_customer_access_user_id', 'user_customer_access', ['user_id'])
     op.create_index('ix_user_customer_access_customer_id', 'user_customer_access', ['customer_id'])
     
-    # Backfill: Create access records for existing users with customer_id set
-    # This preserves existing single-customer access
-    op.execute("""
-        INSERT INTO user_customer_access (user_id, customer_id, role, is_default, created_at)
-        SELECT id, customer_id, 'admin', true, NOW()
-        FROM users
-        WHERE customer_id IS NOT NULL
-          AND account_type = 'customer'
-          AND NOT EXISTS (
-              SELECT 1 FROM user_customer_access uca 
-              WHERE uca.user_id = users.id AND uca.customer_id = users.customer_id
-          )
-    """)
+    # Note: Backfill of existing customer access records is handled by FilaOps PRO
 
 
 def downgrade():

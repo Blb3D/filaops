@@ -62,8 +62,20 @@ def upgrade():
     op.create_index('ix_customers_email', 'customers', ['email'])
     op.create_index('ix_customers_status', 'customers', ['status'])
 
+    # Add customer_id FK to users table (links portal users to customer orgs)
+    op.add_column('users', sa.Column('customer_id', sa.Integer(), nullable=True))
+    op.create_foreign_key(
+        'fk_users_customer_id', 'users', 'customers',
+        ['customer_id'], ['id'],
+        ondelete='SET NULL'
+    )
+    op.create_index('ix_users_customer_id', 'users', ['customer_id'])
+
 
 def downgrade():
+    op.drop_index('ix_users_customer_id', table_name='users')
+    op.drop_constraint('fk_users_customer_id', 'users', type_='foreignkey')
+    op.drop_column('users', 'customer_id')
     op.drop_index('ix_customers_status', table_name='customers')
     op.drop_index('ix_customers_email', table_name='customers')
     op.drop_index('ix_customers_company_name', table_name='customers')
