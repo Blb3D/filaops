@@ -386,6 +386,7 @@ class TestAutoSkipDownstream:
         skipped = auto_skip_downstream_operations(
             db, test_production_order, test_operations[0]
         )
+        db.flush()
 
         # Ops 2 and 3 should be skipped
         assert skipped == 2

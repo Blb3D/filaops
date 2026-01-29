@@ -13,7 +13,7 @@ Run with:
 import pytest
 import uuid
 from decimal import Decimal
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -233,6 +233,7 @@ class TestFullBusinessCycle:
                 material_grams=Decimal("1000"),
                 unit_price=Decimal("25.00"),
                 total_price=Decimal("250.00"),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
                 status="draft",
             )
             db.add(quote)

@@ -18,7 +18,7 @@ Run with:
 import pytest
 import uuid
 from decimal import Decimal
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -218,6 +218,7 @@ class TestQuoteToCashFlow:
                 material_grams=Decimal("1000"),  # 100g * 10 units
                 unit_price=Decimal("25.00"),
                 total_price=Decimal("250.00"),
+                expires_at=datetime.now(timezone.utc) + timedelta(days=30),
                 status="draft",
             )
             db.add(quote)
@@ -350,6 +351,7 @@ def test_quote_to_cash_smoke(db: Session):
         file_format=".stl",
         file_size_bytes=1024,
         total_price=Decimal("0"),
+        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
         status="draft",
     )
     db.add(quote)
