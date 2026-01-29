@@ -252,6 +252,7 @@ class TestFullBusinessCycle:
                 material_type="PLA",
                 unit_price=Decimal("25.00"),
                 total_price=Decimal("250.00"),
+                grand_total=Decimal("250.00"),
                 status="confirmed",
             )
             db.add(sales_order)
