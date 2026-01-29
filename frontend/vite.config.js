@@ -9,6 +9,6 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ['localhost', 'filaops.local', 'filaops.blb3d.local'],
+    allowedHosts: ['localhost', 'filaops.local'],
   },
 })

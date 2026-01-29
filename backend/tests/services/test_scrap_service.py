@@ -10,7 +10,7 @@ Tests verify:
 6. Validation rejects invalid scrap reasons and quantities
 
 Run with:
-    cd C:\BLB3D_Production\backend
+    cd backend
     pytest tests/services/test_scrap_service.py -v
 
 Run with coverage:

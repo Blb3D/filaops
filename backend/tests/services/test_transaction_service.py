@@ -10,7 +10,7 @@ Tests verify:
 6. ScrapRecord created when scrapping
 
 Run with:
-    cd C:\BLB3D_Production\backend
+    cd backend
     pytest tests/services/test_transaction_service.py -v
 
 Run with coverage:
