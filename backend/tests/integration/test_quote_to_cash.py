@@ -210,6 +210,7 @@ class TestQuoteToCashFlow:
                 quantity=10,
                 material_type="PLA",
                 color="RED",
+                file_format=".stl",
                 dimensions_x=Decimal("100"),
                 dimensions_y=Decimal("100"),
                 dimensions_z=Decimal("50"),
@@ -345,6 +346,8 @@ def test_quote_to_cash_smoke(db: Session):
         quote_number=f"Q-SMOKE-{uuid.uuid4().hex[:8]}",
         user_id=1,
         quantity=1,
+        file_format=".stl",
+        total_price=Decimal("0"),
         status="draft",
     )
     db.add(quote)

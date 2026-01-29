@@ -226,6 +226,7 @@ class TestFullBusinessCycle:
                 quantity=10,
                 material_type="PLA",
                 color="RED",
+                file_format=".stl",
                 dimensions_x=Decimal("100"),
                 dimensions_y=Decimal("100"),
                 dimensions_z=Decimal("50"),

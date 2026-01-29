@@ -18,13 +18,11 @@ def seed_test_data():
     - InventoryLocation id=1 (tests create Inventory with location_id=1)
     - User id=1 (tests create Quotes with user_id=1)
     - WorkCenter id=1 (tests create ProductionOrderOperations with work_center_id)
-    - Vendor id=1 (smoke tests create PurchaseOrders with vendor_id)
     """
     from app.db.session import SessionLocal
     from app.models.inventory import InventoryLocation
     from app.models.user import User
     from app.models.work_center import WorkCenter
-    from app.models.vendor import Vendor
 
     db = SessionLocal()
     try:
@@ -47,13 +45,6 @@ def seed_test_data():
         if not db.query(WorkCenter).filter(WorkCenter.id == 1).first():
             db.add(WorkCenter(
                 id=1, code="TEST-WC", name="Test Work Center",
-            ))
-
-        # Seed default vendor
-        if not db.query(Vendor).filter(Vendor.id == 1).first():
-            db.add(Vendor(
-                id=1, name="Test Vendor", code="V-TEST",
-                email="vendor@filaops.dev", is_active=True,
             ))
 
         db.commit()

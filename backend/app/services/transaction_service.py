@@ -13,7 +13,7 @@ Usage:
     inv_txn, journal_entry = txn_service.receipt_finished_good(...)
     db.commit()  # Caller commits
 """
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Tuple, Optional, NamedTuple
 

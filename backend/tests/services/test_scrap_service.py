@@ -139,6 +139,8 @@ def test_operations(
             status="pending" if i > 1 else "complete",
             quantity_completed=Decimal("10") if i == 1 else Decimal("0"),
             quantity_scrapped=Decimal("0"),
+            planned_setup_minutes=Decimal("0"),
+            planned_run_minutes=Decimal("30"),
         )
         db.add(op)
         db.flush()

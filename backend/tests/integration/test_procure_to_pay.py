@@ -284,10 +284,19 @@ class TestProcureToPayFlow:
 
 def test_procure_to_pay_smoke(db: Session):
     """Quick smoke test."""
+    # Create a vendor for the PO
+    vendor = Vendor(
+        name=f"Smoke Vendor {uuid.uuid4().hex[:8]}",
+        code=f"V-SMOKE-{uuid.uuid4().hex[:8]}",
+        is_active=True,
+    )
+    db.add(vendor)
+    db.flush()
+
     # Verify we can create a PO
     po = PurchaseOrder(
         po_number=f"PO-SMOKE-{uuid.uuid4().hex[:8]}",
-        vendor_id=1,
+        vendor_id=vendor.id,
         status="draft",
         order_date=date.today(),
     )
