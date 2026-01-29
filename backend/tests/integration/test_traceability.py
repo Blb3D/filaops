@@ -215,7 +215,7 @@ class TestTraceabilityFlow:
                 product_id=test_material.id,
                 purchase_order_id=po.id,
                 received_date=date.today(),
-                quantity=Decimal("1000"),
+                quantity_received=Decimal("1000"),
             )
             db.add(lot_record)
             db.flush()
@@ -275,7 +275,6 @@ class TestTraceabilityFlow:
                 quantity=Decimal("500"),
                 unit_cost=Decimal("0.02"),
                 unit="G",
-                lot_number=lot_number,  # Track which lot was consumed
             )]
 
             inv_txns, je = txn_service.issue_materials_for_operation(

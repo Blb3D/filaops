@@ -188,7 +188,6 @@ class TestFullBusinessCycle:
             print(f"  Created customer: {customer.company_name}")
             print(f"  Created raw material: {raw_material.sku}")
             print(f"  Created finished good: {finished_good.sku}")
-
             # === STEP 2: BOM & ROUTING ===
             print("\n=== STEP 2: BOM & ROUTING ===")
 
@@ -227,6 +226,7 @@ class TestFullBusinessCycle:
                 material_type="PLA",
                 color="RED",
                 file_format=".stl",
+                file_size_bytes=102400,
                 dimensions_x=Decimal("100"),
                 dimensions_y=Decimal("100"),
                 dimensions_z=Decimal("50"),

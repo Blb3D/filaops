@@ -96,7 +96,6 @@ def test_scrap_reason(db: Session) -> ScrapReason:
             code="test_reason",
             name="Test Reason",
             description="Test scrap reason for testing",
-            category="production",
             active=True,
         )
         db.add(reason)
@@ -381,6 +380,9 @@ class TestAutoSkipDownstream:
         test_operations[0].status = "complete"
         db.flush()
 
+        # Expire so po.operations relationship loads fresh from DB
+        db.expire(test_production_order)
+
         skipped = auto_skip_downstream_operations(
             db, test_production_order, test_operations[0]
         )
@@ -403,6 +405,9 @@ class TestAutoSkipDownstream:
         test_operations[1].status = "complete"
         test_operations[1].quantity_completed = Decimal("5")
         db.flush()
+
+        # Expire so po.operations relationship loads fresh from DB
+        db.expire(test_production_order)
 
         skipped = auto_skip_downstream_operations(
             db, test_production_order, test_operations[0]

@@ -18,8 +18,7 @@ Run with coverage:
 """
 import pytest
 from decimal import Decimal
-from datetime import date, timezone
-
+from datetime import date
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -32,7 +31,7 @@ from app.services.transaction_service import (
 )
 from app.models.accounting import GLAccount, GLJournalEntry, GLJournalEntryLine
 from app.models.inventory import Inventory, InventoryTransaction
-from app.models.production_order import ScrapRecord
+from app.models.production_order import ProductionOrder, ScrapRecord
 from app.models.product import Product
 
 
@@ -128,6 +127,21 @@ def test_material_with_inventory(db: Session) -> Product:
 
     yield product
     # Cleanup
+    db.rollback()
+
+
+@pytest.fixture
+def test_production_order(db: Session, test_finished_good: Product) -> ProductionOrder:
+    """Create a test production order (needed for ScrapRecord FK)."""
+    po = ProductionOrder(
+        code=f"PO-TEST-{date.today().isoformat()}-001",
+        product_id=test_finished_good.id,
+        quantity_ordered=10,
+        status="in_progress",
+    )
+    db.add(po)
+    db.flush()
+    yield po
     db.rollback()
 
 
@@ -392,13 +406,13 @@ class TestIssueMaterialsForOperation:
 class TestScrapMaterials:
     """Test scrap_materials method"""
 
-    def test_creates_scrap_transaction(self, db: Session, test_finished_good: Product):
+    def test_creates_scrap_transaction(self, db: Session, test_production_order: ProductionOrder, test_finished_good: Product):
         """Should create SCRAP inventory transaction"""
         ts = TransactionService(db)
 
         try:
             inv_txn, je, scrap = ts.scrap_materials(
-                production_order_id=1,
+                production_order_id=test_production_order.id,
                 operation_sequence=3,
                 product_id=test_finished_good.id,
                 quantity=Decimal("2"),
@@ -412,13 +426,13 @@ class TestScrapMaterials:
         finally:
             db.rollback()
 
-    def test_creates_scrap_record(self, db: Session, test_finished_good: Product):
+    def test_creates_scrap_record(self, db: Session, test_production_order: ProductionOrder, test_finished_good: Product):
         """Should create ScrapRecord with cost tracking"""
         ts = TransactionService(db)
 
         try:
             inv_txn, je, scrap = ts.scrap_materials(
-                production_order_id=1,
+                production_order_id=test_production_order.id,
                 operation_sequence=3,
                 product_id=test_finished_good.id,
                 quantity=Decimal("2"),
@@ -438,13 +452,13 @@ class TestScrapMaterials:
         finally:
             db.rollback()
 
-    def test_creates_balanced_journal_entry(self, db: Session, test_finished_good: Product):
+    def test_creates_balanced_journal_entry(self, db: Session, test_production_order: ProductionOrder, test_finished_good: Product):
         """Should create balanced JE: DR Scrap Expense, CR WIP"""
         ts = TransactionService(db)
 
         try:
             inv_txn, je, scrap = ts.scrap_materials(
-                production_order_id=1,
+                production_order_id=test_production_order.id,
                 operation_sequence=3,
                 product_id=test_finished_good.id,
                 quantity=Decimal("2"),
@@ -571,12 +585,11 @@ class TestShipOrder:
                 unit_cost=Decimal("20.00"),
             )]
             packaging = [PackagingUsed(
+            packaging = [PackagingUsed(
                 product_id=test_packaging.id,
-                quantity=1,
+                quantity=Decimal("1"),
                 unit_cost=Decimal("2.50"),
-            )]
-
-            inv_txns, je = ts.ship_order(
+            )]            inv_txns, je = ts.ship_order(
                 sales_order_id=1,
                 items=items,
                 packaging=packaging,

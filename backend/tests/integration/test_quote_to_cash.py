@@ -211,6 +211,7 @@ class TestQuoteToCashFlow:
                 material_type="PLA",
                 color="RED",
                 file_format=".stl",
+                file_size_bytes=102400,
                 dimensions_x=Decimal("100"),
                 dimensions_y=Decimal("100"),
                 dimensions_z=Decimal("50"),
@@ -347,6 +348,7 @@ def test_quote_to_cash_smoke(db: Session):
         user_id=1,
         quantity=1,
         file_format=".stl",
+        file_size_bytes=1024,
         total_price=Decimal("0"),
         status="draft",
     )
