@@ -585,11 +585,11 @@ class TestShipOrder:
                 unit_cost=Decimal("20.00"),
             )]
             packaging = [PackagingUsed(
-            packaging = [PackagingUsed(
                 product_id=test_packaging.id,
-                quantity=Decimal("1"),
+                quantity=1,
                 unit_cost=Decimal("2.50"),
-            )]            inv_txns, je = ts.ship_order(
+            )]
+            inv_txns, je = ts.ship_order(
                 sales_order_id=1,
                 items=items,
                 packaging=packaging,
