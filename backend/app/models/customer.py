@@ -11,7 +11,7 @@ Customers can:
 - Have orders, quotes, and other records linked to them
 - Exist as CRM records without portal access (walk-ins, phone orders)
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.db.base import Base

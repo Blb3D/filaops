@@ -5,7 +5,7 @@ Double-entry bookkeeping system with Schedule C mapping for sole proprietors.
 These models support journal entries, chart of accounts, and fiscal period tracking.
 """
 from sqlalchemy import (
-    Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean, CheckConstraint
+    Column, Integer, String, Numeric, DateTime, Date, ForeignKey, Text, Boolean
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func

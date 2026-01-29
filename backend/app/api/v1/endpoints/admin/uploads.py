@@ -4,9 +4,7 @@ File Upload Endpoints for Admin
 Handles product image uploads and other file uploads.
 Files are stored locally and served via static file serving.
 """
-import os
 import uuid
-import shutil
 from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from pydantic import BaseModel
@@ -93,10 +91,6 @@ async def upload_product_image(
         logger.info(f"Uploaded product image: {unique_filename} ({file_size} bytes) by user {current_user.id}")
 
         # Build URL - uses the static file serving path
-        # In production this would be FRONTEND_URL, but for local we use the API URL
-        base_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:8000')
-        # If FRONTEND_URL points to the React app, we need to use the API server for static files
-        # For now, assume the backend serves static files
         image_url = f"/static/uploads/products/{unique_filename}"
 
         return UploadResponse(

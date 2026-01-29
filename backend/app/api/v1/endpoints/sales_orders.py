@@ -19,7 +19,7 @@ from app.models.user import User
 from app.models.quote import Quote
 from app.models.sales_order import SalesOrder, SalesOrderLine
 from app.models.production_order import ProductionOrder, ProductionOrderOperation, ProductionOrderOperationMaterial
-from app.models.manufacturing import RoutingOperation, RoutingOperationMaterial
+from app.models.manufacturing import RoutingOperation
 from app.models.product import Product
 from app.models.bom import BOM, BOMLine
 from app.models.inventory import Inventory

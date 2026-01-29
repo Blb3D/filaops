@@ -15,7 +15,6 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 
-from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.db.session import SessionLocal
@@ -92,7 +91,7 @@ class PrinterMonitorService:
         db = SessionLocal()
         try:
             printers = db.query(Printer).filter(
-                Printer.active == True,
+                Printer.active.is_(True),
                 Printer.brand == "bambulab"  # Only Bambu printers have MQTT
             ).all()
 

@@ -8,11 +8,11 @@ Provides financial reporting endpoints based on GL Journal Entries:
 
 These endpoints query actual GL journal entries created by TransactionService.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, case
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -950,7 +950,7 @@ async def get_accounting_summary(
             Product, Inventory.product_id == Product.id
         ).filter(
             Product.item_type == item_type,
-            Product.active == True,
+            Product.active.is_(True),
         ).first()
 
         value = Decimal(str(inv_query.value or 0))

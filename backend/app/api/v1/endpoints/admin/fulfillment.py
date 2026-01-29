@@ -2009,7 +2009,6 @@ async def buy_shipping_label(
             "inventory_remaining": float(fg_inventory.on_hand_quantity) if fg_inventory else 0,
             "journal_entry_id": journal_entry.id if journal_entry else None,
         }
-        shipment_journal_entry_id = journal_entry.id if journal_entry else None
 
     # Update order
     order.tracking_number = result.tracking_number

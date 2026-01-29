@@ -247,7 +247,7 @@ def process_operation_scrap(
     # Validate scrap reason
     reason = db.query(ScrapReason).filter(
         ScrapReason.code == scrap_reason_code,
-        ScrapReason.active == True
+        ScrapReason.active.is_(True)
     ).first()
 
     if not reason:

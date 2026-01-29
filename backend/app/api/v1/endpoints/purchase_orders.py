@@ -17,7 +17,7 @@ from app.services.transaction_service import TransactionService, ReceiptItem
 from app.models.vendor import Vendor
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.product import Product
-from app.models.inventory import Inventory, InventoryTransaction, InventoryLocation
+from app.models.inventory import Inventory, InventoryLocation
 from app.models.material_spool import MaterialSpool
 from app.models.traceability import MaterialLot
 from app.api.v1.endpoints.auth import get_current_user

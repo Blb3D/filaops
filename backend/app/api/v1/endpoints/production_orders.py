@@ -29,7 +29,7 @@ from app.models import (
 )
 from app.models.bom import BOMLine
 from app.models.inventory import Inventory
-from app.models.manufacturing import Routing, RoutingOperation, RoutingOperationMaterial, Resource
+from app.models.manufacturing import Routing, RoutingOperation, Resource
 from app.models.production_order import ProductionOrderOperationMaterial
 from app.models.work_center import WorkCenter
 from app.models.material_spool import MaterialSpool, ProductionOrderSpool

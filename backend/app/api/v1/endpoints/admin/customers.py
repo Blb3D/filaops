@@ -17,8 +17,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, File, Uplo
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
-from pydantic import BaseModel
-
 from app.db.session import get_db
 from app.models.user import User
 from app.models.sales_order import SalesOrder
