@@ -206,7 +206,6 @@ class TestQuoteToCashFlow:
             quote = Quote(
                 quote_number=f"Q-{uuid.uuid4().hex[:8]}",
                 user_id=1,
-                customer_id=test_customer.id,
                 quantity=10,
                 material_type="PLA",
                 color="RED",

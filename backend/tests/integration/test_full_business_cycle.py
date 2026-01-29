@@ -221,7 +221,6 @@ class TestFullBusinessCycle:
             quote = Quote(
                 quote_number=f"Q-GP-{uid}",
                 user_id=1,
-                customer_id=customer.id,
                 quantity=10,
                 material_type="PLA",
                 color="RED",
@@ -250,6 +249,7 @@ class TestFullBusinessCycle:
                 quote_id=quote.id,
                 product_name=finished_good.name,
                 quantity=10,
+                material_type="PLA",
                 unit_price=Decimal("25.00"),
                 total_price=Decimal("250.00"),
                 status="confirmed",
