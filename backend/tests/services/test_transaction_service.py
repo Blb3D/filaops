@@ -19,6 +19,7 @@ Run with coverage:
 import pytest
 from decimal import Decimal
 from datetime import date
+from typing import Generator
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
@@ -67,7 +68,7 @@ def test_finished_good(db: Session) -> Product:
 
 
 @pytest.fixture
-def test_material(db: Session) -> Product:
+def test_material(db: Session) -> Generator[Product, None, None]:
     """Create a test raw material."""
     product = Product(
         sku=f"TEST-MAT-{date.today().isoformat()}-001",
@@ -85,7 +86,7 @@ def test_material(db: Session) -> Product:
 
 
 @pytest.fixture
-def test_packaging(db: Session) -> Product:
+def test_packaging(db: Session) -> Generator[Product, None, None]:
     """Create a test packaging item."""
     product = Product(
         sku=f"TEST-PKG-{date.today().isoformat()}-001",
@@ -102,7 +103,7 @@ def test_packaging(db: Session) -> Product:
 
 
 @pytest.fixture
-def test_material_with_inventory(db: Session) -> Product:
+def test_material_with_inventory(db: Session) -> Generator[Product, None, None]:
     """Create a test raw material with existing inventory."""
     product = Product(
         sku=f"TEST-MAT-INV-{date.today().isoformat()}-001",
@@ -131,7 +132,7 @@ def test_material_with_inventory(db: Session) -> Product:
 
 
 @pytest.fixture
-def test_production_order(db: Session, test_finished_good: Product) -> ProductionOrder:
+def test_production_order(db: Session, test_finished_good: Product) -> Generator[ProductionOrder, None, None]:
     """Create a test production order (needed for ScrapRecord FK)."""
     po = ProductionOrder(
         code=f"PO-TEST-{date.today().isoformat()}-001",
@@ -217,6 +218,7 @@ class TestReceiptFinishedGood:
         ts = TransactionService(db)
 
         try:
+            assert test_finished_good.id is not None
             inv_txn, je = ts.receipt_finished_good(
                 production_order_id=1,
                 product_id=test_finished_good.id,
@@ -239,9 +241,10 @@ class TestReceiptFinishedGood:
         ts = TransactionService(db)
 
         try:
+            assert test_finished_good.id is not None
             inv_txn, je = ts.receipt_finished_good(
                 production_order_id=1,
-                product_id=test_finished_good.id,
+                product_id=int(test_finished_good.id),
                 quantity=Decimal("10"),
                 unit_cost=Decimal("5.00"),
             )
@@ -266,9 +269,10 @@ class TestReceiptFinishedGood:
         ts = TransactionService(db)
 
         try:
+            assert test_finished_good.id is not None
             inv_txn, je = ts.receipt_finished_good(
                 production_order_id=1,
-                product_id=test_finished_good.id,
+                product_id=int(test_finished_good.id),
                 quantity=Decimal("10"),
                 unit_cost=Decimal("5.00"),
             )
@@ -283,6 +287,7 @@ class TestReceiptFinishedGood:
         ts = TransactionService(db)
 
         try:
+            assert test_finished_good.id is not None
             # Get initial quantity
             inv = db.query(Inventory).filter(
                 Inventory.product_id == test_finished_good.id
@@ -300,6 +305,7 @@ class TestReceiptFinishedGood:
             inv = db.query(Inventory).filter(
                 Inventory.product_id == test_finished_good.id
             ).first()
+            assert inv is not None
             assert inv.on_hand_quantity == initial_qty + Decimal("10")
         finally:
             db.rollback()
