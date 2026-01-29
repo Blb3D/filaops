@@ -18,7 +18,7 @@ Run with coverage:
 """
 import pytest
 from decimal import Decimal
-from datetime import date
+from datetime import date, timezone
 
 from sqlalchemy.orm import Session
 

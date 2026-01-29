@@ -205,6 +205,7 @@ class TestQuoteToCashFlow:
             # === Step 1: Create Quote ===
             quote = Quote(
                 quote_number=f"Q-{uuid.uuid4().hex[:8]}",
+                user_id=1,
                 customer_id=test_customer.id,
                 quantity=10,
                 material_type="PLA",
@@ -342,6 +343,7 @@ def test_quote_to_cash_smoke(db: Session):
     # Verify we can create basic objects
     quote = Quote(
         quote_number=f"Q-SMOKE-{uuid.uuid4().hex[:8]}",
+        user_id=1,
         quantity=1,
         status="draft",
     )

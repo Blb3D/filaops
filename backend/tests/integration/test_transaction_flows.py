@@ -16,7 +16,7 @@ Each test verifies:
 import pytest
 import uuid
 from decimal import Decimal
-from datetime import date
+from datetime import date, timezone
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal

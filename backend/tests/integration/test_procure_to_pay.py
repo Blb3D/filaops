@@ -159,9 +159,11 @@ class TestProcureToPayFlow:
             po_line = PurchaseOrderLine(
                 purchase_order_id=po.id,
                 product_id=test_material.id,
-                quantity=Decimal("5"),  # 5 KG
-                unit_price=Decimal("25.00"),
-                uom="KG",
+                line_number=1,
+                quantity_ordered=Decimal("5"),  # 5 KG
+                unit_cost=Decimal("25.00"),
+                line_total=Decimal("125.00"),
+                purchase_unit="KG",
             )
             db.add(po_line)
             db.flush()
@@ -234,10 +236,12 @@ class TestProcureToPayFlow:
             po_line = PurchaseOrderLine(
                 purchase_order_id=po.id,
                 product_id=test_material.id,
-                quantity=Decimal("10"),  # 10 KG ordered
-                unit_price=Decimal("25.00"),
-                uom="KG",
-                received_quantity=Decimal("0"),
+                line_number=1,
+                quantity_ordered=Decimal("10"),  # 10 KG ordered
+                quantity_received=Decimal("0"),
+                unit_cost=Decimal("25.00"),
+                line_total=Decimal("250.00"),
+                purchase_unit="KG",
             )
             db.add(po_line)
             db.flush()
@@ -283,6 +287,7 @@ def test_procure_to_pay_smoke(db: Session):
     # Verify we can create a PO
     po = PurchaseOrder(
         po_number=f"PO-SMOKE-{uuid.uuid4().hex[:8]}",
+        vendor_id=1,
         status="draft",
         order_date=date.today(),
     )

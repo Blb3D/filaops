@@ -132,6 +132,7 @@ def test_operations(
     for i in range(1, 4):
         op = ProductionOrderOperation(
             production_order_id=test_production_order.id,
+            work_center_id=1,
             sequence=i * 10,
             operation_code=f"OP{i * 10}",
             operation_name=f"Operation {i}",

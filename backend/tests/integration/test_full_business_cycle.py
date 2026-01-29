@@ -221,6 +221,7 @@ class TestFullBusinessCycle:
             # Create quote
             quote = Quote(
                 quote_number=f"Q-GP-{uid}",
+                user_id=1,
                 customer_id=customer.id,
                 quantity=10,
                 material_type="PLA",

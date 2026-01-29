@@ -316,7 +316,7 @@ class TestTraceabilityFlow:
                     serial_number=f"SN-{uuid.uuid4().hex[:8]}",
                     product_id=test_finished_good.id,
                     production_order_id=prod_order.id,
-                    created_date=date.today(),
+                    manufactured_at=datetime.now(timezone.utc),
                     status="in_stock",
                 )
                 db.add(serial)
